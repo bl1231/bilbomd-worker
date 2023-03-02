@@ -1,9 +1,9 @@
 import * as dotenv from 'dotenv';
 import { Job, Worker, WorkerOptions } from "bullmq"
-import { WorkerJob } from "./jobs"
+import { WorkerJob } from './src/jobs'
 
-import { DoSomeHeavyComputingUseCase } from "./utils"
-import { processBilboMDJob } from "./processJobs"
+import { DoSomeHeavyComputingUseCase } from "./src/utils"
+import { processBilboMDJob } from "./src/processJobs"
 
 dotenv.config()
 
