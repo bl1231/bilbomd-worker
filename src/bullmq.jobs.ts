@@ -1,3 +1,5 @@
+import { Job } from "bullmq"
+
 export interface HelloWorldJob {
   type: "PrintHelloWorld"
   data: { hello: string }
@@ -10,9 +12,9 @@ export interface MayFailOrNotJob {
   type: "MayFailOrNot"
   data: { magicNumber: number }
 };
-export interface BilboMDJob {
+export interface BilboMDJob extends Job {
   type: "BilboMD"
-  data: { uuid: string }
+  data: { title: string, uuid: string, jobid: string }
   id: string
 }
 

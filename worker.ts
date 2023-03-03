@@ -1,11 +1,14 @@
 import * as dotenv from 'dotenv';
+import { connectDB } from './src/db'
 import { Job, Worker, WorkerOptions } from "bullmq"
-import { WorkerJob } from './src/jobs'
+import { WorkerJob } from './src/bullmq.jobs'
 
 import { DoSomeHeavyComputingUseCase } from "./src/utils"
 import { processBilboMDJob } from "./src/processJobs"
 
 dotenv.config()
+
+connectDB()
 
 const workerHandler = async (job: Job<WorkerJob>) => {
   switch (job.data.type) {
@@ -51,7 +54,6 @@ const workerOptions: WorkerOptions = {
     port: Number(process.env.REDIS_PORT),
   },
 }
-
 
 const worker = new Worker("bilbomd", workerHandler, workerOptions)
 

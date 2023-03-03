@@ -1,5 +1,5 @@
 import { setTimeout } from "timers/promises";
-import { DoSomeHeavyComputingJob } from "./jobs";
+import { DoSomeHeavyComputingJob } from "./bullmq.jobs";
 
 export const DoSomeHeavyComputingUseCase = async (
   job: DoSomeHeavyComputingJob
