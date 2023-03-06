@@ -2,7 +2,7 @@ import { Job, IBilboMDJob } from './model/Job'
 import { User } from './model/User'
 // const { sendJobCompleteEmail } = require('./nodemailerConfig')
 
-import { runMinimize, runHeat, runMolecularDynamics, runFoXS } from './bilbomd'
+import { runMinimize, runHeat, runMolecularDynamics, runFoxs, runMultiFoxs } from './bilbomd'
 
 
 const sleep = (ms: number | undefined) => new Promise((r) => setTimeout(r, ms))
@@ -49,19 +49,33 @@ const processBilboMDJob = async (job: BullMQJob) => {
   // CHARMM heating
   await job.log('start heating')
   await runHeat(job, foundJob)
-  await job.updateProgress(50)
+  await job.updateProgress(40)
 
   // CHARMM dynamics and FoXS profiles
   try {
     await job.log('start molecular dynamics')
     await runMolecularDynamics(job, foundJob)
-    await job.updateProgress(75)
+    await job.updateProgress(60)
     await job.log('start FoXS')
-    await runFoXS(job, foundJob)
-    await job.updateProgress(99)
+    await runFoxs(job, foundJob)
+    await job.updateProgress(80)
   } catch (error) {
     console.error(error)
   }
+
+  // MultiFoXS
+  try {
+    await job.log('start MultiFoXS')
+    const foo = await runMultiFoxs(job, foundJob)
+    await job.log(foo)
+    await job.updateProgress(95)
+  } catch (error) {
+
+  }
+
+  // Prepare results for user
+
+
 
   // Set job status to Completed
   foundJob.status = 'Completed'
