@@ -2,7 +2,7 @@ import { Job, IBilboMDJob } from './model/Job'
 import { User } from './model/User'
 // const { sendJobCompleteEmail } = require('./nodemailerConfig')
 
-import { runMinimize, runHeat, runMolecularDynamics, runFoxs, runMultiFoxs } from './bilbomd'
+import { runMinimize, runHeat, runMolecularDynamics, runFoxs, runMultiFoxs, gatherResults } from './bilbomd'
 
 
 const sleep = (ms: number | undefined) => new Promise((r) => setTimeout(r, ms))
@@ -70,15 +70,21 @@ const processBilboMDJob = async (job: BullMQJob) => {
     await job.log(foo)
     await job.updateProgress(95)
   } catch (error) {
-
+    console.error(error)
   }
 
   // Prepare results for user
-
-
+  try {
+    const results = await gatherResults(job, foundJob)
+    await job.log(results)
+    await job.updateProgress(99)
+  } catch (error) {
+    console.error(error)
+  }
 
   // Set job status to Completed
   foundJob.status = 'Completed'
+
   // foundJob.time_completed = new Date()
   const resultCompleted = await foundJob.save()
   console.log(`Job status set to: ${resultCompleted.status}`)

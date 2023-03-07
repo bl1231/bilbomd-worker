@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import util from 'node:util';
 import fs from 'fs-extra'
+import readline from 'node:readline';
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
 import { Job as BilboMDJob, IBilboMDJob } from './model/Job'
@@ -337,6 +338,50 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
   return ('runMultiFoxs done.')
 }
 
+const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
+  const jobDir = path.join(dataVol, MQjob.data.uuid)
+  const multiFoxsDir = path.join(dataVol, MQjob.data.uuid, 'multifoxs')
+  //create results dir
+  const resultsDir = await makeDir(path.join(jobDir, 'results'))
+  MQjob.log('Created results directory')
+  //copy files into results dir
+
+  // need to use exec in order to use a shell and get globbing to work.
+  // const stdOut = path.join(multiFoxsDir, 'foxs_dat_files.txt')
+  // const stdErr = path.join(multiFoxsDir, 'errors.txt')
+  // const stdoutStream = fs.createWriteStream(stdOut)
+  // const errorStream = fs.createWriteStream(stdErr)
+
+  await exec(`cp ${multiFoxsDir}/ensembles_size*.txt .`, { cwd: resultsDir },)
+  MQjob.log('gather ensembles_size*.txt files')
+  await exec(`cp ${multiFoxsDir}/multi_state_model_*_1_1.dat .`, { cwd: resultsDir },)
+  MQjob.log('gather multi_state_model_*_1_1.dat files')
+  await exec(`cp ${jobDir}/const.inp .`, { cwd: resultsDir },)
+  MQjob.log('gather const.inp file')
+  const clusFile = path.join(multiFoxsDir, 'cluster_representatives.txt')
+  const rl = readline.createInterface({
+    input: fs.createReadStream(clusFile),
+    crlfDelay: Infinity,
+  });
+
+  rl.on('line', (line) => {
+    let pdbFile = path.basename(line, '.dat')
+    let pdbDir = path.dirname(line)
+    let fullPdbPath = path.join(pdbDir, pdbFile)
+    console.log(`PDB file: ${pdbFile}`)
+    MQjob.log(`PDB file: ${pdbFile}`)
+    exec(`cp ${fullPdbPath} .`, { cwd: resultsDir },)
+  });
+
+
+
+  //create a tar.gz file
+  await exec(`tar czvf results.tar.gz ${resultsDir}`, { cwd: jobDir },)
+  MQjob.log('created results.tar.gz file')
+  // update MongoDB?
+  return ('results.tar.gz ready for download')
+}
+
 // const countDownTimer = async (message: any, seconds: number | undefined) => {
 //   console.log('Start', message, 'countDownTimer for', seconds, 'sec')
 //   const go = {
@@ -371,5 +416,6 @@ export {
   runHeat,
   runMolecularDynamics,
   runFoxs,
-  runMultiFoxs
+  runMultiFoxs,
+  gatherResults
 }
