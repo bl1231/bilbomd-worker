@@ -126,20 +126,6 @@ const spawnFoXS = async (foxsRunDir: string) => {
   })
 }
 
-// const spawnMultiFoxs = async (multiFoxsDir: string, params: params) => {
-
-//   //console.log('Spawn MultiFoXS dir:', multiFoxsDir)
-//   //console.log('Spawn MultiFoXS saxsDataFile:', params.data_file)
-//   //console.log(params);
-//   const saxs_data = path.join(params.out_dir, params.data_file!)
-
-//   // multi_foxs ../pro_dna_saxs.dat foxs_dat_files.txt
-//   spawn(multiFoxsBin, [saxs_data, 'foxs_dat_files.txt'], {
-//     cwd: multiFoxsDir
-//   })
-
-// }
-
 const spawnMultiFoxs = (multiFoxsDir: string, params: params) => {
   const saxs_data = path.join(params.out_dir, params.data_file!)
   let p = spawn(multiFoxsBin, [saxs_data, 'foxs_dat_files.txt'], {
@@ -157,9 +143,6 @@ const spawnMultiFoxs = (multiFoxsDir: string, params: params) => {
     });
   });
 }
-
-
-
 
 const spawnCharmm = (params: params) =>
   new Promise((resolve, reject) => {
