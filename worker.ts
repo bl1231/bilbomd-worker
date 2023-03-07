@@ -4,10 +4,11 @@ import { Job, Worker, WorkerOptions } from "bullmq"
 import { WorkerJob } from './src/bullmq.jobs'
 
 import { DoSomeHeavyComputingUseCase } from "./src/utils"
-import { processBilboMDJob } from "./src/processJobs"
+import { processBilboMDJob } from "./src/process"
 
 dotenv.config()
 
+// Connect to MongoDB
 connectDB()
 
 const workerHandler = async (job: Job<WorkerJob>) => {
@@ -48,6 +49,7 @@ const workerHandler = async (job: Job<WorkerJob>) => {
   }
 }
 
+// 
 const workerOptions: WorkerOptions = {
   connection: {
     host: process.env.REDIS_HOST,
