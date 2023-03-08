@@ -341,44 +341,42 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
 const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
   const jobDir = path.join(dataVol, MQjob.data.uuid)
   const multiFoxsDir = path.join(dataVol, MQjob.data.uuid, 'multifoxs')
-  //create results dir
+
+  // Create new empty results directory
   const resultsDir = await makeDir(path.join(jobDir, 'results'))
   MQjob.log('Created results directory')
-  //copy files into results dir
 
-  // need to use exec in order to use a shell and get globbing to work.
-  // const stdOut = path.join(multiFoxsDir, 'foxs_dat_files.txt')
-  // const stdErr = path.join(multiFoxsDir, 'errors.txt')
-  // const stdoutStream = fs.createWriteStream(stdOut)
-  // const errorStream = fs.createWriteStream(stdErr)
-
+  // Copy files into results directory
   await exec(`cp ${multiFoxsDir}/ensembles_size*.txt .`, { cwd: resultsDir },)
   MQjob.log('gather ensembles_size*.txt files')
   await exec(`cp ${multiFoxsDir}/multi_state_model_*_1_1.dat .`, { cwd: resultsDir },)
   MQjob.log('gather multi_state_model_*_1_1.dat files')
   await exec(`cp ${jobDir}/const.inp .`, { cwd: resultsDir },)
   MQjob.log('gather const.inp file')
+
+  // This is not quite correct. Only want to add N PDBs equal to
+  // ensemble_size_N.txt. see issue https://github.com/bl1231/bilbomd-worker/issues/13
   const clusFile = path.join(multiFoxsDir, 'cluster_representatives.txt')
   const rl = readline.createInterface({
     input: fs.createReadStream(clusFile),
     crlfDelay: Infinity,
   });
 
-  rl.on('line', (line) => {
+  // Process each line and await for exec cp to complete. 
+  for await (const line of rl) {
     let pdbFile = path.basename(line, '.dat')
     let pdbDir = path.dirname(line)
     let fullPdbPath = path.join(pdbDir, pdbFile)
     console.log(`PDB file: ${pdbFile}`)
     MQjob.log(`PDB file: ${pdbFile}`)
     exec(`cp ${fullPdbPath} .`, { cwd: resultsDir },)
-  });
+  }
 
-
-
-  //create a tar.gz file
-  await exec(`tar czvf results.tar.gz ${resultsDir}`, { cwd: jobDir },)
+  // Create a tar.gz file
+  await exec(`tar czvf results.tar.gz results`, { cwd: jobDir },)
   MQjob.log('created results.tar.gz file')
-  // update MongoDB?
+
+  // Update MongoDB?
   return ('results.tar.gz ready for download')
 }
 
