@@ -32,7 +32,7 @@
     "@types/dotenv": "^8.2.0",
     "@types/express": "^4.17.17",
     "@types/fs-extra": "^11.0.1",
-    "@types/node": "^18.14.6",
+    "@types/node": "^18.15.0",
     "@types/shelljs": "^0.8.11",
     "fs-extra": "^11.1.0",
     "nodemon": "^2.0.21",
