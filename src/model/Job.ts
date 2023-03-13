@@ -1,21 +1,21 @@
 
-import { Document, Date, Schema, ObjectId, model } from "mongoose"
+import { Document, Schema, ObjectId, model } from "mongoose"
 
 interface IBilboMDJob extends Document {
-  title: string
-  uuid: string
-  psf_file: string
-  crd_file: string
-  const_inp_file: string
-  data_file: string
-  conformational_sampling: number
-  rg_min: number
-  rg_max: number
-  status: string
-  time_submitted: Date
-  time_started: Date
-  time_completed: Date
-  user: ObjectId
+  title: string,
+  uuid: string,
+  psf_file: string,
+  crd_file: string,
+  const_inp_file: string,
+  data_file: string,
+  conformational_sampling: number,
+  rg_min: number,
+  rg_max: number,
+  status: string,
+  time_submitted: Date,
+  time_started: Date,
+  time_completed: Date,
+  user: ObjectId,
 
 }
 
@@ -42,14 +42,17 @@ const jobSchema = new Schema<IBilboMDJob>(
       enum: ['Submitted', 'Pending', 'Running', 'Completed', 'Error'],
       default: 'Submitted'
     },
-    time_submitted: { type: Date, default: new Date() },
+    time_submitted: { type: Date, default: () => new Date(Date.now()) },
     time_started: { type: Date },
-    time_completed: { type: Date, default: new Date() },
+    time_completed: { type: Date },
     user: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: true
     }
+  },
+  {
+    timestamps: true
   }
 )
 

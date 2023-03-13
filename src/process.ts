@@ -4,9 +4,6 @@ import { User } from './model/User'
 
 import { runMinimize, runHeat, runMolecularDynamics, runFoxs, runMultiFoxs, gatherResults } from './bilbomd'
 
-
-const sleep = (ms: number | undefined) => new Promise((r) => setTimeout(r, ms))
-
 // import { BilboMDJob } from './bullmq.jobs'
 import { Job as BullMQJob } from 'bullmq'
 
@@ -35,8 +32,8 @@ const processBilboMDJob = async (job: BullMQJob) => {
 
   // Set job status to Running
   foundJob.status = 'Running'
-  // const now = new Date()
-  // foundJob.time_started = Date()
+  const now = new Date()
+  foundJob.time_started = now
   const resultRunning = await foundJob.save()
   console.log(`Job status set to: ${resultRunning.status}`)
   job.log(`MongoDB job status set to ${resultRunning.status}`)
@@ -85,7 +82,7 @@ const processBilboMDJob = async (job: BullMQJob) => {
   // Set job status to Completed
   foundJob.status = 'Completed'
 
-  // foundJob.time_completed = new Date()
+  foundJob.time_completed = new Date()
   const resultCompleted = await foundJob.save()
   console.log(`Job status set to: ${resultCompleted.status}`)
   job.log(`MongoDB job status set to ${resultCompleted.status}`)
