@@ -128,16 +128,19 @@ const spawnFoXS = async (foxsRunDir: string) => {
 }
 
 const spawnMultiFoxs = (multiFoxsDir: string, params: params) => {
-  const saxs_data = path.join(params.out_dir, params.data_file!)
-  let p = spawn(multiFoxsBin, [saxs_data, 'foxs_dat_files.txt'], {
+  const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
+  const logStream = fs.createWriteStream(logFile)
+  const saxsData = path.join(params.out_dir, params.data_file!)
+  let p = spawn(multiFoxsBin, [saxsData, 'foxs_dat_files.txt'], {
     cwd: multiFoxsDir
   })
   return new Promise((resolveFunc) => {
     p.stdout.on("data", (x) => {
-      process.stdout.write(x.toString());
+      console.log(x.toString());
+      logStream.write(x.toString())
     });
     p.stderr.on("data", (x) => {
-      process.stderr.write(x.toString());
+      console.log(x.toString());
     });
     p.on("exit", (code) => {
       resolveFunc(code);
@@ -338,6 +341,18 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
   return ('runMultiFoxs done.')
 }
 
+
+const getNumEnsembles = (logFile: string) => {
+
+  const rl = readline.createInterface({
+    input: fs.createReadStream(logFile),
+    crlfDelay: Infinity,
+  });
+  const regex = /number_of_states([ ])([\d])/
+  // const found = file.match(regex)
+  // return found[2]
+}
+
 const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
   const jobDir = path.join(dataVol, MQjob.data.uuid)
   const multiFoxsDir = path.join(dataVol, MQjob.data.uuid, 'multifoxs')
@@ -361,6 +376,8 @@ const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     input: fs.createReadStream(clusFile),
     crlfDelay: Infinity,
   });
+
+  const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
 
   // Process each line and await for exec cp to complete. 
   for await (const line of rl) {
