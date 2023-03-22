@@ -84,31 +84,23 @@ const makeFile = async (file: string) => {
 }
 
 const makeDir = async (directory: string) => {
-  try {
-    await fs.ensureDir(directory)
-    console.log('created: ', directory)
-    return directory
-  } catch (err) {
-    console.error(err)
-  }
+  await fs.ensureDir(directory)
 }
 
 const makeFoxsDatFileList = async (multiFoxsDir: string) => {
-  //ls -1 ../foxs/*/*.pdb.dat > foxs_dat_files.txt
+  // ls -1 ../foxs/*/*.pdb.dat > foxs_dat_files.txt
   // need to use exec in order to use a shell and get globbing to work.
   const foxsDir = path.resolve(multiFoxsDir, '../foxs')
   const lookHere = foxsDir + '/*/*.pdb.dat'
-  console.log('lookHere:', lookHere)
+  // console.log('lookHere:', lookHere)
   const stdOut = path.join(multiFoxsDir, 'foxs_dat_files.txt')
-  const stdErr = path.join(multiFoxsDir, 'errors.txt')
+  const stdErr = path.join(multiFoxsDir, 'foxs_dat_files_errors.txt')
   const stdoutStream = fs.createWriteStream(stdOut)
   const errorStream = fs.createWriteStream(stdErr)
 
   const { stdout, stderr } = await exec('ls -1 ../foxs/*/*.pdb.dat', {
     cwd: multiFoxsDir
   })
-  //console.log('stdout:', stdout)
-  //console.error('stderr:', stderr)
   stdoutStream.write(stdout)
   errorStream.write(stderr)
 }
@@ -348,9 +340,10 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     run: '',
     data_file: DBjob.data_file
   }
-  const dir = await makeDir(path.join(params.out_dir, 'multifoxs'))
-  await makeFoxsDatFileList(dir!)
-  await spawnMultiFoxs(dir!, params)
+  const multiFoxsDir = path.join(params.out_dir, 'multifoxs')
+  await makeDir(multiFoxsDir)
+  await makeFoxsDatFileList(multiFoxsDir)
+  await spawnMultiFoxs(multiFoxsDir, params)
 }
 
 const getNumEnsembles = (logFile: string) => {
