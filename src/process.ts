@@ -62,8 +62,6 @@ const processBilboMDJob = async (job: BullMQJob) => {
     foundJob.save().then((doc: IBilboMDJob) => {
       console.log('saved:', doc)
     })
-    // Maybe try an async/await strategy?
-    //updateJobStatus(foundJob, 'Error')
     console.log('set Error status in MongoDB?')
     throw new Error('CHARMM minimize step failed')
   })

@@ -163,7 +163,7 @@ const spawnCharmm = (params: params) => {
         resolve(code.toString())
       } else {
         console.log('spawnCharmm close error:', input, 'exit code:', code)
-        reject(`spawnCharmm on close reject ${code.toString()}`)
+        reject('CHARMM failed. Please see teh error log file')
       }
     })
   })
