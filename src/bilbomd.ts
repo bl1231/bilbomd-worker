@@ -1,14 +1,14 @@
 import Handlebars from 'handlebars'
 import { readFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
-import util from 'node:util';
+import util from 'node:util'
 import fs from 'fs-extra'
-import readline from 'node:readline';
+import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
 import { Job as BilboMDJob, IBilboMDJob } from './model/Job'
 
-const exec = util.promisify(require('node:child_process').exec);
+const exec = util.promisify(require('node:child_process').exec)
 const templates = path.resolve(__dirname, './templates/bilbomd')
 const topoFiles: string = process.env.CHARM_TOPOLOGY!
 const foxsBin: string = process.env.FOXS!
@@ -44,21 +44,15 @@ type params = {
 
 const writeToFile = async (templateString: string, params: params) => {
   const outFile = path.join(params.out_dir, params.charmm_inp_file)
-  var template = Handlebars.compile(templateString)
-  var outputString = template(params)
+  let template = Handlebars.compile(templateString)
+  let outputString = template(params)
   await fs.writeFile(outFile, outputString)
 }
 
 const generateInputFile = async (params: params) => {
-  try {
-    const templateFile = path.join(templates, `${params.template}.handlebars`)
-    const templateString = await readFile(templateFile, 'utf8')
-    await writeToFile(templateString, params)
-    console.log('wrote CHARMM input file: ', params.charmm_inp_file)
-  } catch (err) {
-    console.log('Something went badly! Unable to generate inp file')
-    console.error(err)
-  }
+  const templateFile = path.join(templates, `${params.template}.handlebars`)
+  const templateString = await readFile(templateFile, 'utf8')
+  await writeToFile(templateString, params)
 }
 
 const generateDCD2PDBInpFile = async (params: params, rg: any, run: number) => {
@@ -66,50 +60,33 @@ const generateDCD2PDBInpFile = async (params: params, rg: any, run: number) => {
   params.in_pdb = 'heat_output.pdb'
   params.in_dcd = `dynamics_rg${rg}_run${run}.dcd`
   params.foxs_rg = 'foxs_rg.out'
-  // params.charmm_inp_file = `${params.template}_rg${rg}_run${run}.inp`
-  try {
-    await generateInputFile(params)
-  } catch (error) {
-    console.error(error)
-  }
+  await generateInputFile(params)
 }
 
 const makeFile = async (file: string) => {
-  try {
-    await fs.ensureFile(file)
-    console.log('created: ', file)
-  } catch (err) {
-    console.error(err)
-  }
+  await fs.ensureFile(file)
 }
 
 const makeDir = async (directory: string) => {
-  try {
-    await fs.ensureDir(directory)
-    console.log('created: ', directory)
-    return directory
-  } catch (err) {
-    console.error(err)
-  }
+  await fs.ensureDir(directory)
+  console.log('Create dir:', directory)
 }
 
 const makeFoxsDatFileList = async (multiFoxsDir: string) => {
-  //ls -1 ../foxs/*/*.pdb.dat > foxs_dat_files.txt
-  // need to use exec in order to use a shell and get globbing to work.
+  // ls -1 ../foxs/*/*.pdb.dat > foxs_dat_files.txt
+  // need to use 'exec' in order to instantiate a shell so globbing will work.
   const foxsDir = path.resolve(multiFoxsDir, '../foxs')
   const lookHere = foxsDir + '/*/*.pdb.dat'
-  console.log('lookHere:', lookHere);
   const stdOut = path.join(multiFoxsDir, 'foxs_dat_files.txt')
-  const stdErr = path.join(multiFoxsDir, 'errors.txt')
+  const stdErr = path.join(multiFoxsDir, 'foxs_dat_files_errors.txt')
   const stdoutStream = fs.createWriteStream(stdOut)
   const errorStream = fs.createWriteStream(stdErr)
 
-  const { stdout, stderr } = await exec('ls -1 ../foxs/*/*.pdb.dat', { cwd: multiFoxsDir },)
-  //console.log('stdout:', stdout)
-  //console.error('stderr:', stderr)
+  const { stdout, stderr } = await exec('ls -1 ../foxs/*/*.pdb.dat', {
+    cwd: multiFoxsDir
+  })
   stdoutStream.write(stdout)
   errorStream.write(stderr)
-
 }
 
 const spawnFoXS = async (foxsRunDir: string) => {
@@ -123,56 +100,78 @@ const spawnFoXS = async (foxsRunDir: string) => {
           cwd: foxsRunDir
         })
       }
-    } catch (error) { }
+    } catch (error) {}
   })
 }
 
 const spawnMultiFoxs = (multiFoxsDir: string, params: params) => {
   const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
+  const errorFile = path.join(multiFoxsDir, 'multi_foxs_error.log')
   const logStream = fs.createWriteStream(logFile)
+  const errorStream = fs.createWriteStream(errorFile)
   const saxsData = path.join(params.out_dir, params.data_file!)
-  let p = spawn(multiFoxsBin, [saxsData, 'foxs_dat_files.txt'], {
+  const multiFoxs = spawn(multiFoxsBin, [saxsData, 'foxs_dat_files.txt'], {
     cwd: multiFoxsDir
   })
-  return new Promise((resolveFunc) => {
-    p.stdout.on("data", (x) => {
-      console.log(x.toString());
+  return new Promise((resolve, reject) => {
+    multiFoxs.stdout.on('data', (x) => {
+      console.log('spawnMultiFoxs stdout', x.toString())
       logStream.write(x.toString())
-    });
-    p.stderr.on("data", (x) => {
-      console.log(x.toString());
-    });
-    p.on("exit", (code) => {
-      resolveFunc(code);
-    });
-  });
-}
-
-const spawnCharmm = (params: params) =>
-  new Promise((resolve, reject) => {
-    const input = params.charmm_inp_file
-    const output = params.charmm_out_file
-    console.log('Spawn CHARMM job:', input)
-    const charmm = spawn(charmmBin, ['-o', output, '-i', input], {
-      cwd: params.out_dir
     })
-    charmm.stdout.on('data', (data: { toString: () => any }) => {
-      console.log('charmm stdout', data.toString())
+    multiFoxs.stderr.on('data', (x) => {
+      console.log('spawnMultiFoxs stderr', x.toString())
+      errorStream.write(x.toString())
     })
-    charmm.stderr.on('data', (data: { toString: () => any }) => {
-      console.error('charmm stderr', data.toString())
-      reject()
+    multiFoxs.on('error', (error) => {
+      console.log('spawnMultiFoxs error:', error)
+      reject(error)
     })
-    charmm.on('close', (code: unknown) => {
-      //console.log('finished:', input, 'exit code:', code)
-      resolve(code)
+    multiFoxs.on('exit', (code: number) => {
+      if (code === 0) {
+        console.log('spawnMultiFoxs close success exit code:', code)
+        resolve(code.toString())
+      } else {
+        console.log('spawnMultiFoxs close error exit code:', code)
+        reject(`spawnMultiFoxs on close reject ${code.toString()}`)
+      }
     })
   })
+}
+
+const spawnCharmm = (params: params) => {
+  const input = params.charmm_inp_file
+  const output = params.charmm_out_file
+  console.log('Spawn CHARMM job for:', input)
+  const charmm = spawn(charmmBin, ['-o', output, '-i', input], {
+    cwd: params.out_dir
+  })
+  return new Promise((resolve, reject) => {
+    charmm.stdout.on('data', (x) => {
+      console.log('spawnCharmm stdout: ', x.toString())
+    })
+    charmm.stderr.on('data', (x) => {
+      console.error('spawnCharmm stderr: ', x.toString())
+      reject(x.toString())
+    })
+    charmm.on('error', (error) => {
+      console.log('spawnCharmm error:', error)
+      reject(error)
+    })
+    charmm.on('close', (code: number) => {
+      if (code === 0) {
+        console.log('spawnCharmm close success:', input, 'exit code:', code)
+        resolve(code.toString())
+      } else {
+        console.log('spawnCharmm close error:', input, 'exit code:', code)
+        reject('CHARMM failed. Please see teh error log file')
+      }
+    })
+  })
+}
 
 const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
-  console.log(MQjob.data);
-  console.log(DBjob);
-  //const foundJob = await BilboMDJob.findOne({ _id: job.data.jobid }).exec()
+  console.log(MQjob.data)
+  console.log(DBjob)
   const outputDir = path.join(dataVol, MQjob.data.uuid)
   const params = {
     template: 'minimize',
@@ -186,15 +185,12 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     out_min_pdb: 'minimization_output.pdb',
     rg_min: DBjob.rg_min,
     rg_max: DBjob.rg_max,
-    conf_sample: DBjob.conformational_sampling,
+    conf_sample: DBjob.conformational_sampling
   }
-  try {
-    await generateInputFile(params)
-    await spawnCharmm(params)
-    console.log('minimized complete')
-  } catch (error) {
-    console.error('runMinimize error:', error)
-  }
+  await generateInputFile(params).catch((err) => {
+    console.log('Got generateInputFile error:', err.message, err.stack)
+  })
+  await spawnCharmm(params)
 }
 
 const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
@@ -215,13 +211,8 @@ const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     out_heat_crd: 'heat_output.crd',
     out_heat_pdb: 'heat_output.pdb'
   }
-  try {
-    await generateInputFile(params)
-    await spawnCharmm(params)
-    console.log('heat complete')
-  } catch (error) {
-    console.error('runHeat error:', error)
-  }
+  await generateInputFile(params)
+  await spawnCharmm(params)
 }
 
 const runMolecularDynamics = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
@@ -243,12 +234,11 @@ const runMolecularDynamics = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     inp_basename: ''
   }
   const runAllCharmm = []
-  const step = (params.rg_max - params.rg_min) / 5
+  const step = Math.round((params.rg_max - params.rg_min) / 5)
   for (let rg = params.rg_min; rg <= params.rg_max; rg += step) {
     params.charmm_inp_file = `${params.template}_rg${rg}.inp`
     params.charmm_out_file = `${params.template}_rg${rg}.out`
     params.inp_basename = `${params.template}_rg${rg}`
-    // makeAllInpFiles.push(generateInputFile(params))
     await generateInputFile(params)
     runAllCharmm.push(spawnCharmm(params))
   }
@@ -283,7 +273,7 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
   const foxsRgFile = path.join(params.out_dir, params.foxs_rg)
   await makeFile(foxsRgFile)
 
-  const step = (params.rg_max - params.rg_min) / 5
+  const step = Math.round((params.rg_max - params.rg_min) / 5)
   for (let rg = params.rg_min; rg <= params.rg_max; rg += step) {
     for (let run = 1; run <= params.conf_sample; run += 1) {
       const runAllCharmm = []
@@ -296,13 +286,10 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
       params.inp_basename = `${params.template}_rg${rg}_run${run}`
       params.run = `rg${rg}_run${run}`
 
-      // This doesn't work for some reason!
-      // using the last "version" of params...WTF?
-      //makeAllDcd2PdbInpFiles.push(generateDCD2PDBInpFile(params, rg, run))
-      // This does work, and all iterations of the inp file get created
       await generateDCD2PDBInpFile(params, rg, run)
       runAllCharmm.push(spawnCharmm(params))
       await Promise.all(runAllCharmm)
+
       // then run FoXS on every PDB in foxsRunDir
       runAllFoxs.push(spawnFoXS(foxsRunDir))
       // const files = await fs.readdir(foxsRunDir)
@@ -313,11 +300,11 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
 }
 
 const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
-  const outputDir = path.join(dataVol, MQjob.data.uuid)
+  const jobDir = path.join(dataVol, MQjob.data.uuid)
   const params = {
     template: 'foxs',
     topology_dir: topoFiles,
-    out_dir: outputDir,
+    out_dir: jobDir,
     charmm_inp_file: 'heat.inp',
     charmm_out_file: 'heat.out',
     in_psf: DBjob.psf_file,
@@ -333,98 +320,93 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     run: '',
     data_file: DBjob.data_file
   }
-  const dir = await makeDir(path.join(params.out_dir, 'multifoxs'))
-  // create foxs_dat_files.txt
-  await makeFoxsDatFileList(dir!)
-  // run multi_foxs
-  await spawnMultiFoxs(dir!, params)
-  return ('runMultiFoxs done.')
+  const multiFoxsDir = path.join(jobDir, 'multifoxs')
+  await makeDir(multiFoxsDir)
+  await makeFoxsDatFileList(multiFoxsDir)
+  await spawnMultiFoxs(multiFoxsDir, params)
 }
 
-
-const getNumEnsembles = (logFile: string) => {
-
+const getNumEnsembles = async (logFile: string): Promise<number> => {
   const rl = readline.createInterface({
     input: fs.createReadStream(logFile),
-    crlfDelay: Infinity,
-  });
-  const regex = /number_of_states([ ])([\d])/
-  // const found = file.match(regex)
-  // return found[2]
+    crlfDelay: Infinity
+  })
+  const regex = /(?:number_of_states[ ])([\d]+)/
+  const ensembleCount = ['0']
+  for await (const line of rl) {
+    const found = line.match(regex)
+    if (found !== null) {
+      ensembleCount.push(found[1])
+    }
+  }
+  return Number(ensembleCount.pop())
+}
+
+const retrieveNumLinesFromFile = (file: string, num: number) => {
+  let lines: string[] = []
+  return new Promise<Array<string>>((resolve, reject) => {
+    const rl = readline.createInterface({
+      input: fs.createReadStream(file),
+      crlfDelay: Infinity
+    })
+    rl.on('line', (line) => {
+      // console.log('retrieveNumLinesFromFile line:', line)
+      lines.push(line)
+    })
+    rl.on('close', () => {
+      // console.log('retrieveNumLinesFromFile close')
+      const linesToProcess = lines.slice(0, num)
+      resolve(linesToProcess)
+    })
+  })
 }
 
 const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
   const jobDir = path.join(dataVol, MQjob.data.uuid)
-  const multiFoxsDir = path.join(dataVol, MQjob.data.uuid, 'multifoxs')
+  const multiFoxsDir = path.join(jobDir, 'multifoxs')
+  const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
+  const resultsDir = path.join(jobDir, 'results')
 
   // Create new empty results directory
-  const resultsDir = await makeDir(path.join(jobDir, 'results'))
-  MQjob.log('Created results directory')
+  await makeDir(resultsDir)
+  MQjob.log('Create results directory')
 
-  // Copy files into results directory
-  await exec(`cp ${multiFoxsDir}/ensembles_size*.txt .`, { cwd: resultsDir },)
-  MQjob.log('gather ensembles_size*.txt files')
-  await exec(`cp ${multiFoxsDir}/multi_state_model_*_1_1.dat .`, { cwd: resultsDir },)
-  MQjob.log('gather multi_state_model_*_1_1.dat files')
-  await exec(`cp ${jobDir}/const.inp .`, { cwd: resultsDir },)
-  MQjob.log('gather const.inp file')
+  // Copy non-PDB files into results directory
+  await exec(`cp ${multiFoxsDir}/ensembles_size*.txt .`, { cwd: resultsDir })
+  MQjob.log('Gather ensembles_size*.txt files')
+  await exec(`cp ${multiFoxsDir}/multi_state_model_*_1_1.dat .`, { cwd: resultsDir })
+  MQjob.log('Gather multi_state_model_*_1_1.dat files')
+  await exec(`cp ${jobDir}/const.inp .`, { cwd: resultsDir })
+  MQjob.log('Gather const.inp file')
 
-  // This is not quite correct. Only want to add N PDBs equal to
-  // ensemble_size_N.txt. see issue https://github.com/bl1231/bilbomd-worker/issues/13
+  // Only want to add N best PDBs equal to number_of_states N in logfile.
+  const numEnsembles = await getNumEnsembles(logFile).catch((error) => {
+    console.log(error)
+  })
+  console.log('numEnsembles', numEnsembles)
+  MQjob.log(`Gather ${numEnsembles} best ensembles`)
   const clusFile = path.join(multiFoxsDir, 'cluster_representatives.txt')
-  const rl = readline.createInterface({
-    input: fs.createReadStream(clusFile),
-    crlfDelay: Infinity,
-  });
 
-  const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
+  const linesToProcess = await retrieveNumLinesFromFile(clusFile, numEnsembles!)
 
-  // Process each line and await for exec cp to complete. 
-  for await (const line of rl) {
+  // Process N lines and await for exec cp to complete.
+  for await (const line of linesToProcess) {
+    console.log('in for await line:', line)
     let pdbFile = path.basename(line, '.dat')
     let pdbDir = path.dirname(line)
     let fullPdbPath = path.join(pdbDir, pdbFile)
     console.log(`PDB file: ${pdbFile}`)
     MQjob.log(`PDB file: ${pdbFile}`)
-    exec(`cp ${fullPdbPath} .`, { cwd: resultsDir },)
+    exec(`cp ${fullPdbPath} .`, { cwd: resultsDir })
   }
 
   // Create a tar.gz file
-  await exec(`tar czvf results.tar.gz results`, { cwd: jobDir },)
+  await exec(`tar czvf results.tar.gz results`, { cwd: jobDir })
   MQjob.log('created results.tar.gz file')
 
   // Update MongoDB?
-  return ('results.tar.gz ready for download')
+  return 'results.tar.gz ready for download'
 }
-
-// const countDownTimer = async (message: any, seconds: number | undefined) => {
-//   console.log('Start', message, 'countDownTimer for', seconds, 'sec')
-//   const go = {
-//     timer: null,
-//     message: '',
-//     time: 0,
-//     countdown: (duration = 10) => {
-//       clearInterval(go.timer)
-//       return new Promise(function (resolve, reject) {
-//         go.timer = setInterval(function () {
-//           go.time--
-//           console.log(go.message + ': ' + go.time)
-//           if (!go.time) {
-//             clearInterval(go.timer)
-//             resolve()
-//           }
-//         }, 1000)
-//       })
-//     },
-//     do: async (msg: string, time = 10) => {
-//       go.time = time
-//       go.message = msg
-//       await go.countdown(go.time)
-//     }
-//   }
-//   await go.do(message, seconds)
-//   console.log(`Finished ${message}`)
-// }
 
 export {
   runMinimize,
