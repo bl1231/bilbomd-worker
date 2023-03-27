@@ -1,10 +1,10 @@
-import * as dotenv from 'dotenv';
+import * as dotenv from 'dotenv'
 import { connectDB } from './src/db'
-import { Job, Worker, WorkerOptions } from "bullmq"
+import { Job, Worker, WorkerOptions } from 'bullmq'
 import { WorkerJob } from './src/bullmq.jobs'
 
-import { DoSomeHeavyComputingUseCase } from "./src/utils"
-import { processBilboMDJob } from "./src/process"
+import { DoSomeHeavyComputingUseCase } from './src/utils'
+import { processBilboMDJob } from './src/process'
 
 dotenv.config()
 
@@ -13,50 +13,51 @@ connectDB()
 
 const workerHandler = async (job: Job<WorkerJob>) => {
   switch (job.data.type) {
-    case "PrintHelloWorld": {
+    case 'PrintHelloWorld': {
       console.log(`Hello world!`, job.data)
       return
     }
-    case "DoSomeHeavyComputing": {
-      console.log("Starting job:", job.name)
+    case 'DoSomeHeavyComputing': {
+      console.log('Starting job:', job.name)
       job.updateProgress(10)
 
       await DoSomeHeavyComputingUseCase(job.data)
 
       job.updateProgress(100)
-      console.log("Finished job:", job.name)
+      console.log('Finished job:', job.name)
       return
     }
-    case "MayFailOrNot": {
+    case 'MayFailOrNot': {
       if (Math.random() > 0.3) {
         console.log(`FAILED ;( - ${job.data.data.magicNumber}`)
-        throw new Error("Something went wrong")
+        throw new Error('Something went wrong')
       }
 
       console.log(`COMPLETED - ${job.data.data.magicNumber}`)
-      return "Done!"
+      return 'Done!'
     }
-    case "BilboMD": {
-      console.log("Starting  job:", job.name)
+    case 'BilboMD': {
+      console.log('Starting  job:', job.name)
       job.updateProgress(10)
 
       await processBilboMDJob(job)
 
       job.updateProgress(100)
-      console.log("Finished job:", job.name)
+      console.log('Finished job:', job.name)
       return
     }
   }
 }
 
-// 
+//
 const workerOptions: WorkerOptions = {
   connection: {
     host: process.env.REDIS_HOST,
-    port: Number(process.env.REDIS_PORT),
+    port: Number(process.env.REDIS_PORT)
   },
+  lockDuration: 90000 // default is 30sec 30000ms
 }
 
-const worker = new Worker("bilbomd", workerHandler, workerOptions)
+const worker = new Worker('bilbomd', workerHandler, workerOptions)
 
-console.log("Worker started!")
+console.log('Worker started!')
