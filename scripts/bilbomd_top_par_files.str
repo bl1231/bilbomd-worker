@@ -36,8 +36,8 @@ stream /home/node/app/scripts/toppar/toppar_all36_prot_heme.str
 stream /home/node/app/scripts/toppar/toppar_all36_prot_retinol.str
 
 ! Custom topology and parameter files for FAD
-open read card unit 10 name /home/node/app/scripts/toppar/fad.rtf
-read  rtf card unit 10 append
+!open read card unit 10 name /home/node/app/scripts/toppar/fad.rtf
+!read  rtf card unit 10 append
 
-open read card unit 20 name /home/node/app/scripts/toppar/fad.prm
-read para flex card unit 20 append
+!open read card unit 20 name /home/node/app/scripts/toppar/fad.prm
+!read para flex card unit 20 append
