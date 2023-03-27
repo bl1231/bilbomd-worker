@@ -1,0 +1,43 @@
+* CHARMM Topology and Parameter files for BilboMD
+* March 2023
+
+! Protein Topology and Parameter
+open read card unit 10 name /home/node/app/scripts/toppar/top_all36_prot.rtf
+read  rtf card unit 10
+
+open read card unit 20 name /home/node/app/scripts/toppar/par_all36_prot.prm
+read para card unit 20 flex
+
+! Nucleic Acids
+open read card unit 10 name /home/node/app/scripts/toppar/top_all36_na.rtf
+read  rtf card unit 10 append
+
+open read card unit 20 name /home/node/app/scripts/toppar/par_all36_na.prm
+read para card unit 20 append flex
+
+! Carbohydrates
+open read card unit 10 name /home/node/app/scripts/toppar/top_all36_carb.rtf
+read  rtf card unit 10 append
+
+open read card unit 20 name /home/node/app/scripts/toppar/par_all36_carb.prm
+read para card unit 20 append flex
+
+! Glycopeptide
+stream /home/node/app/scripts/toppar/toppar_all36_carb_glycopeptide.str
+
+! Read additional topology and parameter
+stream /home/node/app/scripts/toppar/toppar_all36_na_nad_ppi.str
+
+! Carbohydrate chemical modifications
+stream /home/node/app/scripts/toppar/toppar_all36_carb_chemmod.str
+
+! Additional topologies and parameters for protein
+stream /home/node/app/scripts/toppar/toppar_all36_prot_heme.str
+stream /home/node/app/scripts/toppar/toppar_all36_prot_retinol.str
+
+! Custom topology and parameter files for FAD
+open read card unit 10 name /home/node/app/scripts/toppar/fad.rtf
+read  rtf card unit 10 append
+
+open read card unit 20 name /home/node/app/scripts/toppar/fad.prm
+read para flex card unit 20 append
