@@ -60,4 +60,12 @@ const workerOptions: WorkerOptions = {
 
 const worker = new Worker('bilbomd', workerHandler, workerOptions)
 
+// worker.run()
+
+worker.on('completed', (job: Job, returnvalue: any) => {
+  // Do something with the return value.
+  console.log('job', job)
+  console.log('returnvalue', returnvalue)
+})
+
 console.log('Worker started!')
