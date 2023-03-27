@@ -3,8 +3,9 @@ RUN apt-get update && apt-get install -y cmake gcc gfortran g++
 
 FROM builder AS config_charmm
 WORKDIR /usr/local/src
-COPY ./charmm/c47b1.tar.gz ./
-RUN tar zxvf c47b1.tar.gz
+ARG CHARMM_VER
+COPY ./charmm/${CHARMM_VER}.tar.gz ./
+RUN tar zxvf ${CHARMM_VER}.tar.gz
 WORKDIR /usr/local/src/charmm
 RUN ./configure
 
