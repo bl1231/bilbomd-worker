@@ -1,7 +1,6 @@
 import { Job, IBilboMDJob } from './model/Job'
 import { User } from './model/User'
-// const { sendJobCompleteEmail } = require('./nodemailerConfig')
-
+import { sendJobCompleteEmail } from './mailer'
 import {
   runMinimize,
   runHeat,
@@ -10,8 +9,6 @@ import {
   runMultiFoxs,
   gatherResults
 } from './bilbomd'
-
-// import { BilboMDJob } from './bullmq.jobs'
 import { Job as BullMQJob } from 'bullmq'
 
 const updateJobStatus = async (job: IBilboMDJob, status: string) => {
@@ -140,10 +137,9 @@ const processBilboMDJob = async (job: BullMQJob) => {
     console.log(`Job status set to: ${job.status}`)
   })
 
-  // send mail to user
-
-  console.log('send email to user', foundUser?.username)
-  // sendJobCompleteEmail(foundUser?.email, process.env.BILBOMD_URL, foundJob.id)
+  // Send email to user
+  sendJobCompleteEmail(foundUser?.email, process.env.BILBOMD_URL!, foundJob.id)
+  console.log(`email notification sent to ${foundUser?.email}`)
   await job.log(`email notification sent to ${foundUser?.email}`)
   await job.updateProgress(100)
   return 'ok'
