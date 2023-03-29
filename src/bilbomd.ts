@@ -391,7 +391,7 @@ const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
 
   // Process N lines and await for exec cp to complete.
   for await (const line of linesToProcess) {
-    console.log('in for await line:', line)
+    // console.log('in for await line:', line)
     let pdbFile = path.basename(line, '.dat')
     let pdbDir = path.dirname(line)
     let fullPdbPath = path.join(pdbDir, pdbFile)
