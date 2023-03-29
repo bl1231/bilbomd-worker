@@ -8,7 +8,7 @@ Processes BilboMD jobs and run CHARMM, FoXS, and MultiFoXS
 
 ## BilboMD processing pipeline
 
-
+![BilboMD flow](scripts/bilbomd-flow.png)
 
 ## Deployment
 
@@ -32,7 +32,6 @@ MONGO_AUTH_SRC=admin
 ```
 
 All of these env settings (and some others) reside in a single `.env` file that is used by Docker Compose to build the suite of 4 services. This will be documented elsewhere. But for posterity they are:
-
 
 - bilbomd-worker (this project)
 - [bilbomd-backend](https://github.com/bl1231/bilbomd-backend)
