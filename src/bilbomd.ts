@@ -151,11 +151,13 @@ const spawnCharmm = (params: params) => {
     })
     charmm.stderr.on('data', (x) => {
       console.error('spawnCharmm stderr: ', x.toString())
-      reject(x.toString())
+      // Would like to ignore this error:
+      // Note: The following floating-point exceptions are signalling: IEEE_INVALID_FLAG
+      // reject(x.toString())
     })
     charmm.on('error', (error) => {
       console.log('spawnCharmm error:', error)
-      reject(error)
+      // reject(error)
     })
     charmm.on('close', (code: number) => {
       if (code === 0) {
@@ -163,7 +165,7 @@ const spawnCharmm = (params: params) => {
         resolve(code.toString())
       } else {
         console.log('spawnCharmm close error:', input, 'exit code:', code)
-        reject('CHARMM failed. Please see teh error log file')
+        reject('CHARMM failed. Please see the error log file')
       }
     })
   })
