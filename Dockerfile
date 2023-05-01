@@ -43,7 +43,9 @@ COPY --from=build_imp /usr/local/src/imp_release/bin/multi_foxs /usr/local/bin/
 RUN apt-get update && apt-get install -y perl ncat gfortran
 RUN mkdir -p /home/node/app/node_modules && chown -R node:node /home/node/app
 WORKDIR /home/node/app
-COPY ./package*.json ./
+COPY --chown=node:node package*.json ./
+#USER node
 RUN npm install
 COPY --chown=node:node . .
 CMD [ "npm", "run", "worker" ]
+#CMD ["npm", "start"]

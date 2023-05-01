@@ -1,6 +1,6 @@
 import { Job, IBilboMDJob } from './model/Job'
 import { User } from './model/User'
-import { sendJobCompleteEmail } from './mailer'
+import { sendJobCompleteEmail } from 'mailer'
 import {
   runMinimize,
   runHeat,
@@ -8,8 +8,10 @@ import {
   runFoxs,
   runMultiFoxs,
   gatherResults
-} from './bilbomd'
+} from 'bilbomd'
 import { Job as BullMQJob } from 'bullmq'
+
+const bilbomdUrl: string = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
 
 const updateJobStatus = async (job: IBilboMDJob, status: string) => {
   console.log('in updateJobStatus')
@@ -138,7 +140,7 @@ const processBilboMDJob = async (job: BullMQJob) => {
   })
 
   // Send email to user
-  sendJobCompleteEmail(foundUser?.email, process.env.BILBOMD_URL!, foundJob.id)
+  sendJobCompleteEmail(foundUser?.email, bilbomdUrl, foundJob.id)
   console.log(`email notification sent to ${foundUser?.email}`)
   await job.log(`email notification sent to ${foundUser?.email}`)
   await job.updateProgress(100)

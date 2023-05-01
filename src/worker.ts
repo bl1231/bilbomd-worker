@@ -1,10 +1,10 @@
 import * as dotenv from 'dotenv'
-import { connectDB } from './src/db'
+import { connectDB } from 'db'
 import { Job, Worker, WorkerOptions } from 'bullmq'
-import { WorkerJob } from './src/bullmq.jobs'
-
-import { DoSomeHeavyComputingUseCase } from './src/utils'
-import { processBilboMDJob } from './src/process'
+import { WorkerJob } from 'bullmq.jobs'
+import { DoSomeHeavyComputingUseCase } from 'utils'
+import { processBilboMDJob } from 'process.job'
+import { testFunction } from 'test'
 
 dotenv.config()
 
@@ -39,7 +39,7 @@ const workerHandler = async (job: Job<WorkerJob>) => {
     case 'BilboMD': {
       console.log('Starting  job:', job.name)
       job.updateProgress(10)
-
+      testFunction
       await processBilboMDJob(job)
 
       job.updateProgress(100)
@@ -62,10 +62,10 @@ const worker = new Worker('bilbomd', workerHandler, workerOptions)
 
 // worker.run()
 
-worker.on('completed', (job: Job, returnvalue: any) => {
+worker.on('completed', (job: Job, returnvalue) => {
   // Do something with the return value.
-  // console.log('job', job)
-  // console.log('returnvalue', returnvalue)
+  console.log('job', job)
+  console.log('returnvalue', returnvalue)
 })
 
 console.log('Worker started!')

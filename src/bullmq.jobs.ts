@@ -1,20 +1,20 @@
-import { Job } from "bullmq"
+import { Job } from 'bullmq'
 
 export interface HelloWorldJob {
-  type: "PrintHelloWorld"
+  type: 'PrintHelloWorld'
   data: { hello: string }
-};
+}
 export interface DoSomeHeavyComputingJob {
-  type: "DoSomeHeavyComputing"
+  type: 'DoSomeHeavyComputing'
   data: { magicNumber: number }
-};
+}
 export interface MayFailOrNotJob {
-  type: "MayFailOrNot"
+  type: 'MayFailOrNot'
   data: { magicNumber: number }
-};
+}
 export interface BilboMDJob extends Job {
-  type: "BilboMD"
-  data: { title: string, uuid: string, jobid: string }
+  type: 'BilboMD'
+  data: { title: string; uuid: string; jobid: string }
   id: string
 }
 
@@ -22,5 +22,4 @@ export type WorkerJob =
   | HelloWorldJob
   | DoSomeHeavyComputingJob
   | MayFailOrNotJob
-  | BilboMDJob;
-
+  | BilboMDJob
