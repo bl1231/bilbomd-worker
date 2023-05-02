@@ -1,6 +1,6 @@
 import { Job, IBilboMDJob } from './model/Job'
 import { User } from './model/User'
-import { sendJobCompleteEmail } from 'mailer'
+import { sendJobCompleteEmail } from './mailer'
 import {
   runMinimize,
   runHeat,
@@ -8,7 +8,7 @@ import {
   runFoxs,
   runMultiFoxs,
   gatherResults
-} from 'bilbomd'
+} from './bilbomd'
 import { Job as BullMQJob } from 'bullmq'
 
 const bilbomdUrl: string = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
