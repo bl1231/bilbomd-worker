@@ -1,20 +1,22 @@
 import Handlebars from 'handlebars'
 import { readFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
-import util from 'node:util'
+import { promisify } from 'util'
 import fs from 'fs-extra'
 import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
 import { Job as BilboMDJob, IBilboMDJob } from './model/Job'
+import { exec } from 'node:child_process'
 
-const exec = util.promisify(require('node:child_process').exec)
+const execPromise = promisify(exec)
 const templates = path.resolve(__dirname, './templates/bilbomd')
-const topoFiles: string = process.env.CHARM_TOPOLOGY!
-const foxsBin: string = process.env.FOXS!
-const multiFoxsBin: string = process.env.MULTIFOXS!
-const charmmBin: string = process.env.CHARMM!
-const dataVol: string = process?.env?.DATA_VOL!
+
+const topoFiles: string = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
+const foxsBin: string = process.env.FOXS ?? '/usr/local/bin/foxs'
+const multiFoxsBin: string = process.env.MULTIFOXS ?? '/usr/local/bin/multi_foxs'
+const charmmBin: string = process.env.CHARMM ?? '/usr/local/bin/charmm'
+const dataVol: string = process.env.DATA_VOL ?? '/bilbomd/uploads'
 
 type params = {
   template: string
@@ -44,8 +46,8 @@ type params = {
 
 const writeToFile = async (templateString: string, params: params) => {
   const outFile = path.join(params.out_dir, params.charmm_inp_file)
-  let template = Handlebars.compile(templateString)
-  let outputString = template(params)
+  const template = Handlebars.compile(templateString)
+  const outputString = template(params)
   await fs.writeFile(outFile, outputString)
 }
 
@@ -75,14 +77,14 @@ const makeDir = async (directory: string) => {
 const makeFoxsDatFileList = async (multiFoxsDir: string) => {
   // ls -1 ../foxs/*/*.pdb.dat > foxs_dat_files.txt
   // need to use 'exec' in order to instantiate a shell so globbing will work.
-  const foxsDir = path.resolve(multiFoxsDir, '../foxs')
-  const lookHere = foxsDir + '/*/*.pdb.dat'
+  // const foxsDir = path.resolve(multiFoxsDir, '../foxs')
+  // const lookHere = foxsDir + '/*/*.pdb.dat'
   const stdOut = path.join(multiFoxsDir, 'foxs_dat_files.txt')
   const stdErr = path.join(multiFoxsDir, 'foxs_dat_files_errors.txt')
   const stdoutStream = fs.createWriteStream(stdOut)
   const errorStream = fs.createWriteStream(stdErr)
 
-  const { stdout, stderr } = await exec('ls -1 ../foxs/*/*.pdb.dat', {
+  const { stdout, stderr } = await execPromise('ls -1 ../foxs/*/*.pdb.dat', {
     cwd: multiFoxsDir
   })
   stdoutStream.write(stdout)
@@ -95,12 +97,14 @@ const spawnFoXS = async (foxsRunDir: string) => {
     console.log('Spawn FoXS jobs:', foxsRunDir)
     try {
       for (const file of files) {
-        //console.log(file)
+        // console.log(file)
         spawn(foxsBin, ['-pr', file], {
           cwd: foxsRunDir
         })
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error(error)
+    }
   })
 }
 
@@ -132,7 +136,7 @@ const spawnMultiFoxs = (multiFoxsDir: string, params: params) => {
         resolve(code.toString())
       } else {
         console.log('spawnMultiFoxs close error exit code:', code)
-        reject(`spawnMultiFoxs on close reject ${code.toString()}`)
+        reject(`spawnMultiFoxs on close reject`)
       }
     })
   })
@@ -344,9 +348,28 @@ const getNumEnsembles = async (logFile: string): Promise<number> => {
   return Number(ensembleCount.pop())
 }
 
-const retrieveNumLinesFromFile = (file: string, num: number) => {
-  let lines: string[] = []
-  return new Promise<Array<string>>((resolve, reject) => {
+// const retrieveNumLinesFromFile = (file: string, num: number) => {
+//   const lines: string[] = []
+//   return new Promise<string[]>((resolve) => {
+//     const rl = readline.createInterface({
+//       input: fs.createReadStream(file),
+//       crlfDelay: Infinity
+//     })
+//     rl.on('line', (line) => {
+//       // console.log('retrieveNumLinesFromFile line:', line)
+//       lines.push(line)
+//     })
+//     rl.on('close', () => {
+//       // console.log('retrieveNumLinesFromFile close')
+//       const linesToProcess = lines.slice(0, num)
+//       resolve(linesToProcess)
+//     })
+//   })
+// }
+
+const retrieveAllLinesFromFile = (file: string) => {
+  const lines: string[] = []
+  return new Promise<string[]>((resolve) => {
     const rl = readline.createInterface({
       input: fs.createReadStream(file),
       crlfDelay: Infinity
@@ -357,7 +380,7 @@ const retrieveNumLinesFromFile = (file: string, num: number) => {
     })
     rl.on('close', () => {
       // console.log('retrieveNumLinesFromFile close')
-      const linesToProcess = lines.slice(0, num)
+      const linesToProcess = lines.slice()
       resolve(linesToProcess)
     })
   })
@@ -374,11 +397,13 @@ const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
   MQjob.log('Create results directory')
 
   // Copy non-PDB files into results directory
-  await exec(`cp ${multiFoxsDir}/ensembles_size*.txt .`, { cwd: resultsDir })
+  await execPromise(`cp ${multiFoxsDir}/ensembles_size*.txt .`, { cwd: resultsDir })
   MQjob.log('Gather ensembles_size*.txt files')
-  await exec(`cp ${multiFoxsDir}/multi_state_model_*_1_1.dat .`, { cwd: resultsDir })
+  await execPromise(`cp ${multiFoxsDir}/multi_state_model_*_1_1.dat .`, {
+    cwd: resultsDir
+  })
   MQjob.log('Gather multi_state_model_*_1_1.dat files')
-  await exec(`cp ${jobDir}/const.inp .`, { cwd: resultsDir })
+  await execPromise(`cp ${jobDir}/const.inp .`, { cwd: resultsDir })
   MQjob.log('Gather const.inp file')
 
   // Only want to add N best PDBs equal to number_of_states N in logfile.
@@ -389,21 +414,23 @@ const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
   MQjob.log(`Gather ${numEnsembles} best ensembles`)
   const clusFile = path.join(multiFoxsDir, 'cluster_representatives.txt')
 
-  const linesToProcess = await retrieveNumLinesFromFile(clusFile, numEnsembles!)
+  // Maybe just return all PDB files in the cluster file?
+  // const linesToProcess = await retrieveNumLinesFromFile(clusFile, numEnsembles!)
+  const linesToProcess = await retrieveAllLinesFromFile(clusFile)
 
   // Process N lines and await for exec cp to complete.
   for await (const line of linesToProcess) {
     // console.log('in for await line:', line)
-    let pdbFile = path.basename(line, '.dat')
-    let pdbDir = path.dirname(line)
-    let fullPdbPath = path.join(pdbDir, pdbFile)
+    const pdbFile = path.basename(line, '.dat')
+    const pdbDir = path.dirname(line)
+    const fullPdbPath = path.join(pdbDir, pdbFile)
     console.log(`PDB file: ${pdbFile}`)
     MQjob.log(`PDB file: ${pdbFile}`)
-    exec(`cp ${fullPdbPath} .`, { cwd: resultsDir })
+    execPromise(`cp ${fullPdbPath} .`, { cwd: resultsDir })
   }
 
   // Create a tar.gz file
-  await exec(`tar czvf results.tar.gz results`, { cwd: jobDir })
+  await execPromise(`tar czvf results.tar.gz results`, { cwd: jobDir })
   MQjob.log('created results.tar.gz file')
 
   // Update MongoDB?

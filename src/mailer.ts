@@ -21,7 +21,7 @@ const sendJobCompleteEmail = (email: string, url: string, jobid: string) => {
         defaultLayout: 'jobcomplete',
         layoutsDir: viewPath
       },
-      viewPath: viewPath,
+      viewPath,
       extName: '.handlebars'
     })
   )
@@ -33,8 +33,8 @@ const sendJobCompleteEmail = (email: string, url: string, jobid: string) => {
     subject: 'BilboMD Job Complete',
     template: 'jobcomplete',
     context: {
-      jobid: jobid,
-      url: url
+      jobid,
+      url
     }
   }
 
