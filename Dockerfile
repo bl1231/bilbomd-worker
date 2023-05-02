@@ -2,9 +2,10 @@ FROM debian:bullseye AS builder
 RUN apt-get update && apt-get install -y cmake gcc gfortran g++
 
 FROM builder AS config_charmm
+RUN mkdir -p /usr/local/src
 WORKDIR /usr/local/src
 ARG CHARMM_VER
-COPY ./charmm/${CHARMM_VER}.tar.gz ./
+COPY ./charmm/${CHARMM_VER}.tar.gz .
 RUN tar zxvf ${CHARMM_VER}.tar.gz
 WORKDIR /usr/local/src/charmm
 RUN ./configure
@@ -44,8 +45,7 @@ RUN apt-get update && apt-get install -y perl ncat gfortran
 RUN mkdir -p /home/node/app/node_modules && chown -R node:node /home/node/app
 WORKDIR /home/node/app
 COPY --chown=node:node package*.json ./
-#USER node
+# USER node
 RUN npm install
 COPY --chown=node:node . .
-CMD [ "npm", "run", "worker" ]
-#CMD ["npm", "start"]
+CMD ["npm", "start"]
