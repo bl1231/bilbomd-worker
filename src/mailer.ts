@@ -6,6 +6,7 @@ const user = process.env.SENDMAIL_USER
 const viewPath = path.resolve(__dirname, './templates/mailer/')
 
 const transporter = nodemailer.createTransport({
+  name: 'bl1231-local.als.lbl.gov',
   host: 'smtp-relay.gmail.com',
   port: 25,
   secure: false
