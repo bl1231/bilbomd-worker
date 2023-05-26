@@ -42,10 +42,14 @@ COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 COPY --from=build_imp /usr/local/src/imp_release/bin/foxs /usr/local/bin/
 COPY --from=build_imp /usr/local/src/imp_release/bin/multi_foxs /usr/local/bin/
 RUN apt-get update && apt-get install -y perl ncat gfortran
-RUN mkdir -p /home/node/app/node_modules && chown -R node:node /home/node/app
+RUN mkdir -p /home/node/app/node_modules
+RUN chown -R node:node /home/node/app
+RUN mkdir -p /bilbomd/uploads
+RUN chown -R node:node /bilbomd/uploads
+VOLUME [ "/bilbomd/uploads" ]
 WORKDIR /home/node/app
 COPY --chown=node:node package*.json ./
-# USER node
-RUN npm install
+USER node
+RUN npm ci 
 COPY --chown=node:node . .
 CMD ["npm", "start"]
