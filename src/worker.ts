@@ -49,8 +49,8 @@ const workerHandler = async (job: Job<WorkerJob>) => {
 //
 const workerOptions: WorkerOptions = {
   connection: {
-    host: process.env.REDIS_HOST,
-    port: Number(process.env.REDIS_PORT)
+    host: 'redis',
+    port: 6379
   },
   lockDuration: 90000 // default is 30sec 30000ms
 }
