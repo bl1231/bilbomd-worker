@@ -38,18 +38,31 @@ RUN cmake /usr/local/src/imp-2.18.0 -DIMP_STATIC=On -DIMP_DISABLED_MODULES=cgal:
 RUN make -j8
 
 FROM node:18-bullseye AS bilbomd-worker
+ARG USER_ID=1000
+ARG GROUP_ID=1000
 COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 COPY --from=build_imp /usr/local/src/imp_release/bin/foxs /usr/local/bin/
 COPY --from=build_imp /usr/local/src/imp_release/bin/multi_foxs /usr/local/bin/
+
 RUN apt-get update && apt-get install -y perl ncat gfortran
-RUN mkdir -p /home/node/app/node_modules
-RUN chown -R node:node /home/node/app
+
+RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
-RUN chown -R node:node /bilbomd/uploads
 VOLUME [ "/bilbomd/uploads" ]
-WORKDIR /home/node/app
-COPY --chown=node:node package*.json ./
-USER node
-RUN npm ci 
-COPY --chown=node:node . .
+WORKDIR /app
+
+# Create a user and group with the provided IDs
+RUN groupadd -g $GROUP_ID bilbomd && useradd -u $USER_ID -g $GROUP_ID -d /home/node -s /bin/bash bilbo
+
+# Change ownership of directories to the user and group
+RUN chown -R bilbo:bilbomd /app /bilbomd/uploads /home/node
+
+# Switch to the non-root user
+USER bilbo:bilbomd
+
+COPY --chown=bilbo:bilbomd package*.json ./
+
+RUN npm ci
+
+COPY --chown=bilbo:bilbomd . .
 CMD ["npm", "start"]
