@@ -38,8 +38,8 @@ RUN cmake /usr/local/src/imp-2.18.0 -DIMP_STATIC=On -DIMP_DISABLED_MODULES=cgal:
 RUN make -j8
 
 FROM node:18-bullseye AS bilbomd-worker
-ARG USER_ID=1000
-ARG GROUP_ID=1000
+ARG USER_ID=1001
+ARG GROUP_ID=1001
 COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 COPY --from=build_imp /usr/local/src/imp_release/bin/foxs /usr/local/bin/
 COPY --from=build_imp /usr/local/src/imp_release/bin/multi_foxs /usr/local/bin/
