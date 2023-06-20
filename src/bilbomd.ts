@@ -391,6 +391,7 @@ const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
   const multiFoxsDir = path.join(jobDir, 'multifoxs')
   const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
   const resultsDir = path.join(jobDir, 'results')
+  const inpFile = DBjob.const_inp_file
 
   // Create new empty results directory
   await makeDir(resultsDir)
@@ -403,7 +404,7 @@ const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     cwd: resultsDir
   })
   MQjob.log('Gather multi_state_model_*_1_1.dat files')
-  await execPromise(`cp ${jobDir}/const.inp .`, { cwd: resultsDir })
+  await execPromise(`cp ${jobDir}/${inpFile} .`, { cwd: resultsDir })
   MQjob.log('Gather const.inp file')
 
   // Only want to add N best PDBs equal to number_of_states N in logfile.
