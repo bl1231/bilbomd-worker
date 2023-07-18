@@ -6,7 +6,7 @@ import fs from 'fs-extra'
 import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
-import { Job as BilboMDJob, IBilboMDJob } from './model/Job'
+import { IBilboMDJob } from './model/Job'
 import { exec } from 'node:child_process'
 
 const execPromise = promisify(exec)
@@ -57,7 +57,7 @@ const generateInputFile = async (params: params) => {
   await writeToFile(templateString, params)
 }
 
-const generateDCD2PDBInpFile = async (params: params, rg: any, run: number) => {
+const generateDCD2PDBInpFile = async (params: params, rg: number, run: number) => {
   params.template = 'dcd2pdb'
   params.in_pdb = 'heat_output.pdb'
   params.in_dcd = `dynamics_rg${rg}_run${run}.dcd`
@@ -92,20 +92,31 @@ const makeFoxsDatFileList = async (multiFoxsDir: string) => {
 }
 
 const spawnFoXS = async (foxsRunDir: string) => {
-  const files = await fs.readdir(foxsRunDir)
-  new Promise((resolve, reject) => {
+  try {
+    const files = await fs.readdir(foxsRunDir)
     console.log('Spawn FoXS jobs:', foxsRunDir)
-    try {
-      for (const file of files) {
-        // console.log(file)
-        spawn(foxsBin, ['-pr', file], {
-          cwd: foxsRunDir
+
+    const spawnPromises = files.map(
+      (file) =>
+        new Promise<void>((resolve, reject) => {
+          const childProcess = spawn(foxsBin, ['-pr', file], {
+            cwd: foxsRunDir
+          })
+          childProcess.on('exit', (code) => {
+            if (code === 0) {
+              resolve()
+            } else {
+              reject(new Error(`FoXS process exited with code ${code}`))
+            }
+          })
         })
-      }
-    } catch (error) {
-      console.error(error)
-    }
-  })
+    )
+
+    await Promise.all(spawnPromises)
+    console.log('All FoXS jobs completed.')
+  } catch (error) {
+    console.error(error)
+  }
 }
 
 const spawnMultiFoxs = (multiFoxsDir: string, params: params) => {
