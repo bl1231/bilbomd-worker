@@ -7,7 +7,6 @@ import { processBilboMDJob } from './process.job'
 
 dotenv.config()
 
-// Connect to MongoDB
 connectDB()
 
 const workerHandler = async (job: Job<WorkerJob>) => {
@@ -46,23 +45,15 @@ const workerHandler = async (job: Job<WorkerJob>) => {
   }
 }
 
-//
 const workerOptions: WorkerOptions = {
   connection: {
     host: 'redis',
     port: 6379
   },
-  lockDuration: 90000 // default is 30sec 30000ms
+  lockDuration: 90000
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const worker = new Worker('bilbomd', workerHandler, workerOptions)
-
-// worker.run()
-
-worker.on('completed', (job: Job, returnvalue) => {
-  // Do something with the return value.
-  console.log('job', job)
-  console.log('returnvalue', returnvalue)
-})
 
 console.log('Worker started!')

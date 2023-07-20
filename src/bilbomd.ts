@@ -1,6 +1,6 @@
 import Handlebars from 'handlebars'
 import { readFile } from 'node:fs/promises'
-import { spawn } from 'node:child_process'
+import { spawn, ChildProcess } from 'node:child_process'
 import { promisify } from 'util'
 import fs from 'fs-extra'
 import readline from 'node:readline'
@@ -42,6 +42,7 @@ type params = {
   out_heat_rst?: string
   out_heat_crd?: string
   out_heat_pdb?: string
+  rg?: number
 }
 
 const writeToFile = async (templateString: string, params: params) => {
@@ -95,14 +96,14 @@ const spawnFoXS = async (foxsRunDir: string) => {
   try {
     const files = await fs.readdir(foxsRunDir)
     console.log('Spawn FoXS jobs:', foxsRunDir)
+    const foxsOpts = { cwd: foxsRunDir }
 
     const spawnPromises = files.map(
       (file) =>
         new Promise<void>((resolve, reject) => {
-          const childProcess = spawn(foxsBin, ['-pr', file], {
-            cwd: foxsRunDir
-          })
-          childProcess.on('exit', (code) => {
+          const foxsArgs = ['-pr', file]
+          const foxs: ChildProcess = spawn(foxsBin, foxsArgs, foxsOpts)
+          foxs.on('exit', (code) => {
             if (code === 0) {
               resolve()
             } else {
@@ -119,23 +120,24 @@ const spawnFoXS = async (foxsRunDir: string) => {
   }
 }
 
-const spawnMultiFoxs = (multiFoxsDir: string, params: params) => {
+const spawnMultiFoxs = (multiFoxsDir: string, params: params): Promise<string> => {
   const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
   const errorFile = path.join(multiFoxsDir, 'multi_foxs_error.log')
   const logStream = fs.createWriteStream(logFile)
   const errorStream = fs.createWriteStream(errorFile)
   const saxsData = path.join(params.out_dir, params.data_file!)
-  const multiFoxs = spawn(multiFoxsBin, [saxsData, 'foxs_dat_files.txt'], {
-    cwd: multiFoxsDir
-  })
+  const multiFoxArgs = [saxsData, 'foxs_dat_files.txt']
+  const multiFoxOpts = { cwd: multiFoxsDir }
+
   return new Promise((resolve, reject) => {
-    multiFoxs.stdout.on('data', (x) => {
-      console.log('spawnMultiFoxs stdout', x.toString())
-      logStream.write(x.toString())
+    const multiFoxs: ChildProcess = spawn(multiFoxsBin, multiFoxArgs, multiFoxOpts)
+    multiFoxs.stdout?.on('data', (data) => {
+      console.log('spawnMultiFoxs stdout', data.toString())
+      logStream.write(data.toString())
     })
-    multiFoxs.stderr.on('data', (x) => {
-      console.log('spawnMultiFoxs stderr', x.toString())
-      errorStream.write(x.toString())
+    multiFoxs.stderr?.on('data', (data) => {
+      console.log('spawnMultiFoxs stderr', data.toString())
+      errorStream.write(data.toString())
     })
     multiFoxs.on('error', (error) => {
       console.log('spawnMultiFoxs error:', error)
@@ -153,26 +155,23 @@ const spawnMultiFoxs = (multiFoxsDir: string, params: params) => {
   })
 }
 
-const spawnCharmm = (params: params) => {
+const spawnCharmm = (params: params): Promise<string> => {
   const input = params.charmm_inp_file
   const output = params.charmm_out_file
   console.log('Spawn CHARMM job for:', input)
-  const charmm = spawn(charmmBin, ['-o', output, '-i', input], {
-    cwd: params.out_dir
-  })
+  const charmmArgs = ['-o', output, '-i', input]
+  const charmmOpts = { cwd: params.out_dir }
+
   return new Promise((resolve, reject) => {
-    charmm.stdout.on('data', (x) => {
-      console.log('spawnCharmm stdout: ', x.toString())
+    const charmm: ChildProcess = spawn(charmmBin, charmmArgs, charmmOpts)
+    charmm.stdout?.on('data', (data) => {
+      console.log('spawnCharmm stdout: ', data.toString())
     })
-    charmm.stderr.on('data', (x) => {
-      console.error('spawnCharmm stderr: ', x.toString())
-      // Would like to ignore this error:
-      // Note: The following floating-point exceptions are signalling: IEEE_INVALID_FLAG
-      // reject(x.toString())
+    charmm.stderr?.on('data', (data) => {
+      console.error('spawnCharmm stderr: ', data.toString())
     })
     charmm.on('error', (error) => {
       console.log('spawnCharmm error:', error)
-      // reject(error)
     })
     charmm.on('close', (code: number) => {
       if (code === 0) {
@@ -180,7 +179,7 @@ const spawnCharmm = (params: params) => {
         resolve(code.toString())
       } else {
         console.log('spawnCharmm close error:', input, 'exit code:', code)
-        reject('CHARMM failed. Please see the error log file')
+        reject(new Error('CHARMM failed. Please see the error log file'))
       }
     })
   })
@@ -248,7 +247,8 @@ const runMolecularDynamics = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     rg_max: DBjob.rg_max,
     conf_sample: DBjob.conformational_sampling,
     timestep: 0.001,
-    inp_basename: ''
+    inp_basename: '',
+    rg: 0
   }
   const runAllCharmm = []
   const step = Math.round((params.rg_max - params.rg_min) / 5)
@@ -256,6 +256,7 @@ const runMolecularDynamics = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     params.charmm_inp_file = `${params.template}_rg${rg}.inp`
     params.charmm_out_file = `${params.template}_rg${rg}.out`
     params.inp_basename = `${params.template}_rg${rg}`
+    params.rg = rg
     await generateInputFile(params)
     runAllCharmm.push(spawnCharmm(params))
   }
@@ -358,25 +359,6 @@ const getNumEnsembles = async (logFile: string): Promise<number> => {
   }
   return Number(ensembleCount.pop())
 }
-
-// const retrieveNumLinesFromFile = (file: string, num: number) => {
-//   const lines: string[] = []
-//   return new Promise<string[]>((resolve) => {
-//     const rl = readline.createInterface({
-//       input: fs.createReadStream(file),
-//       crlfDelay: Infinity
-//     })
-//     rl.on('line', (line) => {
-//       // console.log('retrieveNumLinesFromFile line:', line)
-//       lines.push(line)
-//     })
-//     rl.on('close', () => {
-//       // console.log('retrieveNumLinesFromFile close')
-//       const linesToProcess = lines.slice(0, num)
-//       resolve(linesToProcess)
-//     })
-//   })
-// }
 
 const retrieveAllLinesFromFile = (file: string) => {
   const lines: string[] = []
