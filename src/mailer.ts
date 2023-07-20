@@ -26,8 +26,7 @@ const sendJobCompleteEmail = (email: string, url: string, jobid: string) => {
       extName: '.handlebars'
     })
   )
-  // bilbomd-worker/src/templates/mailer/jobcomplete.handlebars
-  //  home/node/app/src/templates/mailer/main.handlebars
+
   const mailOptions = {
     from: user,
     to: email,
