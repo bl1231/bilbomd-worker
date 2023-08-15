@@ -12,7 +12,7 @@
     "dev:start": "npm-run-all build start",
     "dev": "nodemon --watch src -e ts,ejs --exec npm run dev:start",
     "start": "npm run build && node build/worker.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "NODE_ENV=test jest --testTimeout=5000 --runInBand --verbose --detectOpenHandles",
     "worker": "nodemon ."
   },
   "keywords": [],
@@ -32,6 +32,7 @@
     "@types/dotenv": "^8.2.0",
     "@types/express": "^4.17.17",
     "@types/fs-extra": "^11.0.1",
+    "@types/jest": "^29.5.3",
     "@types/node": "^20.4.2",
     "@types/nodemailer": "^6.4.8",
     "@types/nodemailer-express-handlebars": "^4.0.2",
