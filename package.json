@@ -37,7 +37,7 @@
     "@types/nodemailer": "^6.4.9",
     "@types/nodemailer-express-handlebars": "^4.0.2",
     "@types/shelljs": "^0.8.12",
-    "@typescript-eslint/eslint-plugin": "^6.4.0",
+    "@typescript-eslint/eslint-plugin": "^6.6.0",
     "@typescript-eslint/parser": "^6.4.0",
     "copyfiles": "^2.4.1",
     "eslint": "^8.47.0",
