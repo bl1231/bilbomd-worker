@@ -36,9 +36,7 @@ const workerHandler = async (job: Job<WorkerJob>) => {
     }
     case 'BilboMD': {
       console.log('Starting  job:', job.name)
-      job.updateProgress(10)
       await processBilboMDJob(job)
-      job.updateProgress(100)
       console.log('Finished job:', job.name)
       return
     }
@@ -50,6 +48,7 @@ const workerOptions: WorkerOptions = {
     host: 'redis',
     port: 6379
   },
+  concurrency: 1,
   lockDuration: 90000
 }
 

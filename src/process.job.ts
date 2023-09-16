@@ -23,7 +23,7 @@ const updateJobStatus = async (job: IBilboMDJob, status: string) => {
 }
 
 const processBilboMDJob = async (job: BullMQJob) => {
-  console.log('BullMQ job:', job.data)
+  // console.log('BullMQ job:', job.data)
   console.log('BullMQ ID:', job.id)
   await job.log(`Start job ${job.data.uuid}`)
   await job.log(`MongoDB jobid ${job.data.jobid}`)
@@ -46,6 +46,7 @@ const processBilboMDJob = async (job: BullMQJob) => {
 
   // Set job status to Running
   foundJob.status = 'Running'
+  await job.updateProgress(10)
   const now = new Date()
   foundJob.time_started = now
   const resultRunning = await foundJob.save()
