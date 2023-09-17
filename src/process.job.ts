@@ -24,23 +24,23 @@ const updateJobStatus = async (job: IBilboMDJob, status: string) => {
 
 const processBilboMDJob = async (job: BullMQJob) => {
   // console.log('BullMQ job:', job.data)
-  console.log('BullMQ ID:', job.id)
-  await job.log(`Start job ${job.data.uuid}`)
-  await job.log(`MongoDB jobid ${job.data.jobid}`)
+  // console.log('BullMQ ID:', job.id)
+  // await job.log(`Start job ${job.data.uuid}`)
+  // await job.log(`MongoDB jobid ${job.data.jobid}`)
 
   // Make sure job exists in MongoDB
   const foundJob = await Job.findOne({ _id: job.data.jobid }).exec()
   if (!foundJob) {
-    console.log('no job found for:', job.data.jobid)
-    job.log(`no job found for ${job.data.jobid}`)
+    // console.log('no job found for:', job.data.jobid)
+    // job.log(`no job found for ${job.data.jobid}`)
     return 'no job found'
   }
 
   // Make sure the user exists
   const foundUser = await User.findById(foundJob.user).lean().exec()
   if (!foundUser) {
-    console.log('no user found for job:', job.data.jobid)
-    job.log(`no user found for job: ${job.data.jobid}`)
+    // console.log('no user found for job:', job.data.jobid)
+    // job.log(`no user found for job: ${job.data.jobid}`)
     return 'no user found'
   }
 
@@ -49,9 +49,10 @@ const processBilboMDJob = async (job: BullMQJob) => {
   await job.updateProgress(10)
   const now = new Date()
   foundJob.time_started = now
-  const resultRunning = await foundJob.save()
-  console.log(`Job status set to: ${resultRunning.status}`)
-  await job.log(`MongoDB job status set to ${resultRunning.status}`)
+  await foundJob.save()
+  // const resultRunning = await foundJob.save()
+  // console.log(`Job status set to: ${resultRunning.status}`)
+  // await job.log(`MongoDB job status set to ${resultRunning.status}`)
 
   // CHARMM minimization
   await job.log('start minimization')
@@ -65,6 +66,7 @@ const processBilboMDJob = async (job: BullMQJob) => {
     console.log('set Error status in MongoDB?')
     throw new Error('CHARMM minimize step failed')
   })
+  await job.log('end minimization')
   await job.updateProgress(25)
 
   // CHARMM heating
@@ -75,6 +77,7 @@ const processBilboMDJob = async (job: BullMQJob) => {
     updateJobStatus(foundJob, 'Error')
     throw new Error('CHARMM heating step failed')
   })
+  await job.log('end heating')
   await job.updateProgress(40)
 
   // CHARMM molecular dynamics
@@ -89,6 +92,7 @@ const processBilboMDJob = async (job: BullMQJob) => {
     .then(() => {
       job.log('finished molecular dynamics')
     })
+  await job.log('end molecular dynamics')
   await job.updateProgress(60)
 
   // Calculate FoXS profiles
@@ -103,6 +107,7 @@ const processBilboMDJob = async (job: BullMQJob) => {
     .then(() => {
       job.log('finished FoXS')
     })
+  await job.log('end FoXS')
   await job.updateProgress(80)
 
   // MultiFoXS
@@ -115,11 +120,13 @@ const processBilboMDJob = async (job: BullMQJob) => {
       throw new Error('Multi-FoXS step failed')
     })
     .then(() => {
-      job.log('finished MultiFoXS')
+      job.log('end MultiFoXS')
     })
+
   await job.updateProgress(95)
 
   // Prepare results for user
+  await job.log('start gather results')
   await gatherResults(job, foundJob)
     .catch((error) => {
       console.log('gatherResults error:', error)
@@ -128,7 +135,7 @@ const processBilboMDJob = async (job: BullMQJob) => {
       throw new Error('Gather results step failed')
     })
     .then(() => {
-      job.log('finished Gathering Results')
+      job.log('end gather results')
     })
 
   await job.updateProgress(99)
