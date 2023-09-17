@@ -96,7 +96,7 @@ const processBilboMDJob = async (job: BullMQJob) => {
   await job.updateProgress(60)
 
   // Calculate FoXS profiles
-  await job.log('start FoXS')
+  await job.log('start FoXS calculations')
   await runFoxs(job, foundJob)
     .catch((error) => {
       console.log('runFoxs error:', error)
@@ -111,7 +111,7 @@ const processBilboMDJob = async (job: BullMQJob) => {
   await job.updateProgress(80)
 
   // MultiFoXS
-  await job.log('start MultiFoXS')
+  await job.log('start MultiFoXS calculations')
   await runMultiFoxs(job, foundJob)
     .catch((error) => {
       console.log('runMultiFoxs error:', error)
@@ -148,7 +148,7 @@ const processBilboMDJob = async (job: BullMQJob) => {
   })
 
   // Send email to user
-  sendJobCompleteEmail(foundUser?.email, bilbomdUrl, foundJob.id)
+  sendJobCompleteEmail(foundUser?.email, bilbomdUrl, foundJob.id, foundJob.title)
   console.log(`email notification sent to ${foundUser?.email}`)
   await job.log(`email notification sent to ${foundUser?.email}`)
   await job.updateProgress(100)

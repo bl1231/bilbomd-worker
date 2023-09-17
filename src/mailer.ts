@@ -12,7 +12,12 @@ const transporter = nodemailer.createTransport({
   secure: false
 })
 
-const sendJobCompleteEmail = (email: string, url: string, jobid: string) => {
+const sendJobCompleteEmail = (
+  email: string,
+  url: string,
+  jobid: string,
+  title: string
+) => {
   console.log('send job complete email')
   transporter.use(
     'compile',
@@ -30,11 +35,12 @@ const sendJobCompleteEmail = (email: string, url: string, jobid: string) => {
   const mailOptions = {
     from: user,
     to: email,
-    subject: 'BilboMD Job Complete',
+    subject: `BilboMD Job Complete - Job Title: ${title}`,
     template: 'jobcomplete',
     context: {
       jobid,
-      url
+      url,
+      title
     }
   }
 
