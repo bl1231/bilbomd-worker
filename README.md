@@ -43,3 +43,8 @@ All of these env settings (and some others) reside in a single `.env` file that 
 - [bilbomd-backend](https://github.com/bl1231/bilbomd-backend)
 - [bilbomd-mongodb](https://hub.docker.com/_/mongo) (official docker image from [Docker Hub](https://hub.docker.com/))
 - [bilbomd-redis](https://hub.docker.com/_/redis)(official docker image [Docker Hub](https://hub.docker.com/))
+
+## Version History
+
+- 0.0.9
+  - add job title to emails
