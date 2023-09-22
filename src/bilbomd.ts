@@ -101,7 +101,7 @@ const spawnFoXS = async (foxsRunDir: string) => {
     const spawnPromises = files.map(
       (file) =>
         new Promise<void>((resolve, reject) => {
-          const foxsArgs = ['-pr', file]
+          const foxsArgs = ['-p', file]
           const foxs: ChildProcess = spawn(foxsBin, foxsArgs, foxsOpts)
           foxs.on('exit', (code) => {
             if (code === 0) {
