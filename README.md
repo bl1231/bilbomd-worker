@@ -46,5 +46,7 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 0.0.10
+  - Remove the `-r` option from FoXS in `spawnFoXS` function.
 - 0.0.9
   - add job title to emails
