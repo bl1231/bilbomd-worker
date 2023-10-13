@@ -6,7 +6,9 @@ import fs from 'fs-extra'
 import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
+import { User } from './model/User'
 import { IBilboMDJob, IBilboMDAutoJob } from './model/Job'
+import { sendJobCompleteEmail } from './mailer'
 import { exec } from 'node:child_process'
 
 const execPromise = promisify(exec)
@@ -17,6 +19,7 @@ const foxsBin: string = process.env.FOXS ?? '/usr/local/bin/foxs'
 const multiFoxsBin: string = process.env.MULTIFOXS ?? '/usr/local/bin/multi_foxs'
 const charmmBin: string = process.env.CHARMM ?? '/usr/local/bin/charmm'
 const dataVol: string = process.env.DATA_VOL ?? '/bilbomd/uploads'
+const bilbomdUrl: string = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
 
 type params = {
   out_dir: string
@@ -57,22 +60,45 @@ type charmmParams = params & {
   rg?: number
 }
 
+const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDJob) => {
+  // Make sure the user exists in MongoDB
+  const foundUser = await User.findById(DBjob.user).lean().exec()
+  if (!foundUser) {
+    throw new Error(`No user found for: ${DBjob.uuid}`)
+  }
+  // Clear the BullMQ Job logs
+  await MQJob.clearLogs()
+  // Set MongoDB status to Running
+  DBjob.status = 'Running'
+  const now = new Date()
+  DBjob.time_started = now
+  await DBjob.save()
+}
+
+const cleanupJob = async (MQjob: BullMQJob, DBJob: IBilboMDJob) => {
+  DBJob.status = 'Completed'
+  DBJob.time_completed = new Date()
+  await DBJob.save()
+  sendJobCompleteEmail(DBJob.user.email, bilbomdUrl, DBJob.id, DBJob.title)
+  console.log(`email notification sent to ${DBJob.user.email}`)
+  await MQjob.log(`email notification sent to ${DBJob.user.email}`)
+}
+
 /**
  *
  * @param {IBilboMDJob} job - BullMQ Job
  * @param {string} status - Status of the job
  */
 const updateJobStatus = async (job: IBilboMDJob, status: string) => {
-  console.log('in updateJobStatus')
   job.status = status
-  job.save()
+  await job.save()
 }
 
 const writeToFile = async (templateString: string, params: charmmParams) => {
   const outFile = path.join(params.out_dir, params.charmm_inp_file)
   const template = Handlebars.compile(templateString)
   const outputString = template(params)
-  console.log('about to write ', outFile)
+  console.log('Write File: ', outFile)
   await fs.writeFile(outFile, outputString)
 }
 
@@ -96,7 +122,7 @@ const makeFile = async (file: string) => {
 
 const makeDir = async (directory: string) => {
   await fs.ensureDir(directory)
-  console.log('Create dir:', directory)
+  console.log('Create Dir: ', directory)
 }
 
 const makeFoxsDatFileList = async (multiFoxsDir: string) => {
@@ -184,27 +210,30 @@ const spawnMultiFoxs = (multiFoxsDir: string, params: foxsParams): Promise<strin
 const spawnCharmm = (params: charmmParams): Promise<string> => {
   const input = params.charmm_inp_file
   const output = params.charmm_out_file
-  console.log('Spawn CHARMM job for:', input)
   const charmmArgs = ['-o', output, '-i', input]
   const charmmOpts = { cwd: params.out_dir }
 
   return new Promise((resolve, reject) => {
     const charmm: ChildProcess = spawn(charmmBin, charmmArgs, charmmOpts)
-    charmm.stdout?.on('data', (data) => {
-      console.log('spawnCharmm stdout: ', data.toString())
-    })
-    charmm.stderr?.on('data', (data) => {
-      console.error('spawnCharmm stderr: ', data.toString())
-    })
+
+    // charmm.stdout?.on('data', (data) => {
+    //   console.log('spawnCharmm stdout: ', data.toString())
+    // })
+
+    // charmm.stderr?.on('data', (data) => {
+    //   console.error('spawnCharmm stderr: ', data.toString())
+    // })
+
     charmm.on('error', (error) => {
-      console.log('spawnCharmm error:', error)
+      reject(error)
     })
+
     charmm.on('close', (code: number) => {
       if (code === 0) {
-        console.log('spawnCharmm close success:', input, 'exit code:', code)
-        resolve(code.toString())
+        console.log('CHARMM success:', input, 'exit code:', code)
+        resolve('CHARMM execution succeeded')
       } else {
-        console.log('spawnCharmm close error:', input, 'exit code:', code)
+        console.log('CHARMM error:', input, 'exit code:', code)
         reject(new Error('CHARMM failed. Please see the error log file'))
       }
     })
@@ -256,6 +285,58 @@ const runPaeToConst = async (DBjob: IBilboMDAutoJob) => {
     out_dir: outputDir
   }
   await spawnPaeToConst(params)
+  DBjob.const_inp_file = 'const.inp'
+  await DBjob.save()
+}
+
+const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
+  const outputDir = path.join(dataVol, DBjob.uuid)
+  const logFile = path.join(outputDir, 'autoRg.log')
+  const errorFile = path.join(outputDir, 'autoRg_error.log')
+  const logStream = fs.createWriteStream(logFile)
+  const errorStream = fs.createWriteStream(errorFile)
+  const autoRg_script = '/app/scripts/autorg.py'
+  const args = [autoRg_script, DBjob.data_file]
+
+  return new Promise<void>((resolve, reject) => {
+    const autoRg = spawn('python', args, { cwd: outputDir })
+    let autoRg_json = ''
+
+    autoRg.stdout?.on('data', (data) => {
+      logStream.write(data.toString())
+      autoRg_json += data.toString()
+    })
+
+    autoRg.stderr?.on('data', (data) => {
+      errorStream.write(data.toString())
+    })
+
+    autoRg.on('error', (error) => {
+      errorStream.end()
+      reject(error)
+    })
+
+    autoRg.on('exit', (code) => {
+      logStream.end()
+      errorStream.end()
+      if (code === 0) {
+        try {
+          // Parse the stdout data as JSON
+          const analysisResults = JSON.parse(autoRg_json)
+          // Update rg_min and rg_max in DBjob
+          DBjob.rg_min = analysisResults.rg_min
+          DBjob.rg_max = analysisResults.rg_max
+          DBjob.save().then(() => {
+            resolve()
+          })
+        } catch (parseError) {
+          reject(parseError)
+        }
+      } else {
+        reject(`spawnAutoRgCalculator on close reject`)
+      }
+    })
+  })
 }
 
 const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
@@ -331,7 +412,7 @@ const runMolecularDynamics = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     inp_basename: '',
     rg: 0
   }
-  console.log('in runMD params: ', params)
+  // console.log('in runMD params: ', params)
   try {
     const molecularDynamicsTasks = []
     const step = Math.round((params.rg_max - params.rg_min) / 5)
@@ -534,11 +615,14 @@ const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
 }
 
 export {
+  initializeJob,
   runPaeToConst,
+  runAutoRg,
   runMinimize,
   runHeat,
   runMolecularDynamics,
   runFoxs,
   runMultiFoxs,
-  gatherResults
+  gatherResults,
+  cleanupJob
 }
