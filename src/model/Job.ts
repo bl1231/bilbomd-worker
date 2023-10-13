@@ -108,8 +108,8 @@ const bilboMdAutoJobSchema = new Schema<IBilboMDAutoJob>(
       enum: [1, 2, 3, 4],
       default: 1
     },
-    rg_min: { type: Number, required: true },
-    rg_max: { type: Number, required: true },
+    rg_min: { type: Number, required: false },
+    rg_max: { type: Number, required: false },
     status: {
       type: String,
       enum: ['Submitted', 'Pending', 'Running', 'Completed', 'Error'],
