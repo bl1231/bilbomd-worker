@@ -35,7 +35,7 @@ const sendJobCompleteEmail = (
   const mailOptions = {
     from: user,
     to: email,
-    subject: `BilboMD Job Complete - Job Title: ${title}`,
+    subject: `BilboMD Job Complete: ${title}`,
     template: 'jobcomplete',
     context: {
       jobid,

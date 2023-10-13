@@ -12,7 +12,7 @@ const {
 const url = `mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@${MONGO_HOSTNAME}:${MONGO_PORT}/${MONGO_DB}?authSource=${MONGO_AUTH_SRC}`
 
 const connectDB = async () => {
-  console.log(url)
+  // console.log(url)
   try {
     await mongoose.connect(url)
   } catch (err) {

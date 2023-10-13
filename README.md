@@ -15,7 +15,7 @@ Processes BilboMD jobs and run CHARMM, FoXS, and MultiFoXS
 To build the Docker image from the command line you must specify the CHARMM version.
 
 ```bash
-docker build -t bl1231/bilbomd-worker:1 --build-arg CHARMM_VER=c47b2 .
+docker build -t bl1231/bilbomd-worker:0.0.11-dev3 --build-arg CHARMM_VER=c47b2 .
 ```
 
 The entire app is run within a [Docker](https://www.docker.com/) container. See the `Dockerfile` for details. It accesses BullMQ/Redis container using these env variables:

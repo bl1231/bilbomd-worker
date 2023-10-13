@@ -6,7 +6,7 @@ import fs from 'fs-extra'
 import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
-import { IBilboMDJob } from './model/Job'
+import { IBilboMDJob, IBilboMDAutoJob } from './model/Job'
 import { exec } from 'node:child_process'
 
 const execPromise = promisify(exec)
@@ -19,14 +19,26 @@ const charmmBin: string = process.env.CHARMM ?? '/usr/local/bin/charmm'
 const dataVol: string = process.env.DATA_VOL ?? '/bilbomd/uploads'
 
 type params = {
+  out_dir: string
+}
+
+type paeParams = params & {
+  in_crd: string
+  in_pae: string
+}
+
+type foxsParams = params & {
+  data_file: string
+}
+
+type charmmParams = params & {
   template: string
   topology_dir: string
-  out_dir: string
   charmm_inp_file: string
   charmm_out_file: string
   in_psf?: string
   in_crd?: string
-  data_file?: string
+  in_pae?: string
   out_min_crd?: string
   out_min_pdb?: string
   in_pdb?: string
@@ -45,20 +57,32 @@ type params = {
   rg?: number
 }
 
-const writeToFile = async (templateString: string, params: params) => {
+/**
+ *
+ * @param {IBilboMDJob} job - BullMQ Job
+ * @param {string} status - Status of the job
+ */
+const updateJobStatus = async (job: IBilboMDJob, status: string) => {
+  console.log('in updateJobStatus')
+  job.status = status
+  job.save()
+}
+
+const writeToFile = async (templateString: string, params: charmmParams) => {
   const outFile = path.join(params.out_dir, params.charmm_inp_file)
   const template = Handlebars.compile(templateString)
   const outputString = template(params)
+  console.log('about to write ', outFile)
   await fs.writeFile(outFile, outputString)
 }
 
-const generateInputFile = async (params: params) => {
+const generateInputFile = async (params: charmmParams) => {
   const templateFile = path.join(templates, `${params.template}.handlebars`)
   const templateString = await readFile(templateFile, 'utf8')
   await writeToFile(templateString, params)
 }
 
-const generateDCD2PDBInpFile = async (params: params, rg: number, run: number) => {
+const generateDCD2PDBInpFile = async (params: charmmParams, rg: number, run: number) => {
   params.template = 'dcd2pdb'
   params.in_pdb = 'heat_output.pdb'
   params.in_dcd = `dynamics_rg${rg}_run${run}.dcd`
@@ -92,6 +116,10 @@ const makeFoxsDatFileList = async (multiFoxsDir: string) => {
   errorStream.write(stderr)
 }
 
+/**
+ *
+ * @param foxsRunDir
+ */
 const spawnFoXS = async (foxsRunDir: string) => {
   try {
     const files = await fs.readdir(foxsRunDir)
@@ -112,20 +140,18 @@ const spawnFoXS = async (foxsRunDir: string) => {
           })
         })
     )
-
     await Promise.all(spawnPromises)
-    console.log('All FoXS jobs completed.')
   } catch (error) {
     console.error(error)
   }
 }
 
-const spawnMultiFoxs = (multiFoxsDir: string, params: params): Promise<string> => {
+const spawnMultiFoxs = (multiFoxsDir: string, params: foxsParams): Promise<string> => {
   const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
   const errorFile = path.join(multiFoxsDir, 'multi_foxs_error.log')
   const logStream = fs.createWriteStream(logFile)
   const errorStream = fs.createWriteStream(errorFile)
-  const saxsData = path.join(params.out_dir, params.data_file!)
+  const saxsData = path.join(params.out_dir, params.data_file)
   const multiFoxArgs = [saxsData, 'foxs_dat_files.txt']
   const multiFoxOpts = { cwd: multiFoxsDir }
 
@@ -155,7 +181,7 @@ const spawnMultiFoxs = (multiFoxsDir: string, params: params): Promise<string> =
   })
 }
 
-const spawnCharmm = (params: params): Promise<string> => {
+const spawnCharmm = (params: charmmParams): Promise<string> => {
   const input = params.charmm_inp_file
   const output = params.charmm_out_file
   console.log('Spawn CHARMM job for:', input)
@@ -185,9 +211,54 @@ const spawnCharmm = (params: params): Promise<string> => {
   })
 }
 
+const spawnPaeToConst = async (params: paeParams): Promise<string> => {
+  const logFile = path.join(params.out_dir, 'af2pae.log')
+  const errorFile = path.join(params.out_dir, 'af2pae_error.log')
+  const logStream = fs.createWriteStream(logFile)
+  const errorStream = fs.createWriteStream(errorFile)
+  const paeFile = params.in_pae
+  const crdFile = params.in_crd
+  const af2pae_script = '/app/scripts/pae_ratios.py'
+  const args = [af2pae_script, paeFile, crdFile]
+  const opts = { cwd: params.out_dir }
+
+  return new Promise((resolve, reject) => {
+    const runPaeToConst: ChildProcess = spawn('python', args, opts)
+    runPaeToConst.stdout?.on('data', (data) => {
+      console.log('runPaeToConst stdout: ', data.toString())
+      logStream.write(data.toString())
+    })
+    runPaeToConst.stderr?.on('data', (data) => {
+      console.error('runPaeToConst stderr: ', data.toString())
+      errorStream.write(data.toString())
+    })
+    runPaeToConst.on('error', (error) => {
+      console.log('runPaeToConst error:', error)
+      reject(error)
+    })
+    runPaeToConst.on('exit', (code: number) => {
+      if (code === 0) {
+        console.log('runPaeToConst close success:', 'exit code:', code)
+        resolve(code.toString())
+      } else {
+        console.log('runPaeToConst close error:', 'exit code:', code)
+        reject(new Error('runPaeToConst failed. Please see the error log file'))
+      }
+    })
+  })
+}
+
+const runPaeToConst = async (DBjob: IBilboMDAutoJob) => {
+  const outputDir = path.join(dataVol, DBjob.uuid)
+  const params = {
+    in_crd: DBjob.crd_file,
+    in_pae: DBjob.pae_file,
+    out_dir: outputDir
+  }
+  await spawnPaeToConst(params)
+}
+
 const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
-  console.log(MQjob.data)
-  console.log(DBjob)
   const outputDir = path.join(dataVol, MQjob.data.uuid)
   const params = {
     template: 'minimize',
@@ -203,10 +274,14 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     rg_max: DBjob.rg_max,
     conf_sample: DBjob.conformational_sampling
   }
-  await generateInputFile(params).catch((err) => {
-    console.log('Got generateInputFile error:', err.message, err.stack)
-  })
-  await spawnCharmm(params)
+  try {
+    await generateInputFile(params)
+    await spawnCharmm(params)
+  } catch (error) {
+    updateJobStatus(DBjob, 'Error')
+    MQjob.log('failed in runMinimize')
+    throw new Error('CHARMM minimize step failed')
+  }
 }
 
 const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
@@ -227,8 +302,14 @@ const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     out_heat_crd: 'heat_output.crd',
     out_heat_pdb: 'heat_output.pdb'
   }
-  await generateInputFile(params)
-  await spawnCharmm(params)
+  try {
+    await generateInputFile(params)
+    await spawnCharmm(params)
+  } catch (error) {
+    updateJobStatus(DBjob, 'Error')
+    MQjob.log('failed in runHeat')
+    throw new Error('CHARMM heat step failed')
+  }
 }
 
 const runMolecularDynamics = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
@@ -250,19 +331,27 @@ const runMolecularDynamics = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     inp_basename: '',
     rg: 0
   }
-  const runAllCharmm = []
-  const step = Math.round((params.rg_max - params.rg_min) / 5)
-  for (let rg = params.rg_min; rg <= params.rg_max; rg += step) {
-    params.charmm_inp_file = `${params.template}_rg${rg}.inp`
-    params.charmm_out_file = `${params.template}_rg${rg}.out`
-    params.inp_basename = `${params.template}_rg${rg}`
-    params.rg = rg
-    await generateInputFile(params)
-    runAllCharmm.push(spawnCharmm(params))
+  console.log('in runMD params: ', params)
+  try {
+    const molecularDynamicsTasks = []
+    const step = Math.round((params.rg_max - params.rg_min) / 5)
+    console.log('in runMD step:', step)
+    for (let rg = params.rg_min; rg <= params.rg_max; rg += step) {
+      params.charmm_inp_file = `${params.template}_rg${rg}.inp`
+      params.charmm_out_file = `${params.template}_rg${rg}.out`
+      params.inp_basename = `${params.template}_rg${rg}`
+      params.rg = rg
+      console.log(params)
+      await generateInputFile(params)
+      molecularDynamicsTasks.push(spawnCharmm(params))
+    }
+    await Promise.all(molecularDynamicsTasks)
+  } catch (error) {
+    updateJobStatus(DBjob, 'Error')
+    MQjob.log(`failed in runMolecularDynamics ${error}`)
+    // throw new Error('CHARMM MD step failed')
+    throw error
   }
-  await Promise.all(runAllCharmm).then(() => {
-    console.log('All CHARMM MD runs complete.')
-  })
 }
 
 const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
@@ -285,35 +374,42 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     foxs_rg: '',
     run: ''
   }
-  const foxsDir = path.join(params.out_dir, 'foxs')
-  await makeDir(foxsDir)
-  params.foxs_rg = 'foxs_rg.out'
-  const foxsRgFile = path.join(params.out_dir, params.foxs_rg)
-  await makeFile(foxsRgFile)
 
-  const step = Math.round((params.rg_max - params.rg_min) / 5)
-  for (let rg = params.rg_min; rg <= params.rg_max; rg += step) {
-    for (let run = 1; run <= params.conf_sample; run += 1) {
-      const runAllCharmm = []
-      const runAllFoxs = []
-      const foxsRunDir = path.join(foxsDir, `rg${rg}_run${run}`)
-      await makeDir(foxsRunDir)
-      params.template = 'dcd2pdb'
-      params.charmm_inp_file = `${params.template}_rg${rg}_run${run}.inp`
-      params.charmm_out_file = `${params.template}_rg${rg}_run${run}.out`
-      params.inp_basename = `${params.template}_rg${rg}_run${run}`
-      params.run = `rg${rg}_run${run}`
+  try {
+    const foxsDir = path.join(params.out_dir, 'foxs')
+    await makeDir(foxsDir)
+    params.foxs_rg = 'foxs_rg.out'
+    const foxsRgFile = path.join(params.out_dir, params.foxs_rg)
+    await makeFile(foxsRgFile)
 
-      await generateDCD2PDBInpFile(params, rg, run)
-      runAllCharmm.push(spawnCharmm(params))
-      await Promise.all(runAllCharmm)
+    const step = Math.round((params.rg_max - params.rg_min) / 5)
+    for (let rg = params.rg_min; rg <= params.rg_max; rg += step) {
+      for (let run = 1; run <= params.conf_sample; run += 1) {
+        const runAllCharmm = []
+        const runAllFoxs = []
+        const foxsRunDir = path.join(foxsDir, `rg${rg}_run${run}`)
+        await makeDir(foxsRunDir)
+        params.template = 'dcd2pdb'
+        params.charmm_inp_file = `${params.template}_rg${rg}_run${run}.inp`
+        params.charmm_out_file = `${params.template}_rg${rg}_run${run}.out`
+        params.inp_basename = `${params.template}_rg${rg}_run${run}`
+        params.run = `rg${rg}_run${run}`
 
-      // then run FoXS on every PDB in foxsRunDir
-      runAllFoxs.push(spawnFoXS(foxsRunDir))
-      // const files = await fs.readdir(foxsRunDir)
-      // await spawnFoXS(foxsRunDir, files)
-      await Promise.all(runAllFoxs)
+        await generateDCD2PDBInpFile(params, rg, run)
+        runAllCharmm.push(spawnCharmm(params))
+        await Promise.all(runAllCharmm)
+
+        // then run FoXS on every PDB in foxsRunDir
+        runAllFoxs.push(spawnFoXS(foxsRunDir))
+        // const files = await fs.readdir(foxsRunDir)
+        // await spawnFoXS(foxsRunDir, files)
+        await Promise.all(runAllFoxs)
+      }
     }
+  } catch (error) {
+    updateJobStatus(DBjob, 'Error')
+    MQjob.log('failed in runFoxs')
+    throw new Error('runFoxs step failed')
   }
 }
 
@@ -338,10 +434,16 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     run: '',
     data_file: DBjob.data_file
   }
-  const multiFoxsDir = path.join(jobDir, 'multifoxs')
-  await makeDir(multiFoxsDir)
-  await makeFoxsDatFileList(multiFoxsDir)
-  await spawnMultiFoxs(multiFoxsDir, params)
+  try {
+    const multiFoxsDir = path.join(jobDir, 'multifoxs')
+    await makeDir(multiFoxsDir)
+    await makeFoxsDatFileList(multiFoxsDir)
+    await spawnMultiFoxs(multiFoxsDir, params)
+  } catch (error) {
+    updateJobStatus(DBjob, 'Error')
+    MQjob.log('failed in runMultiFoxs')
+    throw new Error('runMultiFoxs step failed')
+  }
 }
 
 const getNumEnsembles = async (logFile: string): Promise<number> => {
@@ -432,6 +534,7 @@ const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
 }
 
 export {
+  runPaeToConst,
   runMinimize,
   runHeat,
   runMolecularDynamics,
