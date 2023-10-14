@@ -46,6 +46,10 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 0.0.12
+  - Add BilboMDAuto job type (experimental and untested!)
+- 0.0.11
+  - bump nodejs to 18.18.0
 - 0.0.10
   - Remove the `-r` option from FoXS in `spawnFoXS` function.
 - 0.0.9
