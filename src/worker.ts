@@ -3,7 +3,8 @@ import { connectDB } from './db'
 import { Job, Worker, WorkerOptions } from 'bullmq'
 import { WorkerJob } from 'bullmq.jobs'
 import { DoSomeHeavyComputingUseCase } from './utils'
-import { processBilboMDJob } from './process.job'
+import { processBilboMDJob } from './process.bilbomd'
+import { processBilboMDAutoJob } from './process.bilbomdauto'
 
 dotenv.config()
 
@@ -35,8 +36,14 @@ const workerHandler = async (job: Job<WorkerJob>) => {
       return 'Done!'
     }
     case 'BilboMD': {
-      console.log('Starting  job:', job.name)
+      console.log('Start job:', job.name)
       await processBilboMDJob(job)
+      console.log('Finish job:', job.name)
+      return
+    }
+    case 'BilboMDAuto': {
+      console.log('Start job:', job.name)
+      await processBilboMDAutoJob(job)
       console.log('Finished job:', job.name)
       return
     }

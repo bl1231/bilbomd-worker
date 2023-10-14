@@ -1,4 +1,4 @@
-import { Document, Date, Schema, ObjectId, model } from "mongoose"
+import { Document, Date, Schema, ObjectId, model } from 'mongoose'
 
 interface IUser extends Document {
   username: string
@@ -58,4 +58,4 @@ const userSchema = new Schema<IUser>({
 
 const User = model('User', userSchema)
 
-export { User }
+export { User, IUser }
