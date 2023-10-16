@@ -46,6 +46,9 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.0.0
+  - Start using Ubuntu for Docker build
+  - IMP 2.19.0
 - 0.0.12
   - Add BilboMDAuto job type (experimental and untested!)
 - 0.0.11
