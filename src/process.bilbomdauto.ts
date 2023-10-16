@@ -87,10 +87,16 @@ const processBilboMDAutoJob = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(10)
 
   // Use PAE to construct const.inp file
+  await MQjob.log('start pae to const')
   await runPaeToConst(foundJob)
+  await MQjob.log('end pae to const')
+  await MQjob.updateProgress(15)
 
   // Use BioXTAS to calculate Rg_min and Rg_max
+  await MQjob.log('start autorg')
   await runAutoRg(foundJob)
+  await MQjob.log('end autorg')
+  await MQjob.updateProgress(20)
 
   // CHARMM minimization
   await MQjob.log('start minimization')
