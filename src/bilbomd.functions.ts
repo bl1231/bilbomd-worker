@@ -416,13 +416,11 @@ const runMolecularDynamics = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
   try {
     const molecularDynamicsTasks = []
     const step = Math.round((params.rg_max - params.rg_min) / 5)
-    console.log('in runMD step:', step)
     for (let rg = params.rg_min; rg <= params.rg_max; rg += step) {
       params.charmm_inp_file = `${params.template}_rg${rg}.inp`
       params.charmm_out_file = `${params.template}_rg${rg}.out`
       params.inp_basename = `${params.template}_rg${rg}`
       params.rg = rg
-      console.log(params)
       await generateInputFile(params)
       molecularDynamicsTasks.push(spawnCharmm(params))
     }
