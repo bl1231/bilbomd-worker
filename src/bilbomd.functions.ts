@@ -15,8 +15,8 @@ const execPromise = promisify(exec)
 const templates = path.resolve(__dirname, './templates/bilbomd')
 
 const topoFiles: string = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
-const foxsBin: string = process.env.FOXS ?? '/usr/local/bin/foxs'
-const multiFoxsBin: string = process.env.MULTIFOXS ?? '/usr/local/bin/multi_foxs'
+const foxsBin: string = process.env.FOXS ?? '/usr/bin/foxs'
+const multiFoxsBin: string = process.env.MULTIFOXS ?? '/usr/bin/multi_foxs'
 const charmmBin: string = process.env.CHARMM ?? '/usr/local/bin/charmm'
 const dataVol: string = process.env.DATA_VOL ?? '/bilbomd/uploads'
 const bilbomdUrl: string = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
@@ -416,13 +416,11 @@ const runMolecularDynamics = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
   try {
     const molecularDynamicsTasks = []
     const step = Math.round((params.rg_max - params.rg_min) / 5)
-    console.log('in runMD step:', step)
     for (let rg = params.rg_min; rg <= params.rg_max; rg += step) {
       params.charmm_inp_file = `${params.template}_rg${rg}.inp`
       params.charmm_out_file = `${params.template}_rg${rg}.out`
       params.inp_basename = `${params.template}_rg${rg}`
       params.rg = rg
-      console.log(params)
       await generateInputFile(params)
       molecularDynamicsTasks.push(spawnCharmm(params))
     }

@@ -1,4 +1,4 @@
-FROM debian:bullseye AS builder
+FROM ubuntu:22.04 AS builder
 RUN apt-get update && apt-get install -y cmake gcc gfortran g++
 
 FROM builder AS config_charmm
@@ -14,46 +14,43 @@ FROM config_charmm AS build_charmm
 WORKDIR /usr/local/src/charmm
 RUN make -j8 -C build/cmake install
 
-FROM builder AS build_imp
-RUN apt-get install -y \
-    libboost-all-dev \
-    libeigen3-dev \
-    google-perftools \
-    libcgal-dev \
-    graphviz \
-    libgsl-dev \
-    libhdf5-dev \
-    swig \
-    fftw-dev \
-    opencv-data \
-    python3-dev \
-    python3-numpy \
-    doxygen
-WORKDIR /usr/local/src
-COPY ./scripts/imp-2.18.0.tar.gz .
-RUN tar zxvf imp-2.18.0.tar.gz
-RUN mkdir imp_release
-WORKDIR /usr/local/src/imp_release
-RUN cmake /usr/local/src/imp-2.18.0 -DIMP_STATIC=On -DIMP_DISABLED_MODULES=cgal:membrane:example
-RUN make -j8
+FROM ubuntu:22.04 as install_imp
+RUN apt-get update && apt-get install -y wget
+RUN echo "deb https://integrativemodeling.org/latest/download jammy/" >> /etc/apt/sources.list
+RUN wget -O /etc/apt/trusted.gpg.d/salilab.asc https://salilab.org/~ben/pubkey256.asc
+RUN apt-get update && apt-get install -y imp
 
-FROM continuumio/miniconda3:latest AS bilbomd-worker
+FROM install_imp AS bilbomd-worker-step1
 ARG USER_ID=1001
 ARG GROUP_ID=1001
 COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
-COPY --from=build_imp /usr/local/src/imp_release/bin/foxs /usr/local/bin/
-COPY --from=build_imp /usr/local/src/imp_release/bin/multi_foxs /usr/local/bin/
 
+
+FROM bilbomd-worker-step1 AS bilbomd-worker-nodejs
 RUN apt-get update
 RUN apt-get install -y gpg curl
-
 RUN mkdir -p /etc/apt/keyrings
 RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-
 RUN echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_18.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
-
 RUN apt-get update
-RUN apt-get install -y nodejs zip build-essential
+RUN apt-get install -y nodejs
+
+FROM bilbomd-worker-nodejs AS bilbomd-worker-step3
+
+# Update the package repository and install dependencies
+RUN apt-get update && apt-get install -y wget bzip2
+
+# Download the Miniconda installer script
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh
+
+# Run the Miniconda installer
+RUN bash /tmp/miniconda.sh -b -p /opt/miniconda
+
+# Clean up
+RUN rm /tmp/miniconda.sh
+
+# Set up the Miniconda environment
+ENV PATH="/opt/miniconda/bin:$PATH"
 
 # Copy the environment.yml file into the image
 COPY environment.yml /tmp/environment.yml
@@ -61,6 +58,8 @@ COPY environment.yml /tmp/environment.yml
 # Update existing base environment from environment.yml
 RUN conda env update -f /tmp/environment.yml
 
+FROM bilbomd-worker-step3 AS bilbomd-worker-bioxtas
+RUN apt-get install -y zip build-essential
 # Create a directory for BioXTAS and copy the source ZIP file
 RUN mkdir /BioXTAS
 COPY bioxtas/RAW-2.2.1-source.zip /BioXTAS/
