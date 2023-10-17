@@ -110,3 +110,5 @@ build
 *.tar.gz
 
 *.zip
+
+test/
