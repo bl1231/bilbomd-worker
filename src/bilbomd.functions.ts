@@ -560,12 +560,12 @@ const getNumEnsembles = async (logFile: string): Promise<number> => {
 //   })
 // }
 
-function extractPdbPaths(content: string): string[] {
+const extractPdbPaths = (content: string): string[] => {
   const lines = content.split('\n')
   const pdbPaths = lines
     .filter((line) => line.includes('.pdb.dat'))
     .map((line) => {
-      const match = line.match(/(\.\.\/[^|]+\.pdb.dat)/)
+      const match = line.match(/(\/[^|]+\.pdb.dat)/)
       if (match) {
         const fullPath = match[1]
         // Remove the .dat extension from the filename
@@ -577,7 +577,11 @@ function extractPdbPaths(content: string): string[] {
   return pdbPaths
 }
 
-async function concatenateAndSaveAsEnsemble(pdbFiles: string[], ensembleSize: number) {
+const concatenateAndSaveAsEnsemble = async (
+  pdbFiles: string[],
+  ensembleSize: number,
+  resultsDir: string
+) => {
   try {
     const concatenatedContent: string[] = []
     for (let i = 0; i < pdbFiles.length; i++) {
@@ -594,78 +598,82 @@ async function concatenateAndSaveAsEnsemble(pdbFiles: string[], ensembleSize: nu
 
     // Save the concatenated content to the ensemble file
     const ensembleFileName = `ensemble_size_${ensembleSize}_model.pdb`
-    await fs.writeFile(ensembleFileName, concatenatedContent.join('\n'))
+    const ensembleFile = path.join(resultsDir, ensembleFileName)
+    await fs.writeFile(ensembleFile, concatenatedContent.join('\n'))
 
-    console.log(`Ensemble file saved as: ${ensembleFileName}`)
+    console.log(`Ensemble file saved: ${ensembleFile}`)
   } catch (error) {
     console.error('Error:', error)
   }
 }
 
 const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
-  const jobDir = path.join(dataVol, MQjob.data.uuid)
-  const multiFoxsDir = path.join(jobDir, 'multifoxs')
-  const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
-  const resultsDir = path.join(jobDir, 'results')
-  const inpFile = DBjob.const_inp_file
+  try {
+    const jobDir = path.join(dataVol, MQjob.data.uuid)
+    const multiFoxsDir = path.join(jobDir, 'multifoxs')
+    const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
+    const resultsDir = path.join(jobDir, 'results')
+    const inpFile = DBjob.const_inp_file
 
-  // Create new empty results directory
-  await makeDir(resultsDir)
-  MQjob.log('Create results directory')
+    // Create new empty results directory
+    await makeDir(resultsDir)
+    MQjob.log('Create results directory')
 
-  // Copy ensemble_size_*.txt files
-  await execPromise(`cp ${multiFoxsDir}/ensembles_size*.txt .`, { cwd: resultsDir })
-  MQjob.log('Gather ensembles_size*.txt files')
+    // Copy ensemble_size_*.txt files
+    await execPromise(`cp ${multiFoxsDir}/ensembles_size*.txt .`, { cwd: resultsDir })
+    MQjob.log('Gather ensembles_size*.txt files')
 
-  // Copy multi_state_model_*_1_1.dat files
-  await execPromise(`cp ${multiFoxsDir}/multi_state_model_*_1_1.dat .`, {
-    cwd: resultsDir
-  })
-  MQjob.log('Gather multi_state_model_*_1_1.dat files')
+    // Copy multi_state_model_*_1_1.dat files
+    await execPromise(`cp ${multiFoxsDir}/multi_state_model_*_1_1.dat .`, {
+      cwd: resultsDir
+    })
+    MQjob.log('Gather multi_state_model_*_1_1.dat files')
 
-  // Copy the CHARMM const.inp file
-  await execPromise(`cp ${jobDir}/${inpFile} .`, { cwd: resultsDir })
-  MQjob.log('Gather const.inp file')
+    // Copy the CHARMM const.inp file
+    await execPromise(`cp ${jobDir}/${inpFile} .`, { cwd: resultsDir })
+    MQjob.log('Gather const.inp file')
 
-  // Copy the original uploaded crd, psf, and dat files
-  await execPromise(`cp ${jobDir}/${DBjob.crd_file} .`, { cwd: resultsDir })
-  await execPromise(`cp ${jobDir}/${DBjob.psf_file} .`, { cwd: resultsDir })
-  await execPromise(`cp ${jobDir}/${DBjob.data_file} .`, { cwd: resultsDir })
-
-  // Only want to add N best PDBs equal to number_of_states N in logfile.
-  const numEnsembles = await getNumEnsembles(logFile).catch((error) => {
-    console.log(error)
-  })
-  console.log('numEnsembles', numEnsembles)
-  MQjob.log(`Gather ${numEnsembles} best ensembles`)
-
-  if (numEnsembles) {
-    // Iterate through each ensembles_siz_*.txt file
-    for (let i = 1; i <= numEnsembles; i++) {
-      const ensembleFile = path.join(multiFoxsDir, `ensembles_size_${i}.txt`)
-
-      // Read the ensemble file
-      const ensembleFileContent = await fs.readFile(ensembleFile, 'utf8')
-
-      // Extract PDB filenames from the file
-      const pdbFilenames = extractPdbPaths(ensembleFileContent)
-
-      // Extrac the first N PDB files to string[]
-      const numToCopy = Math.min(pdbFilenames.length, i)
-      const ensembleModelFiles = pdbFilenames.slice(0, numToCopy)
-      const ensembleSize = ensembleModelFiles.length
-      concatenateAndSaveAsEnsemble(ensembleModelFiles, ensembleSize)
-
-      MQjob.log(`Gathered ${pdbFilenames.length} PDB files from ensembles_size_${i}.txt`)
+    // Copy the original uploaded crd, psf, and dat files
+    const filesToCopy = [DBjob.crd_file, DBjob.psf_file, DBjob.data_file]
+    for (const file of filesToCopy) {
+      await execPromise(`cp ${path.join(jobDir, file)} .`, { cwd: resultsDir })
+      MQjob.log(`Gathered ${file}`)
     }
+    // Only want to add N best PDBs equal to number_of_states N in logfile.
+    const numEnsembles = await getNumEnsembles(logFile)
+    console.log('numEnsembles', numEnsembles)
+    MQjob.log(`Gather ${numEnsembles} best ensembles`)
+
+    if (numEnsembles) {
+      // Iterate through each ensembles_siz_*.txt file
+      for (let i = 1; i <= numEnsembles; i++) {
+        const ensembleFile = path.join(multiFoxsDir, `ensembles_size_${i}.txt`)
+        const ensembleFileContent = await fs.readFile(ensembleFile, 'utf8')
+        const pdbFilesRelative = extractPdbPaths(ensembleFileContent)
+        const pdbFilesFullPath = pdbFilesRelative.map((item) => path.join(jobDir, item))
+        // Extract the first N PDB files to string[]
+        const numToCopy = Math.min(pdbFilesFullPath.length, i)
+        const ensembleModelFiles = pdbFilesFullPath.slice(0, numToCopy)
+        const ensembleSize = ensembleModelFiles.length
+        await concatenateAndSaveAsEnsemble(ensembleModelFiles, ensembleSize, resultsDir)
+
+        MQjob.log(
+          `Gathered ${pdbFilesFullPath.length} PDB files from ensembles_size_${i}.txt`
+        )
+      }
+    }
+
+    // Create a tar.gz file
+    await execPromise(`tar czvf results.tar.gz results`, { cwd: jobDir })
+    MQjob.log('created results.tar.gz file')
+
+    // Update MongoDB?
+    return 'results.tar.gz ready for download'
+  } catch (error) {
+    updateJobStatus(DBjob, 'Error')
+    MQjob.log('failed in gatherResults')
+    throw new Error('gatherResults step failed')
   }
-
-  // Create a tar.gz file
-  await execPromise(`tar czvf results.tar.gz results`, { cwd: jobDir })
-  MQjob.log('created results.tar.gz file')
-
-  // Update MongoDB?
-  return 'results.tar.gz ready for download'
 }
 
 export {
