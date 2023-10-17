@@ -46,6 +46,9 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.1.0
+  - Rewrite gatherResults
+  - Return single PDB file for each MultiFoXS ensemble
 - 1.0.0
   - Start using Ubuntu for Docker build
   - IMP 2.19.0
