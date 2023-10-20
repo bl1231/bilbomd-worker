@@ -21,20 +21,20 @@ const charmmBin: string = process.env.CHARMM ?? '/usr/local/bin/charmm'
 const dataVol: string = process.env.DATA_VOL ?? '/bilbomd/uploads'
 const bilbomdUrl: string = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
 
-type params = {
+type Params = {
   out_dir: string
 }
 
-type paeParams = params & {
+type PaeParams = Params & {
   in_crd: string
   in_pae: string
 }
 
-type foxsParams = params & {
+type FoxsParams = Params & {
   data_file: string
 }
 
-type charmmParams = params & {
+type CharmmParams = Params & {
   template: string
   topology_dir: string
   charmm_inp_file: string
@@ -60,55 +60,82 @@ type charmmParams = params & {
   rg?: number
 }
 
-const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDJob) => {
-  // Make sure the user exists in MongoDB
-  const foundUser = await User.findById(DBjob.user).lean().exec()
-  if (!foundUser) {
-    throw new Error(`No user found for: ${DBjob.uuid}`)
+const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+  try {
+    // Make sure the user exists in MongoDB
+    const foundUser = await User.findById(DBjob.user).lean().exec()
+    if (!foundUser) {
+      throw new Error(`No user found for: ${DBjob.uuid}`)
+    }
+
+    // Clear the BullMQ Job logs in the case this job is being re-run
+    await MQJob.clearLogs()
+
+    // Set MongoDB status to Running and update the start time
+    DBjob.status = 'Running'
+    DBjob.time_started = new Date()
+    await DBjob.save()
+  } catch (error) {
+    // Handle and log the error
+    console.error('Error in initializeJob:', error)
+    throw error
   }
-  // Clear the BullMQ Job logs
-  await MQJob.clearLogs()
-  // Set MongoDB status to Running
-  DBjob.status = 'Running'
-  const now = new Date()
-  DBjob.time_started = now
-  await DBjob.save()
 }
 
-const cleanupJob = async (MQjob: BullMQJob, DBJob: IBilboMDJob) => {
-  DBJob.status = 'Completed'
-  DBJob.time_completed = new Date()
-  await DBJob.save()
-  sendJobCompleteEmail(DBJob.user.email, bilbomdUrl, DBJob.id, DBJob.title)
-  console.log(`email notification sent to ${DBJob.user.email}`)
-  await MQjob.log(`email notification sent to ${DBJob.user.email}`)
+const cleanupJob = async (MQjob: BullMQJob, DBJob: IBilboMDJob): Promise<void> => {
+  try {
+    // Update MongoDB job status and completion time
+    DBJob.status = 'Completed'
+    DBJob.time_completed = new Date()
+    await DBJob.save()
+
+    // Retrieve the user email from the associated User model
+    const user = await User.findById(DBJob.user).lean().exec()
+    if (!user) {
+      console.error(`No user found for: ${DBJob.uuid}`)
+      return
+    }
+
+    // Send job completion email and log the notification
+    sendJobCompleteEmail(user.email, bilbomdUrl, DBJob.id, DBJob.title)
+    console.log(`Email notification sent to ${user.email}`)
+    await MQjob.log(`Email notification sent to ${user.email}`)
+  } catch (error) {
+    console.error('Error in cleanupJob:', error)
+    throw error
+  }
 }
 
-/**
- *
- * @param {IBilboMDJob} job - BullMQ Job
- * @param {string} status - Status of the job
- */
-const updateJobStatus = async (job: IBilboMDJob, status: string) => {
+const updateJobStatus = async (job: IBilboMDJob, status: string): Promise<void> => {
   job.status = status
   await job.save()
 }
 
-const writeToFile = async (templateString: string, params: charmmParams) => {
-  const outFile = path.join(params.out_dir, params.charmm_inp_file)
-  const template = Handlebars.compile(templateString)
-  const outputString = template(params)
-  console.log('Write File: ', outFile)
-  await fs.writeFile(outFile, outputString)
+const writeToFile = async (template: string, params: CharmmParams): Promise<void> => {
+  try {
+    const outFile = path.join(params.out_dir, params.charmm_inp_file)
+    const templ = Handlebars.compile(template)
+    const content = templ(params)
+
+    console.log('Write File:', outFile)
+    await fs.promises.writeFile(outFile, content)
+  } catch (error) {
+    console.error('Error in writeToFile:', error)
+    throw error
+  }
 }
 
-const generateInputFile = async (params: charmmParams) => {
-  const templateFile = path.join(templates, `${params.template}.handlebars`)
-  const templateString = await readFile(templateFile, 'utf8')
+const readTemplate = async (templateName: string): Promise<string> => {
+  const templateFile = path.join(templates, `${templateName}.handlebars`)
+  return readFile(templateFile, 'utf8')
+}
+
+const generateInputFile = async (params: CharmmParams): Promise<void> => {
+  const templateString = await readTemplate(params.template)
   await writeToFile(templateString, params)
 }
 
-const generateDCD2PDBInpFile = async (params: charmmParams, rg: number, run: number) => {
+const generateDCD2PDBInpFile = async (params: CharmmParams, rg: number, run: number) => {
   params.template = 'dcd2pdb'
   params.in_pdb = 'heat_output.pdb'
   params.in_dcd = `dynamics_rg${rg}_run${run}.dcd`
@@ -142,10 +169,69 @@ const makeFoxsDatFileList = async (multiFoxsDir: string) => {
   errorStream.write(stderr)
 }
 
-/**
- *
- * @param foxsRunDir
- */
+const getNumEnsembles = async (logFile: string): Promise<number> => {
+  const rl = readline.createInterface({
+    input: fs.createReadStream(logFile),
+    crlfDelay: Infinity
+  })
+  const regex = /(?:number_of_states[ ])([\d]+)/
+  const ensembleCount = ['0']
+  for await (const line of rl) {
+    const found = line.match(regex)
+    if (found !== null) {
+      ensembleCount.push(found[1])
+    }
+  }
+  return Number(ensembleCount.pop())
+}
+
+const extractPdbPaths = (content: string): string[] => {
+  const lines = content.split('\n')
+  const pdbPaths = lines
+    .filter((line) => line.includes('.pdb.dat'))
+    .map((line) => {
+      const match = line.match(/(\/[^|]+\.pdb.dat)/)
+      if (match) {
+        const fullPath = match[1]
+        // Remove the .dat extension from the filename
+        const filename = fullPath.replace(/\.dat$/, '')
+        return filename
+      }
+      return ''
+    })
+  return pdbPaths
+}
+
+const concatenateAndSaveAsEnsemble = async (
+  pdbFiles: string[],
+  ensembleSize: number,
+  resultsDir: string
+) => {
+  try {
+    const concatenatedContent: string[] = []
+    for (let i = 0; i < pdbFiles.length; i++) {
+      // Read the content of each PDB file
+      let content = await fs.readFile(pdbFiles[i], 'utf8')
+
+      // Replace the word "END" with "ENDMDL"
+      content = content.replace(/\bEND\n?$/, 'ENDMDL')
+
+      // Concatenate the content with MODEL....N
+      concatenatedContent.push(`MODEL       ${i + 1}`)
+      concatenatedContent.push(content)
+    }
+
+    // Save the concatenated content to the ensemble file
+    const ensembleFileName = `ensemble_size_${ensembleSize}_model.pdb`
+    const ensembleFile = path.join(resultsDir, ensembleFileName)
+    await fs.writeFile(ensembleFile, concatenatedContent.join('\n'))
+
+    console.log(`Ensemble file saved: ${ensembleFile}`)
+  } catch (error) {
+    console.error('Error:', error)
+  }
+}
+
 const spawnFoXS = async (foxsRunDir: string) => {
   try {
     const files = await fs.readdir(foxsRunDir)
@@ -172,7 +258,7 @@ const spawnFoXS = async (foxsRunDir: string) => {
   }
 }
 
-const spawnMultiFoxs = (multiFoxsDir: string, params: foxsParams): Promise<string> => {
+const spawnMultiFoxs = (multiFoxsDir: string, params: FoxsParams): Promise<string> => {
   const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
   const errorFile = path.join(multiFoxsDir, 'multi_foxs_error.log')
   const logStream = fs.createWriteStream(logFile)
@@ -207,40 +293,36 @@ const spawnMultiFoxs = (multiFoxsDir: string, params: foxsParams): Promise<strin
   })
 }
 
-const spawnCharmm = (params: charmmParams): Promise<string> => {
-  const input = params.charmm_inp_file
-  const output = params.charmm_out_file
-  const charmmArgs = ['-o', output, '-i', input]
-  const charmmOpts = { cwd: params.out_dir }
+const spawnCharmm = (params: CharmmParams): Promise<string> => {
+  const { charmm_inp_file: inputFile, charmm_out_file: outputFile, out_dir } = params
+  const charmmArgs = ['-o', outputFile, '-i', inputFile]
+  const charmmOpts = { cwd: out_dir }
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const charmm: ChildProcess = spawn(charmmBin, charmmArgs, charmmOpts)
+    let charmmOutput = '' // Create an empty string to capture stdout
 
-    // charmm.stdout?.on('data', (data) => {
-    //   console.log('spawnCharmm stdout: ', data.toString())
-    // })
-
-    // charmm.stderr?.on('data', (data) => {
-    //   console.error('spawnCharmm stderr: ', data.toString())
-    // })
-
-    charmm.on('error', (error) => {
-      reject(error)
+    charmm.stdout?.on('data', (data) => {
+      charmmOutput += data.toString()
     })
 
-    charmm.on('close', (code: number) => {
+    charmm.on('error', (error) => {
+      reject(new Error(`CHARMM process encountered an error: ${error.message}`))
+    })
+
+    charmm.on('close', (code: number, signal: string) => {
       if (code === 0) {
-        console.log('CHARMM success:', input, 'exit code:', code)
+        console.log('CHARMM success:', inputFile, 'exit code:', code, 'signal:', signal)
         resolve('CHARMM execution succeeded')
       } else {
-        console.log('CHARMM error:', input, 'exit code:', code)
-        reject(new Error('CHARMM failed. Please see the error log file'))
+        console.log('CHARMM error:', inputFile, 'exit code:', code, 'signal:', signal)
+        reject(new Error(charmmOutput))
       }
     })
   })
 }
 
-const spawnPaeToConst = async (params: paeParams): Promise<string> => {
+const spawnPaeToConst = async (params: PaeParams): Promise<string> => {
   const logFile = path.join(params.out_dir, 'af2pae.log')
   const errorFile = path.join(params.out_dir, 'af2pae_error.log')
   const logStream = fs.createWriteStream(logFile)
@@ -277,7 +359,7 @@ const spawnPaeToConst = async (params: paeParams): Promise<string> => {
   })
 }
 
-const runPaeToConst = async (DBjob: IBilboMDAutoJob) => {
+const runPaeToConst = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   const outputDir = path.join(dataVol, DBjob.uuid)
   const params = {
     in_crd: DBjob.crd_file,
@@ -339,7 +421,7 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   })
 }
 
-const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
+const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
   const outputDir = path.join(dataVol, MQjob.data.uuid)
   const params = {
     template: 'minimize',
@@ -359,13 +441,16 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     await generateInputFile(params)
     await spawnCharmm(params)
   } catch (error) {
+    const errorMessage = error as string
     updateJobStatus(DBjob, 'Error')
-    MQjob.log('failed in runMinimize')
+    MQjob.log('error minimization')
+    console.log(errorMessage)
+    MQjob.log(errorMessage)
     throw new Error('CHARMM minimize step failed')
   }
 }
 
-const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
+const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
   const outputDir = path.join(dataVol, MQjob.data.uuid)
   const params = {
     template: 'heat',
@@ -388,12 +473,15 @@ const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     await spawnCharmm(params)
   } catch (error) {
     updateJobStatus(DBjob, 'Error')
-    MQjob.log('failed in runHeat')
+    MQjob.log('error heating')
     throw new Error('CHARMM heat step failed')
   }
 }
 
-const runMolecularDynamics = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
+const runMolecularDynamics = async (
+  MQjob: BullMQJob,
+  DBjob: IBilboMDJob
+): Promise<void> => {
   const outputDir = path.join(dataVol, MQjob.data.uuid)
   const params = {
     template: 'dynamics',
@@ -427,13 +515,13 @@ const runMolecularDynamics = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     await Promise.all(molecularDynamicsTasks)
   } catch (error) {
     updateJobStatus(DBjob, 'Error')
-    MQjob.log(`failed in runMolecularDynamics ${error}`)
-    // throw new Error('CHARMM MD step failed')
-    throw error
+    MQjob.log(`error molecular dynamics`)
+    throw new Error('CHARMM MD step failed')
+    // throw error
   }
 }
 
-const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
+const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
   const outputDir = path.join(dataVol, MQjob.data.uuid)
   const params = {
     template: 'foxs',
@@ -487,12 +575,12 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     }
   } catch (error) {
     updateJobStatus(DBjob, 'Error')
-    MQjob.log('failed in runFoxs')
+    MQjob.log('error FoXS')
     throw new Error('runFoxs step failed')
   }
 }
 
-const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
+const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
   const jobDir = path.join(dataVol, MQjob.data.uuid)
   const params = {
     template: 'foxs',
@@ -520,94 +608,12 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
     await spawnMultiFoxs(multiFoxsDir, params)
   } catch (error) {
     updateJobStatus(DBjob, 'Error')
-    MQjob.log('failed in runMultiFoxs')
+    MQjob.log('error MultiFoXS')
     throw new Error('runMultiFoxs step failed')
   }
 }
 
-const getNumEnsembles = async (logFile: string): Promise<number> => {
-  const rl = readline.createInterface({
-    input: fs.createReadStream(logFile),
-    crlfDelay: Infinity
-  })
-  const regex = /(?:number_of_states[ ])([\d]+)/
-  const ensembleCount = ['0']
-  for await (const line of rl) {
-    const found = line.match(regex)
-    if (found !== null) {
-      ensembleCount.push(found[1])
-    }
-  }
-  return Number(ensembleCount.pop())
-}
-
-// const retrieveAllLinesFromFile = (file: string) => {
-//   const lines: string[] = []
-//   return new Promise<string[]>((resolve) => {
-//     const rl = readline.createInterface({
-//       input: fs.createReadStream(file),
-//       crlfDelay: Infinity
-//     })
-//     rl.on('line', (line) => {
-//       // console.log('retrieveNumLinesFromFile line:', line)
-//       lines.push(line)
-//     })
-//     rl.on('close', () => {
-//       // console.log('retrieveNumLinesFromFile close')
-//       const linesToProcess = lines.slice()
-//       resolve(linesToProcess)
-//     })
-//   })
-// }
-
-const extractPdbPaths = (content: string): string[] => {
-  const lines = content.split('\n')
-  const pdbPaths = lines
-    .filter((line) => line.includes('.pdb.dat'))
-    .map((line) => {
-      const match = line.match(/(\/[^|]+\.pdb.dat)/)
-      if (match) {
-        const fullPath = match[1]
-        // Remove the .dat extension from the filename
-        const filename = fullPath.replace(/\.dat$/, '')
-        return filename
-      }
-      return ''
-    })
-  return pdbPaths
-}
-
-const concatenateAndSaveAsEnsemble = async (
-  pdbFiles: string[],
-  ensembleSize: number,
-  resultsDir: string
-) => {
-  try {
-    const concatenatedContent: string[] = []
-    for (let i = 0; i < pdbFiles.length; i++) {
-      // Read the content of each PDB file
-      let content = await fs.readFile(pdbFiles[i], 'utf8')
-
-      // Replace the word "END" with "ENDMDL"
-      content = content.replace(/\bEND\n?$/, 'ENDMDL')
-
-      // Concatenate the content with MODEL....N
-      concatenatedContent.push(`MODEL       ${i + 1}`)
-      concatenatedContent.push(content)
-    }
-
-    // Save the concatenated content to the ensemble file
-    const ensembleFileName = `ensemble_size_${ensembleSize}_model.pdb`
-    const ensembleFile = path.join(resultsDir, ensembleFileName)
-    await fs.writeFile(ensembleFile, concatenatedContent.join('\n'))
-
-    console.log(`Ensemble file saved: ${ensembleFile}`)
-  } catch (error) {
-    console.error('Error:', error)
-  }
-}
-
-const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
+const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
   try {
     const jobDir = path.join(dataVol, MQjob.data.uuid)
     const multiFoxsDir = path.join(jobDir, 'multifoxs')
@@ -662,13 +668,8 @@ const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob) => {
         )
       }
     }
-
-    // Create a tar.gz file
     await execPromise(`tar czvf results.tar.gz results`, { cwd: jobDir })
     MQjob.log('created results.tar.gz file')
-
-    // Update MongoDB?
-    return 'results.tar.gz ready for download'
   } catch (error) {
     updateJobStatus(DBjob, 'Error')
     MQjob.log('failed in gatherResults')
