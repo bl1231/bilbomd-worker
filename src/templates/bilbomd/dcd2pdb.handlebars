@@ -1,5 +1,5 @@
 * STEP: dcd2pdp
-* PURPOSE: Convert cor trajectory to pdb format
+* PURPOSE: BilboMD Convert cor trajectory to pdb format
 * AUTHOR: Michal Hammel
 * AUTHOR: Scott Classen
 *
@@ -40,9 +40,6 @@ write title unit 1
 *{{inp_basename}}_@tr ?rgyr ?maxd
 *
 close unit 1
-
-! why is FOXS being called from within CHARMM?
-! SYSTEM \" $foxs -p \$PWD/fit/$file$RG$under$r$under$p@$tr$p.pdb \"
 
 incr tr by @step
 if tr .le. @stop goto ILP
