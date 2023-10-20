@@ -7,15 +7,11 @@
 bomlev 0
 
 ! Read Topology-Files
-STREAM {{topology_dir}}
+STREAM {{charmm_topo_dir}}
 
-open read unit 12 card name {{in_psf}}
+open read unit 12 card name {{in_psf_file}}
 read psf card unit 12
 close unit 12
-
-! why does this need to be read in?
-!open read formatted unit 27 name {{in_pdb}}
-!read coor pdb unit 27
 
 set nframe = 0
 open unit 50 read unform name {{in_dcd}}
