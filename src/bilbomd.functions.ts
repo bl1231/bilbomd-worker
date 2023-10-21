@@ -36,11 +36,6 @@ type CharmmParams = Params & {
   charmm_out_file: string
   in_psf_file: string
   in_crd_file: string
-  in_rst_file?: string
-  in_pdb?: string
-  in_dcd?: string
-  run?: string
-  inp_basename?: string
 }
 
 type CharmmMinimizeParams = CharmmParams & {
@@ -69,6 +64,8 @@ type CharmmMDParams = CharmmParams & {
 type CharmmDCD2PDBParams = CharmmParams & {
   inp_basename: string
   foxs_rg: string
+  in_dcd: string
+  run: string
 }
 
 type FoxsParams = Params & {
@@ -153,7 +150,7 @@ const readTemplate = async (templateName: string): Promise<string> => {
 }
 
 const generateInputFile = async (params: CharmmParams): Promise<void> => {
-  console.log('generateInputFile params: ', params)
+  // console.log('generateInputFile params: ', params)
   const templateString = await readTemplate(params.charmm_template)
   await writeToFile(templateString, params)
 }
@@ -164,7 +161,7 @@ const generateDCD2PDBInpFile = async (
   run: number
 ) => {
   params.charmm_template = 'dcd2pdb'
-  params.in_pdb = 'heat_output.pdb'
+  // params.in_pdb = 'heat_output.pdb'
   params.in_dcd = `dynamics_rg${rg}_run${run}.dcd`
   await generateInputFile(params)
 }
@@ -178,14 +175,14 @@ const makeDir = async (directory: string) => {
   console.log('Create Dir: ', directory)
 }
 
-const makeFoxsDatFileList = async (multiFoxsDir: string) => {
-  const stdOut = path.join(multiFoxsDir, 'foxs_dat_files.txt')
-  const stdErr = path.join(multiFoxsDir, 'foxs_dat_files_errors.txt')
+const makeFoxsDatFileList = async (dir: string) => {
+  const stdOut = path.join(dir, 'foxs_dat_files.txt')
+  const stdErr = path.join(dir, 'foxs_dat_files_errors.txt')
   const stdoutStream = fs.createWriteStream(stdOut)
   const errorStream = fs.createWriteStream(stdErr)
 
   const { stdout, stderr } = await execPromise('ls -1 ../foxs/*/*.pdb.dat', {
-    cwd: multiFoxsDir
+    cwd: dir
   })
   stdoutStream.write(stdout)
   errorStream.write(stderr)
@@ -280,10 +277,8 @@ const spawnFoXS = async (foxsRunDir: string) => {
   }
 }
 
-const spawnMultiFoxs = (
-  multiFoxsDir: string,
-  params: MultiFoxsParams
-): Promise<string> => {
+const spawnMultiFoxs = (params: MultiFoxsParams): Promise<void> => {
+  const multiFoxsDir = path.join(params.out_dir, 'multifoxs')
   const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
   const errorFile = path.join(multiFoxsDir, 'multi_foxs_error.log')
   const logStream = fs.createWriteStream(logFile)
@@ -295,21 +290,21 @@ const spawnMultiFoxs = (
   return new Promise((resolve, reject) => {
     const multiFoxs: ChildProcess = spawn(MULTIFOXS_BIN, multiFoxArgs, multiFoxOpts)
     multiFoxs.stdout?.on('data', (data) => {
-      console.log('spawnMultiFoxs stdout', data.toString())
+      // console.log('spawnMultiFoxs stdout', data.toString())
       logStream.write(data.toString())
     })
     multiFoxs.stderr?.on('data', (data) => {
-      console.log('spawnMultiFoxs stderr', data.toString())
+      // console.log('spawnMultiFoxs stderr', data.toString())
       errorStream.write(data.toString())
     })
     multiFoxs.on('error', (error) => {
-      console.log('spawnMultiFoxs error:', error)
+      // console.log('spawnMultiFoxs error:', error)
       reject(error)
     })
     multiFoxs.on('exit', (code: number) => {
       if (code === 0) {
         console.log('spawnMultiFoxs close success exit code:', code)
-        resolve(code.toString())
+        resolve()
       } else {
         console.log('spawnMultiFoxs close error exit code:', code)
         reject(`spawnMultiFoxs on close reject`)
@@ -561,7 +556,9 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
     in_psf_file: DBjob.psf_file,
     in_crd_file: '',
     inp_basename: '',
-    foxs_rg: 'foxs_rg.out'
+    foxs_rg: 'foxs_rg.out',
+    in_dcd: '',
+    run: ''
   }
 
   try {
@@ -603,30 +600,15 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
 
 const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
-  const params = {
-    template: 'foxs',
-    charmm_topo_dir: TOPO_FILES,
+  const multifoxsParams: MultiFoxsParams = {
     out_dir: outputDir,
-    charmm_inp_file: 'heat.inp',
-    charmm_out_file: 'heat.out',
-    in_psf_file: DBjob.psf_file,
-    in_crd_file: 'heat_output.crd',
-    in_rst_file: 'heat_output.rst',
-    constinp: DBjob.const_inp_file,
-    rg_min: DBjob.rg_min,
-    rg_max: DBjob.rg_max,
-    conf_sample: DBjob.conformational_sampling,
-    timestep: 0.001,
-    inp_basename: '',
-    foxs_rg: '',
-    run: '',
     data_file: DBjob.data_file
   }
   try {
-    const multiFoxsDir = path.join(outputDir, 'multifoxs')
+    const multiFoxsDir = path.join(multifoxsParams.out_dir, 'multifoxs')
     await makeDir(multiFoxsDir)
     await makeFoxsDatFileList(multiFoxsDir)
-    await spawnMultiFoxs(multiFoxsDir, params)
+    await spawnMultiFoxs(multifoxsParams)
   } catch (error) {
     updateJobStatus(DBjob, 'Error')
     MQjob.log('error MultiFoXS')
