@@ -1,5 +1,5 @@
 * STEP: dcd2pdp
-* PURPOSE: Convert cor trajectory to pdb format
+* PURPOSE: BilboMD Convert cor trajectory to pdb format
 * AUTHOR: Michal Hammel
 * AUTHOR: Scott Classen
 *
@@ -7,15 +7,11 @@
 bomlev 0
 
 ! Read Topology-Files
-STREAM {{topology_dir}}
+STREAM {{charmm_topo_dir}}
 
-open read unit 12 card name {{in_psf}}
+open read unit 12 card name {{in_psf_file}}
 read psf card unit 12
 close unit 12
-
-! why does this need to be read in?
-!open read formatted unit 27 name {{in_pdb}}
-!read coor pdb unit 27
 
 set nframe = 0
 open unit 50 read unform name {{in_dcd}}
@@ -40,9 +36,6 @@ write title unit 1
 *{{inp_basename}}_@tr ?rgyr ?maxd
 *
 close unit 1
-
-! why is FOXS being called from within CHARMM?
-! SYSTEM \" $foxs -p \$PWD/fit/$file$RG$under$r$under$p@$tr$p.pdb \"
 
 incr tr by @step
 if tr .le. @stop goto ILP

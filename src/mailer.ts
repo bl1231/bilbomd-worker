@@ -16,15 +16,25 @@ const sendJobCompleteEmail = (
   email: string,
   url: string,
   jobid: string,
-  title: string
+  title: string,
+  isError: boolean
 ) => {
-  console.log('send job complete email')
+  console.log('Sending job complete email, error state is: ', isError)
+
+  let emailLayout
+
+  if (isError === true) {
+    emailLayout = 'joberror'
+  } else {
+    emailLayout = 'jobcomplete'
+  }
+
   transporter.use(
     'compile',
     hbs({
       viewEngine: {
         extname: '.handlebars',
-        defaultLayout: 'jobcomplete',
+        defaultLayout: false,
         layoutsDir: viewPath
       },
       viewPath,
@@ -32,11 +42,11 @@ const sendJobCompleteEmail = (
     })
   )
 
-  const mailOptions = {
+  const mail = {
     from: user,
     to: email,
     subject: `BilboMD Job Complete: ${title}`,
-    template: 'jobcomplete',
+    template: emailLayout,
     context: {
       jobid,
       url,
@@ -44,7 +54,8 @@ const sendJobCompleteEmail = (
     }
   }
 
-  transporter.sendMail(mailOptions).catch((err) => console.log(err))
+  console.log('Using email template:', emailLayout)
+  transporter.sendMail(mail)
 }
 
 export { sendJobCompleteEmail }

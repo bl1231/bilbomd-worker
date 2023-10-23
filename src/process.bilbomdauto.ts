@@ -34,7 +34,7 @@ const cleanupJob = async (MQjob: BullMQJob, DBJob: IBilboMDAutoJob) => {
   DBJob.status = 'Completed'
   DBJob.time_completed = new Date()
   await DBJob.save()
-  sendJobCompleteEmail(DBJob.user.email, bilbomdUrl, DBJob.id, DBJob.title)
+  sendJobCompleteEmail(DBJob.user.email, bilbomdUrl, DBJob.id, DBJob.title, false)
   console.log(`email notification sent to ${DBJob.user.email}`)
   await MQjob.log(`email notification sent to ${DBJob.user.email}`)
 }
