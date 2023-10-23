@@ -46,6 +46,10 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.2.0
+  - Refactor bilbomd function code
+  - Add single `handleError` function
+  - improve error handling logic
 - 1.1.0
   - Rewrite gatherResults
   - Return single PDB file for each MultiFoXS ensemble
