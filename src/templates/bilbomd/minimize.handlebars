@@ -27,11 +27,11 @@ mini abnr nstep 500 nprint 50 tolgrd 0.0001 ! 500 needs to be
 coor stat
 coor orie rms mass sele .not. type H* end
 coor orie rms mass sele type H* end
-open write card unit 23 name {{out_min_crd}}
+open write card unit 23 name minimization_output.crd
 write coor card unit 23
 *
 close unit 23
-open write unit 24 card name {{out_min_pdb}}
+open write unit 24 card name minimization_output.pdb
 write coor pdb unit 24
 
 stop

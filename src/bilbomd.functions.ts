@@ -38,21 +38,12 @@ type CharmmParams = Params & {
   in_crd_file: string
 }
 
-type CharmmMinimizeParams = CharmmParams & {
-  out_min_crd: string
-  out_min_pdb: string
-}
-
 type CharmmHeatParams = CharmmParams & {
   constinp: string
-  out_heat_rst: string
-  out_heat_crd: string
-  out_heat_pdb: string
 }
 
 type CharmmMDParams = CharmmParams & {
   constinp: string
-  in_rst_file: string
   rg_min: number
   rg_max: number
   rg: number
@@ -472,16 +463,14 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
 
 const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
-  const params: CharmmMinimizeParams = {
+  const params: CharmmParams = {
     out_dir: outputDir,
     charmm_template: 'minimize',
     charmm_topo_dir: TOPO_FILES,
     charmm_inp_file: 'minimize.inp',
     charmm_out_file: 'minimize.out',
     in_psf_file: DBjob.psf_file,
-    in_crd_file: DBjob.crd_file,
-    out_min_crd: 'minimization_output.crd',
-    out_min_pdb: 'minimization_output.pdb'
+    in_crd_file: DBjob.crd_file
   }
   try {
     await generateInputFile(params)
@@ -501,10 +490,7 @@ const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
     charmm_out_file: 'heat.out',
     in_psf_file: DBjob.psf_file,
     in_crd_file: 'minimization_output.crd',
-    constinp: DBjob.const_inp_file,
-    out_heat_rst: 'heat_output.rst',
-    out_heat_crd: 'heat_output.crd',
-    out_heat_pdb: 'heat_output.pdb'
+    constinp: DBjob.const_inp_file
   }
   try {
     await generateInputFile(params)
@@ -526,8 +512,7 @@ const runMolecularDynamics = async (
     charmm_inp_file: '',
     charmm_out_file: '',
     in_psf_file: DBjob.psf_file,
-    in_crd_file: 'heat_output.crd',
-    in_rst_file: 'heat_output.rst',
+    in_crd_file: '',
     constinp: DBjob.const_inp_file,
     rg_min: DBjob.rg_min,
     rg_max: DBjob.rg_max,
@@ -536,7 +521,7 @@ const runMolecularDynamics = async (
     inp_basename: '',
     rg: 0
   }
-  // console.log('in runMD params: ', params)
+
   try {
     const molecularDynamicsTasks = []
     const step = Math.round((params.rg_max - params.rg_min) / 5)
