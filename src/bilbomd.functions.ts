@@ -79,7 +79,7 @@ type MultiFoxsParams = Params & {
   data_file: string
 }
 
-const handleError = (
+const handleError = async (
   error: Error | unknown,
   MQjob: BullMQJob,
   DBjob: IBilboMDJob,
@@ -87,14 +87,25 @@ const handleError = (
 ) => {
   const errorMsg =
     errorMessage || (error instanceof Error ? error.message : String(error))
-  // for MongoDB
+
   updateJobStatus(DBjob, 'Error')
-  // for BullMQ log so we can displat step status
+
   MQjob.log(`error ${errorMsg}`)
-  // for console debuggibg
-  console.error(errorMsg)
+
+  console.error('Error in', errorMsg)
+
   MQjob.log(error instanceof Error ? error.message : String(error))
-  throw new Error(`BilboMD step failed: ${errorMsg}`)
+
+  // Send job completion email and log the notification
+  console.log('Failed Attempts --> ', MQjob.attemptsMade)
+
+  if (MQjob.attemptsMade >= 3) {
+    sendJobCompleteEmail(DBjob.user.email, BILBOMD_URL, DBjob.id, DBjob.title, true)
+    console.log(`email notification sent to ${DBjob.user.email}`)
+    await MQjob.log(`email notification sent to ${DBjob.user.email}`)
+  }
+
+  throw new Error('BilboMD failed')
 }
 
 const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
@@ -119,22 +130,22 @@ const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDJob): Promise<void
   }
 }
 
-const cleanupJob = async (MQjob: BullMQJob, DBJob: IBilboMDJob): Promise<void> => {
+const cleanupJob = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
   try {
     // Update MongoDB job status and completion time
-    DBJob.status = 'Completed'
-    DBJob.time_completed = new Date()
-    await DBJob.save()
+    DBjob.status = 'Completed'
+    DBjob.time_completed = new Date()
+    await DBjob.save()
 
     // Retrieve the user email from the associated User model
-    const user = await User.findById(DBJob.user).lean().exec()
+    const user = await User.findById(DBjob.user).lean().exec()
     if (!user) {
-      console.error(`No user found for: ${DBJob.uuid}`)
+      console.error(`No user found for: ${DBjob.uuid}`)
       return
     }
 
     // Send job completion email and log the notification
-    sendJobCompleteEmail(user.email, BILBOMD_URL, DBJob.id, DBJob.title)
+    sendJobCompleteEmail(user.email, BILBOMD_URL, DBjob.id, DBjob.title, false)
     console.log(`email notification sent to ${user.email}`)
     await MQjob.log(`email notification sent to ${user.email}`)
   } catch (error) {
@@ -476,13 +487,7 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> 
     await generateInputFile(params)
     await spawnCharmm(params)
   } catch (error: unknown) {
-    // const errorMessage = error as string
-    // updateJobStatus(DBjob, 'Error')
-    // MQjob.log('error minimization')
-    // console.log(errorMessage)
-    // MQjob.log(errorMessage)
-    // throw new Error('CHARMM minimize step failed')
-    handleError(error, MQjob, DBjob, 'minimization')
+    await handleError(error, MQjob, DBjob, 'minimization')
   }
 }
 
@@ -505,10 +510,7 @@ const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
     await generateInputFile(params)
     await spawnCharmm(params)
   } catch (error) {
-    // updateJobStatus(DBjob, 'Error')
-    // MQjob.log('error heating')
-    // throw new Error('CHARMM heat step failed')
-    handleError(error, MQjob, DBjob, 'heating')
+    await handleError(error, MQjob, DBjob, 'heating')
   }
 }
 
@@ -549,10 +551,7 @@ const runMolecularDynamics = async (
     }
     await Promise.all(molecularDynamicsTasks)
   } catch (error) {
-    // updateJobStatus(DBjob, 'Error')
-    // MQjob.log(`error molecular dynamics`)
-    // throw new Error('CHARMM MD step failed')
-    handleError(error, MQjob, DBjob, 'molecular dynamics')
+    await handleError(error, MQjob, DBjob, 'molecular dynamics')
   }
 }
 
@@ -612,10 +611,7 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
       }
     }
   } catch (error) {
-    // updateJobStatus(DBjob, 'Error')
-    // MQjob.log('error FoXS')
-    // throw new Error('runFoxs step failed')
-    handleError(error, MQjob, DBjob, 'FoXS')
+    await handleError(error, MQjob, DBjob, 'FoXS')
   }
 }
 
@@ -631,10 +627,7 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void>
     await makeFoxsDatFileList(multiFoxsDir)
     await spawnMultiFoxs(multifoxsParams)
   } catch (error) {
-    // updateJobStatus(DBjob, 'Error')
-    // MQjob.log('error MultiFoXS')
-    // throw new Error('runMultiFoxs step failed')
-    handleError(error, MQjob, DBjob, 'MultiFoXS')
+    await handleError(error, MQjob, DBjob, 'MultiFoXS')
   }
 }
 
@@ -698,10 +691,7 @@ const gatherResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void
     await execPromise(`tar czvf results.tar.gz results`, { cwd: outputDir })
     MQjob.log('created results.tar.gz file')
   } catch (error) {
-    // updateJobStatus(DBjob, 'Error')
-    // MQjob.log('failed in gatherResults')
-    // throw new Error('gatherResults step failed')
-    handleError(error, MQjob, DBjob, 'gatherResults')
+    await handleError(error, MQjob, DBjob, 'gatherResults')
   }
 }
 
