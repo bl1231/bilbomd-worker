@@ -36,13 +36,13 @@ const workerHandler = async (job: Job<WorkerJob>) => {
       return 'Done!'
     }
     case 'BilboMD': {
-      console.log('Start job:', job.name)
+      console.log('Start BilboMD job:', job.name)
       await processBilboMDJob(job)
       console.log('Finish job:', job.name)
       return
     }
     case 'BilboMDAuto': {
-      console.log('Start job:', job.name)
+      console.log('Start BilboMDAuto job:', job.name)
       await processBilboMDAutoJob(job)
       console.log('Finished job:', job.name)
       return
