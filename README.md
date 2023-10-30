@@ -46,6 +46,8 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.2.1
+  - Small change to logging messages
 - 1.2.0
   - Refactor bilbomd function code
   - Add single `handleError` function
