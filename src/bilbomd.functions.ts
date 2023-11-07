@@ -304,7 +304,7 @@ const spawnMultiFoxs = (params: MultiFoxsParams): Promise<void> => {
   const logStream = fs.createWriteStream(logFile)
   const errorStream = fs.createWriteStream(errorFile)
   const saxsData = path.join(params.out_dir, params.data_file)
-  const multiFoxArgs = [saxsData, 'foxs_dat_files.txt']
+  const multiFoxArgs = ['-o', saxsData, 'foxs_dat_files.txt']
   const multiFoxOpts = { cwd: multiFoxsDir }
 
   return new Promise((resolve, reject) => {
