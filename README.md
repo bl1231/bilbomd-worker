@@ -46,6 +46,10 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.2.3
+  - add the hidden `-o` option for all `multi_foxs` runs
+- 1.2.2
+  - update `pae_ratios.py` script
 - 1.2.1
   - Small change to logging messages
 - 1.2.0
