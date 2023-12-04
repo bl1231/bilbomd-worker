@@ -46,6 +46,8 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.2.4
+  - Upgrade mongoose from 7.6.3 to 8.0.2
 - 1.2.3
   - add the hidden `-o` option for all `multi_foxs` runs
 - 1.2.2
