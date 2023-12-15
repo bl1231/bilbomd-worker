@@ -1,5 +1,5 @@
 import { Job as BullMQJob } from 'bullmq'
-import { BilboMDJob } from './model/Job'
+import { BilboMdJob } from './model/Job'
 // import { User } from './model/User'
 // import { sendJobCompleteEmail } from './mailer'
 import {
@@ -14,7 +14,7 @@ import {
 } from './bilbomd.functions'
 
 const processBilboMDJobTest = async (MQjob: BullMQJob) => {
-  const foundJob = await BilboMDJob.findOne({ _id: MQjob.data.jobid })
+  const foundJob = await BilboMdJob.findOne({ _id: MQjob.data.jobid })
     .populate({
       path: 'user',
       select: 'email'
@@ -31,7 +31,7 @@ const processBilboMDJobTest = async (MQjob: BullMQJob) => {
 const processBilboMDJob = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(1)
 
-  const foundJob = await BilboMDJob.findOne({ _id: MQjob.data.jobid })
+  const foundJob = await BilboMdJob.findOne({ _id: MQjob.data.jobid })
     .populate({
       path: 'user',
       select: 'email'
