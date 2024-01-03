@@ -47,6 +47,8 @@ All of these env settings (and some others) reside in a single `.env` file that 
 ## Version History
 
 - 1.2.5
+  - Synchronize `mongoose` schema files with other BilboMD codes
+- 1.2.5
 - Change all CHARMM bomlev values to `-2``
 - 1.2.4
   - Upgrade mongoose from 7.6.3 to 8.0.2
