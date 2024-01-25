@@ -46,6 +46,8 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.2.7
+  - Update dependencies
 - 1.2.6
   - Synchronize `mongoose` schema files with other BilboMD codes
 - 1.2.5
