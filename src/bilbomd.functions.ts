@@ -525,7 +525,7 @@ const runMolecularDynamics = async (
 
   try {
     const molecularDynamicsTasks = []
-    const step = Math.round((params.rg_max - params.rg_min) / 5)
+    const step = Math.max(Math.round((params.rg_max - params.rg_min) / 5), 1)
     for (let rg = params.rg_min; rg <= params.rg_max; rg += step) {
       params.charmm_inp_file = `${params.charmm_template}_rg${rg}.inp`
       params.charmm_out_file = `${params.charmm_template}_rg${rg}.out`
