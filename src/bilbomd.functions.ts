@@ -525,7 +525,7 @@ const runMolecularDynamics = async (
 
   try {
     const molecularDynamicsTasks = []
-    const step = Math.round((params.rg_max - params.rg_min) / 5)
+    const step = Math.max(Math.round((params.rg_max - params.rg_min) / 5), 1)
     for (let rg = params.rg_min; rg <= params.rg_max; rg += step) {
       params.charmm_inp_file = `${params.charmm_template}_rg${rg}.inp`
       params.charmm_out_file = `${params.charmm_template}_rg${rg}.out`
@@ -572,7 +572,7 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
     const foxsRgFile = path.join(foxsParams.out_dir, foxsParams.foxs_rg)
     await makeFile(foxsRgFile)
 
-    const step = Math.round((foxsParams.rg_max - foxsParams.rg_min) / 5)
+    const step = Math.max(Math.round((foxsParams.rg_max - foxsParams.rg_min) / 5), 1)
 
     for (let rg = foxsParams.rg_min; rg <= foxsParams.rg_max; rg += step) {
       for (let run = 1; run <= foxsParams.conf_sample; run += 1) {
