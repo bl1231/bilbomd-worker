@@ -572,7 +572,7 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
     const foxsRgFile = path.join(foxsParams.out_dir, foxsParams.foxs_rg)
     await makeFile(foxsRgFile)
 
-    const step = Math.round((foxsParams.rg_max - foxsParams.rg_min) / 5)
+    const step = Math.max(Math.round((foxsParams.rg_max - foxsParams.rg_min) / 5), 1)
 
     for (let rg = foxsParams.rg_min; rg <= foxsParams.rg_max; rg += step) {
       for (let run = 1; run <= foxsParams.conf_sample; run += 1) {
