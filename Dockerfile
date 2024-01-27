@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y cmake gcc gfortran g++
 FROM builder AS config_charmm
 RUN mkdir -p /usr/local/src
 WORKDIR /usr/local/src
-ARG CHARMM_VER
+ARG CHARMM_VER=c47b2
 COPY ./charmm/${CHARMM_VER}.tar.gz .
 RUN tar zxvf ${CHARMM_VER}.tar.gz
 WORKDIR /usr/local/src/charmm
@@ -27,11 +27,12 @@ COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 
 
 FROM bilbomd-worker-step1 AS bilbomd-worker-nodejs
+ARG NODE_MAJOR=20
 RUN apt-get update
 RUN apt-get install -y gpg curl
 RUN mkdir -p /etc/apt/keyrings
 RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-RUN echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_18.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
+RUN echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
 RUN apt-get update
 RUN apt-get install -y nodejs
 
