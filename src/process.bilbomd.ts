@@ -9,7 +9,7 @@ import {
   runMolecularDynamics,
   runFoxs,
   runMultiFoxs,
-  gatherResults,
+  prepareResults,
   cleanupJob
 } from './bilbomd.functions'
 
@@ -78,7 +78,7 @@ const processBilboMDJob = async (MQjob: BullMQJob) => {
 
   // Prepare results
   await MQjob.log('start gather results')
-  await gatherResults(MQjob, foundJob)
+  await prepareResults(MQjob, foundJob)
   await MQjob.log('end gather results')
   await MQjob.updateProgress(99)
 
