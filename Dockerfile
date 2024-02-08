@@ -28,7 +28,7 @@ FROM install_imp AS bilbomd-worker-step1
 COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 
 ARG NODE_MAJOR=20
-FROM bilbomd-worker-step1 AS bilbomd-worker-nodejs
+FROM bilbomd-worker-step1 AS bilbomd-worker-step2
 RUN apt-get update && \
     apt-get install -y gpg curl && \
     mkdir -p /etc/apt/keyrings && \
@@ -39,16 +39,14 @@ RUN apt-get update && \
 
 ARG USER_ID=1001
 ARG GROUP_ID=1001
-FROM bilbomd-worker-nodejs AS bilbomd-worker-bioxtas
-COPY RAW-2.2.1-linux-x86_64.deb /tmp/
-RUN apt-get install /tmp/RAW-2.2.1-linux-x86_64.deb
-
-# Libraries needed by CHARMM
-RUN apt-get install -y ncat gfortran
+FROM bilbomd-worker-step2 AS bilbomd-worker-step3
+# RUN curl -L -o /tmp/RAW-2.2.1-linux-x86_64.deb "https://sourceforge.net/projects/bioxtasraw/files/RAW-2.2.1-linux-x86_64.deb/download"
+# RUN apt-get install /tmp/RAW-2.2.1-linux-x86_64.deb
 
 # Update the package repository and install dependencies
+# Libraries needed by CHARMM
 RUN apt-get update && \
-    apt-get install -y wget bzip2
+    apt-get install -y wget bzip2 ncat gfortran libgl1-mesa-dev
 
 # Download and install the Miniconda
 RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
@@ -58,11 +56,30 @@ RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -
 # Set up the Miniconda environment
 ENV PATH="/opt/miniconda/bin:$PATH"
 
-# Copy the environment.yml file into the image
+# Update conda - needed?
+RUN conda update -n base -c defaults conda -y
+
+# Copy in the environment.yml file
 COPY environment.yml /tmp/environment.yml
 
-# Update existing base environment from environment.yml
-RUN conda env update -f /tmp/environment.yml
+# Update existing conda base env from environment.yml
+RUN conda env update -f /tmp/environment.yml && \
+    rm /tmp/environment.yml
+
+FROM bilbomd-worker-step3 AS bilbomd-worker
+RUN apt-get install -y zip build-essential
+# Create a directory for BioXTAS and copy the source ZIP file
+RUN mkdir /BioXTAS
+COPY bioxtas/RAW-2.2.1-source.zip /BioXTAS/
+
+# Change the working directory to BioXTAS
+WORKDIR /BioXTAS
+
+# Install BioXYAS from source
+RUN unzip RAW-2.2.1-source.zip && \
+    python setup.py build_ext --inplace && \
+    pip install . && \
+    rm /BioXTAS/RAW-2.2.1-source.zip
 
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
