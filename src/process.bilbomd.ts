@@ -12,6 +12,7 @@ import {
   prepareResults,
   cleanupJob
 } from './bilbomd.functions'
+import { runSingleFoXS } from './foxs_analysis'
 
 const processBilboMDJobTest = async (MQjob: BullMQJob) => {
   const foundJob = await BilboMdJob.findOne({ _id: MQjob.data.jobid })
@@ -51,6 +52,9 @@ const processBilboMDJob = async (MQjob: BullMQJob) => {
   await runMinimize(MQjob, foundJob)
   await MQjob.log('end minimization')
   await MQjob.updateProgress(25)
+
+  // FoXS calculations on minimization_output.pdb
+  await runSingleFoXS(foundJob)
 
   // CHARMM heating
   await MQjob.log('start heating')

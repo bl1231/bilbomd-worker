@@ -12,6 +12,7 @@ import {
   runPaeToConst,
   runAutoRg
 } from './bilbomd.functions'
+import { runSingleFoXS } from './foxs_analysis'
 
 const bilbomdUrl: string = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
 
@@ -103,6 +104,9 @@ const processBilboMDAutoJob = async (MQjob: BullMQJob) => {
   await runMinimize(MQjob, foundJob)
   await MQjob.log('end minimization')
   await MQjob.updateProgress(25)
+
+  // FoXS calculations on minimization_output.pdb
+  await runSingleFoXS(foundJob)
 
   // CHARMM heating
   await MQjob.log('start heating')
