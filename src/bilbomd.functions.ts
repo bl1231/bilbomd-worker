@@ -1,4 +1,5 @@
 import Handlebars from 'handlebars'
+import { logger } from './loggers'
 import { spawn, ChildProcess } from 'node:child_process'
 import { promisify } from 'util'
 import fs from 'fs-extra'
@@ -83,16 +84,16 @@ const handleError = async (
 
   MQjob.log(`error ${errorMsg}`)
 
-  console.error('Error in', errorMsg)
+  logger.error(`handleError errorMsg: ${errorMsg}`)
 
   MQjob.log(error instanceof Error ? error.message : String(error))
 
   // Send job completion email and log the notification
-  console.log('Failed Attempts --> ', MQjob.attemptsMade)
+  logger.info(`Failed Attempts --> ${MQjob.attemptsMade}`)
 
   if (MQjob.attemptsMade >= 3) {
     sendJobCompleteEmail(DBjob.user.email, BILBOMD_URL, DBjob.id, DBjob.title, true)
-    console.log(`email notification sent to ${DBjob.user.email}`)
+    logger.info(`email notification sent to ${DBjob.user.email}`)
     await MQjob.log(`email notification sent to ${DBjob.user.email}`)
   }
 
@@ -116,7 +117,7 @@ const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDJob): Promise<void
     await DBjob.save()
   } catch (error) {
     // Handle and log the error
-    console.error('Error in initializeJob:', error)
+    logger.error(`Error in initializeJob: ${error}`)
     throw error
   }
 }
@@ -131,16 +132,16 @@ const cleanupJob = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> =
     // Retrieve the user email from the associated User model
     const user = await User.findById(DBjob.user).lean().exec()
     if (!user) {
-      console.error(`No user found for: ${DBjob.uuid}`)
+      logger.error(`No user found for: ${DBjob.uuid}`)
       return
     }
 
     // Send job completion email and log the notification
     sendJobCompleteEmail(user.email, BILBOMD_URL, DBjob.id, DBjob.title, false)
-    console.log(`email notification sent to ${user.email}`)
+    logger.info(`email notification sent to ${user.email}`)
     await MQjob.log(`email notification sent to ${user.email}`)
   } catch (error) {
-    console.error('Error in cleanupJob:', error)
+    logger.error(`Error in cleanupJob: ${error}`)
     throw error
   }
 }
@@ -156,10 +157,10 @@ const writeToFile = async (template: string, params: CharmmParams): Promise<void
     const templ = Handlebars.compile(template)
     const content = templ(params)
 
-    console.log('Write File:', outFile)
+    logger.info(`Write File: ${outFile}`)
     await fs.promises.writeFile(outFile, content)
   } catch (error) {
-    console.error('Error in writeToFile:', error)
+    logger.error(`Error in writeToFile: ${error}`)
     throw error
   }
 }
@@ -170,7 +171,6 @@ const readTemplate = async (templateName: string): Promise<string> => {
 }
 
 const generateInputFile = async (params: CharmmParams): Promise<void> => {
-  // console.log('generateInputFile params: ', params)
   const templateString = await readTemplate(params.charmm_template)
   await writeToFile(templateString, params)
 }
@@ -192,7 +192,7 @@ const makeFile = async (file: string) => {
 
 const makeDir = async (directory: string) => {
   await fs.ensureDir(directory)
-  console.log('Create Dir: ', directory)
+  logger.info(`Create Dir: ${directory}`)
 }
 
 const makeFoxsDatFileList = async (dir: string) => {
@@ -201,11 +201,30 @@ const makeFoxsDatFileList = async (dir: string) => {
   const stdoutStream = fs.createWriteStream(stdOut)
   const errorStream = fs.createWriteStream(stdErr)
 
-  const { stdout, stderr } = await execPromise('ls -1 ../foxs/*/*.pdb.dat', {
-    cwd: dir
-  })
-  stdoutStream.write(stdout)
-  errorStream.write(stderr)
+  try {
+    const { stdout, stderr } = await execPromise('ls -1 ../foxs/*/*.pdb.dat', {
+      cwd: dir
+    })
+
+    // Use 'end' to ensure the stream is closed after writing
+    stdoutStream.end(stdout)
+    errorStream.end(stderr)
+
+    // Wait for both streams to finish writing and closing
+    await Promise.all([
+      new Promise((resolve, reject) =>
+        stdoutStream.on('finish', resolve).on('error', reject)
+      ),
+      new Promise((resolve, reject) =>
+        errorStream.on('finish', resolve).on('error', reject)
+      )
+    ])
+  } catch (error) {
+    logger.error(`Error generating foxs_dat_files list ${error}`)
+    // It's important to close the streams even in case of an error to free up the resources
+    stdoutStream.end()
+    errorStream.end()
+  }
 }
 
 const getNumEnsembles = async (logFile: string): Promise<number> => {
@@ -265,16 +284,16 @@ const concatenateAndSaveAsEnsemble = async (
     const ensembleFile = path.join(resultsDir, ensembleFileName)
     await fs.writeFile(ensembleFile, concatenatedContent.join('\n'))
 
-    console.log(`Ensemble file saved: ${ensembleFile}`)
+    logger.info(`Ensemble file saved: ${ensembleFile}`)
   } catch (error) {
-    console.error('Error:', error)
+    logger.error(`Error: ${error}`)
   }
 }
 
 const spawnFoXS = async (foxsRunDir: string) => {
   try {
     const files = await fs.readdir(foxsRunDir)
-    console.log('Spawn FoXS jobs:', foxsRunDir)
+    logger.info(`Spawn FoXS jobs: ${foxsRunDir}`)
     const foxsOpts = { cwd: foxsRunDir }
 
     const spawnPromises = files.map(
@@ -293,7 +312,7 @@ const spawnFoXS = async (foxsRunDir: string) => {
     )
     await Promise.all(spawnPromises)
   } catch (error) {
-    console.error(error)
+    logger.error(error)
   }
 }
 
@@ -310,25 +329,34 @@ const spawnMultiFoxs = (params: MultiFoxsParams): Promise<void> => {
   return new Promise((resolve, reject) => {
     const multiFoxs: ChildProcess = spawn(MULTIFOXS_BIN, multiFoxArgs, multiFoxOpts)
     multiFoxs.stdout?.on('data', (data) => {
-      // console.log('spawnMultiFoxs stdout', data.toString())
       logStream.write(data.toString())
     })
     multiFoxs.stderr?.on('data', (data) => {
-      // console.log('spawnMultiFoxs stderr', data.toString())
       errorStream.write(data.toString())
     })
     multiFoxs.on('error', (error) => {
-      // console.log('spawnMultiFoxs error:', error)
+      logger.error(`spawnMultiFoxs error: ${error}`)
       reject(error)
     })
     multiFoxs.on('exit', (code: number) => {
-      if (code === 0) {
-        console.log('spawnMultiFoxs close success exit code:', code)
-        resolve()
-      } else {
-        console.log('spawnMultiFoxs close error exit code:', code)
-        reject(`spawnMultiFoxs on close reject`)
-      }
+      const closeStreamsPromises = [
+        new Promise((resolveStream) => logStream.end(resolveStream)),
+        new Promise((resolveStream) => errorStream.end(resolveStream))
+      ]
+      Promise.all(closeStreamsPromises)
+        .then(() => {
+          if (code === 0) {
+            logger.info(`spawnMultiFoxs close success exit code: ${code}`)
+            resolve()
+          } else {
+            logger.info(`spawnMultiFoxs close error exit code: ${code}`)
+            reject(`spawnMultiFoxs on close reject`)
+          }
+        })
+        .catch((streamError) => {
+          logger.error(`Error closing file streams: ${streamError}`)
+          reject(streamError)
+        })
     })
   })
 }
@@ -352,10 +380,10 @@ const spawnCharmm = (params: CharmmParams): Promise<string> => {
 
     charmm.on('close', (code: number) => {
       if (code === 0) {
-        console.log('CHARMM success:', inputFile, 'exit code:', code)
+        logger.info(`CHARMM success: ${inputFile} exit code: ${code}`)
         resolve('CHARMM execution succeeded')
       } else {
-        console.log('CHARMM error:', inputFile, 'exit code:', code)
+        logger.info(`CHARMM error: ${inputFile} exit code: ${code}`)
         reject(new Error(charmmOutput))
       }
     })
@@ -376,25 +404,36 @@ const spawnPaeToConst = async (params: PaeParams): Promise<string> => {
   return new Promise((resolve, reject) => {
     const runPaeToConst: ChildProcess = spawn('python', args, opts)
     runPaeToConst.stdout?.on('data', (data) => {
-      console.log('runPaeToConst stdout: ', data.toString())
+      logger.info(`runPaeToConst stdout:  ${data.toString()}`)
       logStream.write(data.toString())
     })
     runPaeToConst.stderr?.on('data', (data) => {
-      console.error('runPaeToConst stderr: ', data.toString())
+      logger.error(`runPaeToConst stderr:  ${data.toString()}`)
       errorStream.write(data.toString())
     })
     runPaeToConst.on('error', (error) => {
-      console.log('runPaeToConst error:', error)
+      logger.error(`runPaeToConst error: ${error}`)
       reject(error)
     })
     runPaeToConst.on('exit', (code: number) => {
-      if (code === 0) {
-        console.log('runPaeToConst close success:', 'exit code:', code)
-        resolve(code.toString())
-      } else {
-        console.log('runPaeToConst close error:', 'exit code:', code)
-        reject(new Error('runPaeToConst failed. Please see the error log file'))
-      }
+      const closeStreamsPromises = [
+        new Promise((resolveStream) => logStream.end(resolveStream)),
+        new Promise((resolveStream) => errorStream.end(resolveStream))
+      ]
+      Promise.all(closeStreamsPromises)
+        .then(() => {
+          if (code === 0) {
+            logger.info(`runPaeToConst close success exit code: ${code}`)
+            resolve(code.toString())
+          } else {
+            logger.error(`runPaeToConst close error exit code: ${code}`)
+            reject(new Error('runPaeToConst failed. Please see the error log file'))
+          }
+        })
+        .catch((streamError) => {
+          logger.error(`Error closing file streams: ${streamError}`)
+          reject(streamError)
+        })
     })
   })
 }
@@ -406,7 +445,7 @@ const runPaeToConst = async (DBjob: IBilboMDAutoJob): Promise<void> => {
     in_pae: DBjob.pae_file,
     out_dir: outputDir
   }
-  console.log(`runPaeToConst: ${JSON.stringify(params, null, 2)}`)
+  logger.info(`runPaeToConst: ${JSON.stringify(params, null, 2)}`)
   await spawnPaeToConst(params)
   DBjob.const_inp_file = 'const.inp'
   await DBjob.save()
@@ -422,42 +461,46 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   const args = [autoRg_script, DBjob.data_file]
 
   return new Promise<void>((resolve, reject) => {
-    const autoRg = spawn('python', args, { cwd: outputDir })
+    const autoRg: ChildProcess = spawn('python', args, { cwd: outputDir })
     let autoRg_json = ''
-
     autoRg.stdout?.on('data', (data) => {
       logStream.write(data.toString())
       autoRg_json += data.toString()
     })
-
     autoRg.stderr?.on('data', (data) => {
       errorStream.write(data.toString())
     })
-
     autoRg.on('error', (error) => {
-      errorStream.end()
+      logger.error(`spawnMultiFoxs error: ${error}`)
       reject(error)
     })
-
-    autoRg.on('exit', (code) => {
-      logStream.end()
-      errorStream.end()
-      if (code === 0) {
-        try {
-          // Parse the stdout data as JSON
-          const analysisResults = JSON.parse(autoRg_json)
-          // Update rg_min and rg_max in DBjob
-          DBjob.rg_min = analysisResults.rg_min
-          DBjob.rg_max = analysisResults.rg_max
-          DBjob.save().then(() => {
-            resolve()
-          })
-        } catch (parseError) {
-          reject(parseError)
-        }
-      } else {
-        reject(`spawnAutoRgCalculator on close reject`)
-      }
+    autoRg.on('exit', (code: number) => {
+      const closeStreamsPromises = [
+        new Promise((resolveStream) => logStream.end(resolveStream)),
+        new Promise((resolveStream) => errorStream.end(resolveStream))
+      ]
+      Promise.all(closeStreamsPromises)
+        .then(() => {
+          if (code === 0) {
+            try {
+              const analysisResults = JSON.parse(autoRg_json)
+              // Update rg_min and rg_max in DBjob
+              DBjob.rg_min = analysisResults.rg_min
+              DBjob.rg_max = analysisResults.rg_max
+              DBjob.save().then(() => {
+                resolve()
+              })
+            } catch (parseError) {
+              reject(parseError)
+            }
+          } else {
+            reject('spawnAutoRgCalculator on close reject')
+          }
+        })
+        .catch((streamError) => {
+          logger.error(`Error closing file streams: ${streamError}`)
+          reject(streamError)
+        })
     })
   })
 }
@@ -531,7 +574,6 @@ const runMolecularDynamics = async (
       params.charmm_out_file = `${params.charmm_template}_rg${rg}.out`
       params.inp_basename = `${params.charmm_template}_rg${rg}`
       params.rg = rg
-      // console.log('runMolecularDynamics params: ', params)
       await generateInputFile(params)
       molecularDynamicsTasks.push(spawnCharmm(params))
     }
@@ -651,7 +693,7 @@ const prepareResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<voi
     }
     // Only want to add N best PDBs equal to number_of_states N in logfile.
     const numEnsembles = await getNumEnsembles(logFile)
-    console.log('numEnsembles', numEnsembles)
+    logger.info(`prepareResults numEnsembles: ${numEnsembles}`)
     MQjob.log(`Gather ${numEnsembles} best ensembles`)
 
     if (numEnsembles) {
@@ -764,7 +806,7 @@ Thank you for using BilboMD
 `
   const readmePath = path.join(resultsDir, 'README.md')
   await fs.writeFile(readmePath, readmeContent)
-  console.log('README file created successfully.')
+  logger.info('README file created successfully.')
 }
 
 export {
