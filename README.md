@@ -46,6 +46,8 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.3.1
+  - Close fs streams properly so we don't have dangling NFS lock files.
 - 1.3.0
   - Add new functions to run `FoXS` analysis on initial PDB for BilboMD classic/auto
 - 1.2.9
