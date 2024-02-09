@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer'
 import hbs from 'nodemailer-express-handlebars'
 import path from 'path'
+import { logger } from './loggers'
 
 const user = process.env.SENDMAIL_USER
 const viewPath = path.resolve(__dirname, './templates/mailer/')
@@ -19,7 +20,7 @@ const sendJobCompleteEmail = (
   title: string,
   isError: boolean
 ) => {
-  console.log('Sending job complete email, error state is: ', isError)
+  logger.info(`Sending job complete email, isError: ${isError}`)
 
   let emailLayout
 
@@ -54,7 +55,7 @@ const sendJobCompleteEmail = (
     }
   }
 
-  console.log('Using email template:', emailLayout)
+  logger.info(`Using email template: ${emailLayout}`)
   transporter.sendMail(mail)
 }
 

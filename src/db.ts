@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import { logger } from './loggers'
 
 const {
   MONGO_USERNAME,
@@ -16,7 +17,7 @@ const connectDB = async () => {
   try {
     await mongoose.connect(url)
   } catch (err) {
-    console.error(err)
+    logger.error(err)
   }
 }
 
