@@ -10,14 +10,16 @@ const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
 // const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
 
 const initializeJob = async (MQJob: BullMQJob) => {
-  logger.info('init job')
+  // logger.info('init job')
+  logger.info('-------------------------------------')
   // Clear the BullMQ Job logs
   await MQJob.clearLogs()
   await MQJob.log('Init!')
 }
 
 const cleanupJob = async (MQjob: BullMQJob) => {
-  logger.info('cleanup job')
+  // logger.info('cleanup job')
+  logger.info('-------------------------------------')
   await MQjob.log('Done!')
 }
 
