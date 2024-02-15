@@ -1,6 +1,8 @@
 """
-Splits a PDB file into several, each containing one chain. \
-Translate the PDB to CHARMM CRD and PSF file 
+Splits a PDB file into individual files.
+Each file containing one chain from the input PDB file.
+Sanitizes the PDB files to be used by CHARMM in order to convert to CRD and PSF files.
+Writes a CHARMM-compatible pdb_2_crd.inp file for CHARMM.
 
 Usage:
     python pdb_2_crd.py <pdb file>
@@ -13,11 +15,7 @@ Example:
 import argparse
 
 BASENAME = "chain"
-
-__author__ = "MH"
-__email__ = "mhammel@lbl.gov"
-
-USAGE = __doc__.format(__author__, __email__)
+TOPO_FILES = "/app/scripts/bilbomd_top_par_files.str"
 
 
 def delete_water(fhandel):
@@ -225,25 +223,28 @@ def split_chain_hetatm(fhandle):
                 chain_ids.append(chain_id_new)
                 file_pdb = BASENAME + "_" + chain_id_new + ".pdb"
                 file_pdb = file_pdb.lower()
-                with open(file_pdb, "w") as fh:
+                with open(file=file_pdb, mode="w", encoding="utf8") as fh:
                     fh.write("".join(lines))
 
-                with open(file_pdb, "r") as infile:
+                with open(file=file_pdb, mode="r", encoding="utf8") as infile:
                     lines = infile.readlines()
                     modified_lines = [
                         line.replace("HETATM", "ATOM  ") for line in lines
                     ]
-                with open(file_pdb, "w") as fh2:
+                with open(file=file_pdb, mode="w", encoding="utf8") as fh2:
                     fh2.writelines(modified_lines)
     return chain_ids
 
 
 def renumbering(chain_ids):
+    """
+    Renumber all residues starting from 1 to make CHARMM happy.
+    """
     for chain_id in chain_ids:
         file_pdb = BASENAME + "_" + chain_id + ".pdb"
         file_pdb = file_pdb.lower()
         data = {}
-        with open(file_pdb, "r") as fh:
+        with open(file=file_pdb, mode="r", encoding="utf8") as fh:
             lines = fh.readlines()
             prev_resid = None
             resid = 0
@@ -258,16 +259,19 @@ def renumbering(chain_ids):
                 else:
                     data.append(line)
 
-            with open(file_pdb, "w") as fh2:
+            with open(file=file_pdb, mode="w", encoding="utf8") as fh2:
                 fh2.write("".join(data))
 
 
 def change_resid_names(chain_ids):
+    """
+    Rename Residues for CHARMM
+    """
     for chain_id in chain_ids:
         file_pdb = BASENAME + "_" + chain_id + ".pdb"
         file_pdb = file_pdb.lower()
         modify_lines = []
-        with open(file_pdb, "r") as fh:
+        with open(file=file_pdb, mode="r", encoding="utf8") as fh:
             for line in fh:
                 line = line.replace("HIS", "HSD")
                 line = line.replace("   C ", " CYT ")
@@ -281,7 +285,6 @@ def change_resid_names(chain_ids):
                 line = line.replace("NAG ", "BGLC")
                 line = line.replace("BMA ", "BMAN")
                 line = line.replace("MAN ", "AMAN")
-
                 line = line.replace("GAL ", "AGAL")
                 line = line.replace("FUL ", "BFUC")
                 line = line.replace("FUC ", "AFUC")
@@ -296,14 +299,13 @@ def change_resid_names(chain_ids):
                 line = line.replace("TAL ", "ATAL")
                 line = line.replace("XYL ", "AXYL")
                 line = line.replace("RHM ", "ARHM")
-
                 line = line.replace("XYL ", "AXYL")
                 line = line.replace("SIA ", "BSIA")
                 line = line.replace("HEM ", "HEME")
 
                 modify_lines.append(line)
 
-        with open(file_pdb, "w") as fh2:
+        with open(file=file_pdb, mode="w", encoding="utf8") as fh2:
             fh2.writelines(modify_lines)
 
 
@@ -320,8 +322,8 @@ def write_pdb_2_crd_inp_file(chain_ids):
         outfile.write("\n")
         outfile.write("bomlev -2\n")
         outfile.write("\n")
-        outfile.write("STREAM /home/mhammel/pae_to_domains/charmm_reader/toppar.str\n")
-
+        outfile.write(f"STREAM {TOPO_FILES}\n")
+        outfile.write("\n")
         for chain_id in chain_ids:
             file_pdb = BASENAME + "_" + chain_id + ".pdb"
             file_pdb = file_pdb.lower()
@@ -375,7 +377,7 @@ def write_pdb_2_crd_inp_file(chain_ids):
         outfile.write("write coor pdb name step1_pdb2crd.pdb\n")
         outfile.write("stop\n")
 
-    print(f"Wrote {outfile}")
+    print(f"Wrote {outfile.name}")
 
 
 if __name__ == "__main__":
@@ -385,14 +387,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     delete_water(args.pdb_file)
+
     pro_chain_ids = split_chain(args.pdb_file)
     print(f"chain_ids: {pro_chain_ids}")
 
     hetatm_chain_ids = split_chain_hetatm(args.pdb_file)
     print(f"hetatm_chain_ids: {hetatm_chain_ids}")
+
     all_chain_ids = pro_chain_ids + hetatm_chain_ids
     print(f"all_chain_ids: {all_chain_ids}")
 
     renumbering(all_chain_ids)
+
     change_resid_names(all_chain_ids)
+
     write_pdb_2_crd_inp_file(all_chain_ids)
