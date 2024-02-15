@@ -6,7 +6,8 @@ Writes a CHARMM-compatible pdb_2_crd.inp file for CHARMM.
 """
 
 import argparse
-from datetime import datetime
+
+# from datetime import datetime
 
 TOPO_FILES = "/app/scripts/bilbomd_top_par_files.str"
 
@@ -119,6 +120,18 @@ def remove_water(lines):
     return processed_lines
 
 
+def remove_alt_conformers(lines):
+    """
+    Remove lines where the 27th column (index 26 in Python) is not a space.
+    This is teh column used by PDB to denote an alternate conformation.
+
+    :param lines: List of strings (lines from the PDB file).
+    :return: List of strings with lines removed according to the condition.
+    """
+    processed_lines = [line for line in lines if line[26] == " "]
+    return processed_lines
+
+
 def split_and_process_pdb(pdb_file_path: str, output_dir: str):
     """
     Reads a PDB file, splits it by chains, processes each chain in memory,
@@ -157,18 +170,20 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
         # These could be done in a single for x in x loop if we wanted
         # to be more efficient
         processed_lines = remove_water(chain_data["lines"])
+        processed_lines = remove_alt_conformers(processed_lines)
         processed_lines = apply_charmm_residue_names(processed_lines)
         processed_lines = replace_hetatm(processed_lines)
         processed_lines = renumber_residues(processed_lines)
 
         chain_filename = get_chain_filename(chain_id, pdb_file_path)
         print(
-            f"Writing processed chain to: {chain_filename} type: {chain_data['type']}"
+            f"Writing processed chain to: {chain_filename} chainID: {chain_data['chainid']} type: {chain_data['type']}"
         )
         with open(
             output_dir + "/" + chain_filename, "w", encoding="utf-8"
         ) as chain_file:
             chain_file.writelines(processed_lines)
+            chain_file.write("TER\n")
 
     write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path)
 
@@ -181,7 +196,7 @@ def apply_charmm_residue_names(lines):
     :return: A list of processed lines.
     """
     residue_replacements = {
-        "HIS": "HSD",
+        "HIS": "HSD ",
         "C": "CYT",
         "G": "GUA",
         "A": "ADE",
@@ -287,13 +302,13 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
     Write the CHARMM input file
     """
     output_file = f"{output_dir}/pdb_2_crd.inp"
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(output_file, mode="w", encoding="utf8") as outfile:
         outfile.write("* PURPOSE: Convert PDB file to CRD and PSF\n")
         outfile.write("* AUTHOR: Michal Hammel\n")
         outfile.write("* AUTHOR: Scott Classen\n")
         outfile.write(f"* PDB: {pdb_file_path}\n")
-        outfile.write(f"* DATE: {timestamp}\n")
+        # outfile.write(f"* DATE: {timestamp}\n")
         outfile.write("*\n")
         outfile.write("\n")
         outfile.write("bomlev -2\n")
@@ -308,11 +323,11 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
                 f"{chain_id.lower()}{suffix}_{pdb_file_path.split('/')[-1].lower()}"
             )
             chain_file = f"{output_dir}/{chain_filename}"
-            print(chain_file)
+            # print(chain_file)
 
             # Adjust the generation and reading commands based on molecule_type
             if molecule_type == "PRO":
-                outfile.write(f"open read unit 12 card name {chain_file}\n")
+                outfile.write(f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate {molecule_type}{chain_data['chainid']} "
@@ -324,7 +339,7 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
                 outfile.write("close unit 12\n")
                 outfile.write("\n")
             elif molecule_type == "DNA" or molecule_type == "RNA":
-                outfile.write(f"open read unit 12 card name {chain_file}\n")
+                outfile.write(f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate {molecule_type}{chain_data['chainid']} "
@@ -336,16 +351,30 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
                 outfile.write("close unit 12\n")
                 outfile.write("\n")
             elif molecule_type == "CAR":
-                outfile.write(f"open read unit 12 card name  {chain_file}\n")
+                chain_id = chain_data["chainid"]
+                suffix = "R" if chain_id.isupper() else "L"
+                outfile.write(f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
-                    f"generate {molecule_type}{chain_data['chainid']} setup\n"
+                    f"generate CA{suffix}{chain_data['chainid'].upper()} setup\n"
                 )
                 outfile.write("rewind unit 12\n")
                 outfile.write("read coor pdb unit 12 append\n")
                 outfile.write("hbuild sele hydrogen end\n")
                 outfile.write("close unit 12\n")
                 outfile.write("\n")
+
+        outfile.write("ic fill preserve\n")
+        outfile.write("ic parameter\n")
+        outfile.write("ic build\n")
+        outfile.write("coord init sele type h* end\n")
+        outfile.write("hbuild\n")
+        outfile.write("IOFO EXTE\n")
+        outfile.write("\n")
+        outfile.write("write psf card name bilbomd_pdb2crd.psf\n")
+        outfile.write("write coor card name bilbomd_pdb2crd.crd\n")
+        outfile.write("write coor pdb name bilbomd_pdb2crd.pdb\n")
+        outfile.write("stop\n")
 
 
 if __name__ == "__main__":
