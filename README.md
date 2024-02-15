@@ -46,6 +46,10 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.4.0
+  - Add new functions for converting PDB to CRD and PSF.
+  - Enforce Python style guidelines with Black.
+  - Add `pdb2crd.py` script for creating teh CHARMM input file for PDB to CRD.
 - 1.3.1
   - Close fs streams properly so we don't have dangling NFS lock files.
 - 1.3.0
