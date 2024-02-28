@@ -1,32 +1,35 @@
-
+# -----------------------------------------------------------------------------
+# Build stage 1 - Install build tools
 FROM ubuntu:22.04 AS builder
 RUN apt-get update && \
     apt-get install -y cmake gcc gfortran g++
 
+# -----------------------------------------------------------------------------
+# Build stage 2 - Configure CHARMM
 ARG CHARMM_VER=c47b2
-FROM builder AS config_charmm
-RUN mkdir -p /usr/local/src
-WORKDIR /usr/local/src
-COPY ./charmm/${CHARMM_VER}.tar.gz .
-RUN tar zxvf ${CHARMM_VER}.tar.gz
+FROM builder AS build_charmm
+
+# Combine the mkdir, tar extraction, and cleanup into a single RUN command
+COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
+RUN mkdir -p /usr/local/src && \
+    tar -zxvf /usr/local/src/${CHARMM_VER}.tar.gz -C /usr/local/src && \
+    rm /usr/local/src/${CHARMM_VER}.tar.gz
+
+# Configure CHARMM in the same layer as the extraction if possible
 WORKDIR /usr/local/src/charmm
 RUN ./configure
 
-FROM config_charmm AS build_charmm
-WORKDIR /usr/local/src/charmm
+# Build CHARMM
 RUN make -j8 -C build/cmake install
 
-FROM ubuntu:22.04 as install_imp
-RUN apt-get update && \
-    apt-get install -y wget && \
-    echo "deb https://integrativemodeling.org/latest/download jammy/" >> /etc/apt/sources.list && \
-    wget -O /etc/apt/trusted.gpg.d/salilab.asc https://salilab.org/~ben/pubkey256.asc && \
-    apt-get update && \
-    apt-get install -y imp
-
-FROM install_imp AS bilbomd-worker-step1
+# -----------------------------------------------------------------------------
+# Build stage 3 - Copy CHARMM binary
+#   I'm not sure if this needs to be a separate step.
+FROM build_charmm AS bilbomd-worker-step1
 COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 
+# -----------------------------------------------------------------------------
+# Build stage 4 - Install NodeJS
 ARG NODE_MAJOR=20
 FROM bilbomd-worker-step1 AS bilbomd-worker-step2
 RUN apt-get update && \
@@ -37,27 +40,27 @@ RUN apt-get update && \
     apt-get update && \
     apt-get install -y nodejs
 
+# -----------------------------------------------------------------------------
+# Build stage 5 - Install Miniconda3
 ARG USER_ID=1001
 ARG GROUP_ID=1001
 FROM bilbomd-worker-step2 AS bilbomd-worker-step3
-# RUN curl -L -o /tmp/RAW-2.2.1-linux-x86_64.deb "https://sourceforge.net/projects/bioxtasraw/files/RAW-2.2.1-linux-x86_64.deb/download"
-# RUN apt-get install /tmp/RAW-2.2.1-linux-x86_64.deb
 
-# Update the package repository and install dependencies
 # Libraries needed by CHARMM
 RUN apt-get update && \
-    apt-get install -y wget bzip2 ncat gfortran libgl1-mesa-dev
+    apt-get install -y wget bzip2 ncat gfortran libgl1-mesa-dev libarchive13 && \
+    rm -rf /var/lib/apt/lists/*
 
-# Download and install the Miniconda
-RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
-    bash /tmp/miniconda.sh -b -p /opt/miniconda && \
-    rm /tmp/miniconda.sh
+# Download and install Miniforge3
+RUN wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" && \
+    bash Miniforge3-$(uname)-$(uname -m).sh -b -p "/miniforge3" && \
+    rm Miniforge3-$(uname)-$(uname -m).sh
 
-# Set up the Miniconda environment
-ENV PATH="/opt/miniconda/bin:$PATH"
+# Add Conda to PATH
+ENV PATH="/miniforge3/bin/:${PATH}"
 
-# Update conda - needed?
-RUN conda update -n base -c defaults conda -y
+# Update conda
+RUN conda update -y -n base -c defaults conda
 
 # Copy in the environment.yml file
 COPY environment.yml /tmp/environment.yml
@@ -66,20 +69,44 @@ COPY environment.yml /tmp/environment.yml
 RUN conda env update -f /tmp/environment.yml && \
     rm /tmp/environment.yml
 
-FROM bilbomd-worker-step3 AS bilbomd-worker
-RUN apt-get install -y zip build-essential
-# Create a directory for BioXTAS and copy the source ZIP file
-RUN mkdir /BioXTAS
-COPY bioxtas/RAW-2.2.1-source.zip /BioXTAS/
+# -----------------------------------------------------------------------------
+# Build stage 6 - Install BioXTAS
+FROM bilbomd-worker-step3 AS bilbomd-worker-step4
 
-# Change the working directory to BioXTAS
-WORKDIR /BioXTAS
+# Update conda
+RUN conda update -y -n base -c defaults conda
+
+# install deps
+RUN apt-get update && \
+    apt-get install -y zip build-essential libarchive13 git
 
 # Install BioXYAS from source
-RUN unzip RAW-2.2.1-source.zip && \
-    python setup.py build_ext --inplace && \
-    pip install . && \
-    rm /BioXTAS/RAW-2.2.1-source.zip
+WORKDIR /tmp
+RUN git clone https://github.com/jbhopkins/bioxtasraw.git
+
+# Install BioXTAS RAW from source
+WORKDIR /tmp/bioxtasraw
+RUN python3 setup.py build_ext --inplace && \
+    pip3 install .
+
+# -----------------------------------------------------------------------------
+# Build stage 7 - IMP & worker app
+FROM bilbomd-worker-step4 AS bilbomd-worker
+
+# This was for manually downloaded deb files
+# RUN wget https://integrativemodeling.org/2.20.1/download/jammy/imp_2.20.1-1_arm64.deb && \
+#     apt-get update && \
+#     apt-get install -y ./imp_2.20.1-1_arm64.deb && \
+#     rm -f imp_2.20.1-1_arm64.deb && \
+#     rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && \
+    apt-get install -y wget && \
+    echo "deb https://integrativemodeling.org/latest/download jammy/" >> /etc/apt/sources.list && \
+    wget -O /etc/apt/trusted.gpg.d/salilab.asc https://salilab.org/~ben/pubkey256.asc && \
+    apt-get update && \
+    apt-get install -y imp
+
 
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
