@@ -6,8 +6,8 @@ RUN apt-get update && \
 
 # -----------------------------------------------------------------------------
 # Build stage 2 - Configure CHARMM
-ARG CHARMM_VER=c47b2
 FROM builder AS build_charmm
+ARG CHARMM_VER=c47b2
 
 # Combine the mkdir, tar extraction, and cleanup into a single RUN command
 COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
