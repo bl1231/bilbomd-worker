@@ -8,6 +8,7 @@ README.md
 .gitignore
 .vscode
 .prettierrc
+.prettierignore
 .nvmrc
 logs
 .eslintrc.yml
