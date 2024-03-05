@@ -1,5 +1,6 @@
 import Handlebars from 'handlebars'
 import { logger } from './loggers'
+import { config } from './config/config'
 import { spawn, ChildProcess } from 'node:child_process'
 import { promisify } from 'util'
 import fs from 'fs-extra'
@@ -92,7 +93,9 @@ const handleError = async (
   logger.info(`Failed Attempts --> ${MQjob.attemptsMade}`)
 
   if (MQjob.attemptsMade >= 3) {
-    sendJobCompleteEmail(DBjob.user.email, BILBOMD_URL, DBjob.id, DBjob.title, true)
+    if (config.sendEmailNotifications) {
+      sendJobCompleteEmail(DBjob.user.email, BILBOMD_URL, DBjob.id, DBjob.title, true)
+    }
     logger.info(`email notification sent to ${DBjob.user.email}`)
     await MQjob.log(`email notification sent to ${DBjob.user.email}`)
   }
@@ -137,7 +140,9 @@ const cleanupJob = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> =
     }
 
     // Send job completion email and log the notification
-    sendJobCompleteEmail(user.email, BILBOMD_URL, DBjob.id, DBjob.title, false)
+    if (config.sendEmailNotifications) {
+      sendJobCompleteEmail(user.email, BILBOMD_URL, DBjob.id, DBjob.title, false)
+    }
     logger.info(`email notification sent to ${user.email}`)
     await MQjob.log(`email notification sent to ${user.email}`)
   } catch (error) {
