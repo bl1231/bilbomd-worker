@@ -73,9 +73,6 @@ RUN conda env update -f /tmp/environment.yml && \
 # Build stage 6 - Install BioXTAS
 FROM bilbomd-worker-step3 AS bilbomd-worker-step4
 
-# Update conda
-RUN conda update -y -n base -c defaults conda
-
 # install deps
 RUN apt-get update && \
     apt-get install -y zip build-essential libarchive13 git
@@ -86,19 +83,12 @@ RUN git clone https://github.com/jbhopkins/bioxtasraw.git
 
 # Install BioXTAS RAW from source
 WORKDIR /tmp/bioxtasraw
-RUN python3 setup.py build_ext --inplace && \
-    pip3 install .
+RUN python setup.py build_ext --inplace && \
+    pip install .
 
 # -----------------------------------------------------------------------------
 # Build stage 7 - IMP & worker app
 FROM bilbomd-worker-step4 AS bilbomd-worker
-
-# This was for manually downloaded deb files
-# RUN wget https://integrativemodeling.org/2.20.1/download/jammy/imp_2.20.1-1_arm64.deb && \
-#     apt-get update && \
-#     apt-get install -y ./imp_2.20.1-1_arm64.deb && \
-#     rm -f imp_2.20.1-1_arm64.deb && \
-#     rm -rf /var/lib/apt/lists/*
 
 RUN apt-get update && \
     apt-get install -y wget && \
