@@ -3,7 +3,7 @@ import hbs from 'nodemailer-express-handlebars'
 import path from 'path'
 import { logger } from './loggers'
 
-const user = process.env.SENDMAIL_USER
+const user = process.env.SEND_EMAIL_USER
 const viewPath = path.resolve(__dirname, './templates/mailer/')
 
 const transporter = nodemailer.createTransport({
