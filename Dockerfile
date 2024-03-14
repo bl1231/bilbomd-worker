@@ -7,7 +7,7 @@ RUN apt-get update && \
 # -----------------------------------------------------------------------------
 # Build stage 2 - Configure CHARMM
 FROM builder AS build_charmm
-ARG CHARMM_VER=c47b2
+ARG CHARMM_VER=c48b2
 
 # Combine the mkdir, tar extraction, and cleanup into a single RUN command
 COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
@@ -30,8 +30,8 @@ COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 
 # -----------------------------------------------------------------------------
 # Build stage 4 - Install NodeJS
-ARG NODE_MAJOR=20
 FROM bilbomd-worker-step1 AS bilbomd-worker-step2
+ARG NODE_MAJOR=20
 RUN apt-get update && \
     apt-get install -y gpg curl && \
     mkdir -p /etc/apt/keyrings && \
@@ -42,8 +42,6 @@ RUN apt-get update && \
 
 # -----------------------------------------------------------------------------
 # Build stage 5 - Install Miniconda3
-ARG USER_ID=1001
-ARG GROUP_ID=1001
 FROM bilbomd-worker-step2 AS bilbomd-worker-step3
 
 # Libraries needed by CHARMM
@@ -89,6 +87,8 @@ RUN python setup.py build_ext --inplace && \
 # -----------------------------------------------------------------------------
 # Build stage 7 - IMP & worker app
 FROM bilbomd-worker-step4 AS bilbomd-worker
+ARG USER_ID=1001
+ARG GROUP_ID=1001
 
 RUN apt-get update && \
     apt-get install -y wget && \
@@ -100,7 +100,7 @@ RUN apt-get update && \
 
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
-VOLUME [ "/bilbomd/uploads" ]
+# VOLUME [ "/bilbomd/uploads" ]
 WORKDIR /app
 
 # Create a user and group with the provided IDs
@@ -114,7 +114,7 @@ RUN chown -R bilbo:bilbomd /app /bilbomd/uploads /home/bilbo
 USER bilbo:bilbomd
 
 # Copy over the package*.json files
-COPY --chown=bilbo:bilbomd package*.json ./
+COPY --chown=bilbo:bilbomd package*.json .
 
 # Install dependencies
 RUN npm ci
