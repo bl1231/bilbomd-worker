@@ -95,9 +95,10 @@ const handleError = async (
   if (MQjob.attemptsMade >= 3) {
     if (config.sendEmailNotifications) {
       sendJobCompleteEmail(DBjob.user.email, BILBOMD_URL, DBjob.id, DBjob.title, true)
+      logger.info(`email notification sent to ${DBjob.user.email}`)
+      await MQjob.log(`email notification sent to ${DBjob.user.email}`)
     }
-    logger.info(`email notification sent to ${DBjob.user.email}`)
-    await MQjob.log(`email notification sent to ${DBjob.user.email}`)
+    logger.warn(`email notification sent to ${DBjob.user.email}`)
   }
 
   throw new Error('BilboMD failed')
