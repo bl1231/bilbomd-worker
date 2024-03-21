@@ -7,7 +7,7 @@ RUN apt-get update && \
 # -----------------------------------------------------------------------------
 # Build stage 2 - Configure CHARMM
 FROM builder AS build_charmm
-ARG CHARMM_VER=c48b2
+ARG CHARMM_VER=c47b2
 
 # Combine the mkdir, tar extraction, and cleanup into a single RUN command
 COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
@@ -73,14 +73,15 @@ FROM bilbomd-worker-step3 AS bilbomd-worker-step4
 
 # install deps
 RUN apt-get update && \
-    apt-get install -y zip build-essential libarchive13 git
+    apt-get install -y zip build-essential libarchive13
 
 # Install BioXYAS from source
 WORKDIR /tmp
-RUN git clone https://github.com/jbhopkins/bioxtasraw.git
-
+# RUN git clone https://github.com/jbhopkins/bioxtasraw.git
+COPY bioxtas/bioxtasraw-master.zip .
+RUN unzip bioxtasraw-master.zip && rm bioxtasraw-master.zip
 # Install BioXTAS RAW from source
-WORKDIR /tmp/bioxtasraw
+WORKDIR /tmp/bioxtasraw-master
 RUN python setup.py build_ext --inplace && \
     pip install .
 
