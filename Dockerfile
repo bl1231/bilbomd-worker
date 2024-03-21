@@ -7,7 +7,7 @@ RUN apt-get update && \
 # -----------------------------------------------------------------------------
 # Build stage 2 - Configure CHARMM
 FROM builder AS build_charmm
-ARG CHARMM_VER=c48b2
+ARG CHARMM_VER=c47b2
 
 # Combine the mkdir, tar extraction, and cleanup into a single RUN command
 COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
@@ -71,16 +71,19 @@ RUN conda env update -f /tmp/environment.yml && \
 # Build stage 6 - Install BioXTAS
 FROM bilbomd-worker-step3 AS bilbomd-worker-step4
 
-# install deps
+# Install deps
 RUN apt-get update && \
-    apt-get install -y zip build-essential libarchive13 git
+    apt-get install -y zip build-essential libarchive13
 
-# Install BioXYAS from source
+# Copy the BioXTAS GitHiub master zip file
+# 1e2b05c74bbc595dc84e64ee962680b700b258be
 WORKDIR /tmp
-RUN git clone https://github.com/jbhopkins/bioxtasraw.git
+# RUN git clone https://github.com/jbhopkins/bioxtasraw.git
+COPY bioxtas/bioxtasraw-master.zip .
+RUN unzip bioxtasraw-master.zip
 
-# Install BioXTAS RAW from source
-WORKDIR /tmp/bioxtasraw
+# Install BioXTAS RAW into local Python environment
+WORKDIR /tmp/bioxtasraw-master
 RUN python setup.py build_ext --inplace && \
     pip install .
 
