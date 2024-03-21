@@ -1,16 +1,19 @@
 import { Job as BullMQJob } from 'bullmq'
+import { BilboMdAutoJob } from './model/Job'
 import { logger } from './loggers'
 import fs from 'fs-extra'
 import path from 'path'
 import { spawn, ChildProcess } from 'node:child_process'
 
 const uploadFolder = process.env.DATA_VOL ?? '/bilbomd/uploads'
-const af2paeUploads = path.join(uploadFolder, 'af2pae_uploads')
 const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
-// const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
+
+interface Pdb2CrdCharmmInputData {
+  uuid: string
+  pdb_file: string
+}
 
 const initializeJob = async (MQJob: BullMQJob) => {
-  // logger.info('init job')
   logger.info('-------------------------------------')
   // Clear the BullMQ Job logs
   await MQJob.clearLogs()
@@ -18,19 +21,36 @@ const initializeJob = async (MQJob: BullMQJob) => {
 }
 
 const cleanupJob = async (MQjob: BullMQJob) => {
-  // logger.info('cleanup job')
   logger.info('-------------------------------------')
   await MQjob.log('Done!')
 }
 
 const processPdb2CrdJob = async (MQJob: BullMQJob) => {
   await MQJob.updateProgress(1)
+
+  const foundJob = await BilboMdAutoJob.findOne({ uuid: MQJob.data.uuid })
+    .populate({
+      path: 'user',
+      select: 'email'
+    })
+    .exec()
+
+  if (!foundJob) {
+    logger.warn(`No MongoDB entry found for: ${MQJob.data.uuid}. Must be from PAE Jiffy.`)
+  } else {
+    logger.warn(`MongoDB entry for ${MQJob.data.type} Job found: ${foundJob.uuid}`)
+  }
+
   // Initialize
   await initializeJob(MQJob)
 
   // Create pdb_2_crd.inp file
   await MQJob.log('start pdb_2_crd')
-  await createCharmmInpFile(MQJob.data.uuid)
+  if (foundJob) {
+    await createCharmmInpFile({ uuid: foundJob.uuid, pdb_file: foundJob.pdb_file })
+  } else {
+    await createCharmmInpFile({ uuid: MQJob.data.uuid, pdb_file: 'pdb_file.pdb' })
+  }
   await MQJob.log('end pdb_2_crd')
   await MQJob.updateProgress(15)
 
@@ -45,14 +65,17 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
   await MQJob.updateProgress(100)
 }
 
-const createCharmmInpFile = (uuid: string) => {
-  const workingDir = path.join(af2paeUploads, uuid)
+const createCharmmInpFile = async (inpData: Pdb2CrdCharmmInputData) => {
+  logger.info('in createCharmmInpFile')
+  const workingDir = path.join(uploadFolder, inpData.uuid)
+  const inputPDB = path.join(workingDir, inpData.pdb_file)
   const logFile = path.join(workingDir, 'pdb2crd.log')
   const errorFile = path.join(workingDir, 'pdb2crd_error.log')
   const logStream = fs.createWriteStream(logFile)
   const errorStream = fs.createWriteStream(errorFile)
   const pdb2crd_script = '/app/scripts/pdb2crd.py'
-  const args = [pdb2crd_script, 'pdb_file.pdb', '.']
+  const args = [pdb2crd_script, inputPDB, '.']
+  logger.info(`args for pdb2crd_script: ${args}`)
 
   return new Promise((resolve, reject) => {
     const pdb2crd: ChildProcess = spawn('python', args, { cwd: workingDir })
@@ -96,7 +119,7 @@ const createCharmmInpFile = (uuid: string) => {
 }
 
 const spawnCharmm = (MQJob: BullMQJob): Promise<string> => {
-  const workingDir = path.join(af2paeUploads, MQJob.data.uuid)
+  const workingDir = path.join(uploadFolder, MQJob.data.uuid)
   const outputFile = 'pdb2crd_charmm.log'
   const inputFile = 'pdb_2_crd.inp'
   const charmmArgs = ['-o', outputFile, '-i', inputFile]

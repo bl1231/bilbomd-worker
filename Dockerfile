@@ -80,7 +80,8 @@ RUN apt-get update && \
 WORKDIR /tmp
 # RUN git clone https://github.com/jbhopkins/bioxtasraw.git
 COPY bioxtas/bioxtasraw-master.zip .
-RUN unzip bioxtasraw-master.zip
+RUN unzip bioxtasraw-master.zip && rm bioxtasraw-master.zip
+
 
 # Install BioXTAS RAW into local Python environment
 WORKDIR /tmp/bioxtasraw-master

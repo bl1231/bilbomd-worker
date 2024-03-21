@@ -22,6 +22,7 @@ interface IBilboMDJob extends IJob {
 }
 
 interface IBilboMDAutoJob extends IJob {
+  pdb_file: string
   psf_file: string
   crd_file: string
   pae_file: string
@@ -76,7 +77,8 @@ const bilboMdJobSchema = new Schema<IBilboMDJob>({
 })
 
 const bilboMdAutoJobSchema = new Schema<IBilboMDAutoJob>({
-  psf_file: { type: String, required: true },
+  pdb_file: { type: String, required: true },
+  psf_file: { type: String, required: false },
   crd_file: { type: String, required: true },
   pae_file: { type: String, required: true },
   const_inp_file: { type: String, required: false },
