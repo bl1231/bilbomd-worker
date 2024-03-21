@@ -1,11 +1,12 @@
 import { Job as BullMQJob } from 'bullmq'
+import { BilboMdAutoJob, IBilboMDAutoJob } from './model/Job'
 import { logger } from './loggers'
 import fs from 'fs-extra'
 import path from 'path'
 import { spawn, ChildProcess } from 'node:child_process'
 
 const uploadFolder = process.env.DATA_VOL ?? '/bilbomd/uploads'
-const af2paeUploads = path.join(uploadFolder, 'af2pae_uploads')
+// const af2paeUploads = path.join(uploadFolder, 'af2pae_uploads')
 const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
 // const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
 
@@ -25,12 +26,23 @@ const cleanupJob = async (MQjob: BullMQJob) => {
 
 const processPdb2CrdJob = async (MQJob: BullMQJob) => {
   await MQJob.updateProgress(1)
+
+  const foundJob = await BilboMdAutoJob.findOne({ uuid: MQJob.data.uuid })
+    .populate({
+      path: 'user',
+      select: 'email'
+    })
+    .exec()
+  if (!foundJob) {
+    throw new Error(`No job found for: ${MQJob.data.jobid}`)
+  }
+  logger.info(foundJob)
   // Initialize
   await initializeJob(MQJob)
 
   // Create pdb_2_crd.inp file
   await MQJob.log('start pdb_2_crd')
-  await createCharmmInpFile(MQJob.data.uuid)
+  await createCharmmInpFile(foundJob)
   await MQJob.log('end pdb_2_crd')
   await MQJob.updateProgress(15)
 
@@ -45,14 +57,17 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
   await MQJob.updateProgress(100)
 }
 
-const createCharmmInpFile = (uuid: string) => {
-  const workingDir = path.join(af2paeUploads, uuid)
+const createCharmmInpFile = (DBJob: IBilboMDAutoJob) => {
+  logger.info('in createCharmmInpFile')
+  const workingDir = path.join(uploadFolder, DBJob.uuid)
+  const inputPDB = path.join(workingDir, DBJob.pdb_file)
   const logFile = path.join(workingDir, 'pdb2crd.log')
   const errorFile = path.join(workingDir, 'pdb2crd_error.log')
   const logStream = fs.createWriteStream(logFile)
   const errorStream = fs.createWriteStream(errorFile)
   const pdb2crd_script = '/app/scripts/pdb2crd.py'
-  const args = [pdb2crd_script, 'pdb_file.pdb', '.']
+  const args = [pdb2crd_script, inputPDB, '.']
+  logger.info(`args for pdb2crd_script: ${args}`)
 
   return new Promise((resolve, reject) => {
     const pdb2crd: ChildProcess = spawn('python', args, { cwd: workingDir })
@@ -96,7 +111,7 @@ const createCharmmInpFile = (uuid: string) => {
 }
 
 const spawnCharmm = (MQJob: BullMQJob): Promise<string> => {
-  const workingDir = path.join(af2paeUploads, MQJob.data.uuid)
+  const workingDir = path.join(uploadFolder, MQJob.data.uuid)
   const outputFile = 'pdb2crd_charmm.log'
   const inputFile = 'pdb_2_crd.inp'
   const charmmArgs = ['-o', outputFile, '-i', inputFile]

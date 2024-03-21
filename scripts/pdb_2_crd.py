@@ -372,9 +372,9 @@ def write_pdb_2_crd_inp_file(chain_ids):
         outfile.write("hbuild\n")
         outfile.write("IOFO EXTE\n")
         outfile.write("\n")
-        outfile.write("write psf card name step1_pdb2crd.psf\n")
-        outfile.write("write coor card name step1_pdb2crd.crd\n")
-        outfile.write("write coor pdb name step1_pdb2crd.pdb\n")
+        outfile.write("write psf card name pdb2crd.psf\n")
+        outfile.write("write coor card name pdb2crd.crd\n")
+        outfile.write("write coor pdb name pdb2crd.pdb\n")
         outfile.write("stop\n")
 
     print(f"Wrote {outfile.name}")
