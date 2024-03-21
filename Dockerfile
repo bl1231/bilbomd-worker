@@ -71,16 +71,19 @@ RUN conda env update -f /tmp/environment.yml && \
 # Build stage 6 - Install BioXTAS
 FROM bilbomd-worker-step3 AS bilbomd-worker-step4
 
-# install deps
+# Install deps
 RUN apt-get update && \
     apt-get install -y zip build-essential libarchive13
 
-# Install BioXYAS from source
+# Copy the BioXTAS GitHiub master zip file
+# 1e2b05c74bbc595dc84e64ee962680b700b258be
 WORKDIR /tmp
 # RUN git clone https://github.com/jbhopkins/bioxtasraw.git
 COPY bioxtas/bioxtasraw-master.zip .
 RUN unzip bioxtasraw-master.zip && rm bioxtasraw-master.zip
-# Install BioXTAS RAW from source
+
+
+# Install BioXTAS RAW into local Python environment
 WORKDIR /tmp/bioxtasraw-master
 RUN python setup.py build_ext --inplace && \
     pip install .
