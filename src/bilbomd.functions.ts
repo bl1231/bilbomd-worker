@@ -451,7 +451,7 @@ const runPaeToConst = async (DBjob: IBilboMDAutoJob): Promise<void> => {
     in_pae: DBjob.pae_file,
     out_dir: outputDir
   }
-  logger.info(`runPaeToConst: ${JSON.stringify(params, null, 2)}`)
+  // logger.info(`runPaeToConst: ${JSON.stringify(params, null, 2)}`)
   await spawnPaeToConst(params)
   DBjob.const_inp_file = 'const.inp'
   await DBjob.save()
