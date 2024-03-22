@@ -46,6 +46,8 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.5.1
+  - Changes to allow PDB files for BilboMD Auto
 - 1.5.0
   - Mainly changes to allow building and deploying on local laptop and NERSC SPIN.
 - 1.4.0
