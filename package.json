@@ -27,7 +27,7 @@
     "mongoose": "^8.2.2",
     "nodemailer": "^6.9.13",
     "nodemailer-express-handlebars": "^6.1.2",
-    "winston": "^3.12.0"
+    "winston": "^3.13.0"
   },
   "devDependencies": {
     "@types/dotenv": "^8.2.0",
