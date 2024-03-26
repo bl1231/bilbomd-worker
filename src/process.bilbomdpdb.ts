@@ -1,7 +1,5 @@
 import { Job as BullMQJob } from 'bullmq'
-import { BilboMdJob } from './model/Job'
-// import { User } from './model/User'
-// import { sendJobCompleteEmail } from './mailer'
+import { BilboMdPDBJob } from './model/Job'
 import {
   initializeJob,
   runMinimize,
@@ -12,10 +10,11 @@ import {
   prepareResults,
   cleanupJob
 } from './bilbomd.functions'
+import { processPdb2CrdJob } from './process.pdb2crd'
 import { runSingleFoXS } from './foxs_analysis'
 
 const processBilboMDJobTest = async (MQjob: BullMQJob) => {
-  const foundJob = await BilboMdJob.findOne({ _id: MQjob.data.jobid })
+  const foundJob = await BilboMdPDBJob.findOne({ _id: MQjob.data.jobid })
     .populate({
       path: 'user',
       select: 'email'
@@ -29,10 +28,10 @@ const processBilboMDJobTest = async (MQjob: BullMQJob) => {
   await cleanupJob(MQjob, foundJob)
 }
 
-const processBilboMDJob = async (MQjob: BullMQJob) => {
+const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(1)
 
-  const foundJob = await BilboMdJob.findOne({ _id: MQjob.data.jobid })
+  const foundJob = await BilboMdPDBJob.findOne({ _id: MQjob.data.jobid })
     .populate({
       path: 'user',
       select: 'email'
@@ -46,6 +45,12 @@ const processBilboMDJob = async (MQjob: BullMQJob) => {
   // Initialize
   await initializeJob(MQjob, foundJob)
   await MQjob.updateProgress(10)
+
+  // PDB to CRD/PSF for 'pdb' mode
+  await MQjob.log('start PDB to CRD/PSF conversion')
+  await processPdb2CrdJob(MQjob)
+  await MQjob.log('end PDB to CRD/PSF conversion')
+  await MQjob.updateProgress(25)
 
   // CHARMM minimization
   await MQjob.log('start minimization')
@@ -91,4 +96,4 @@ const processBilboMDJob = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(100)
 }
 
-export { processBilboMDJob, processBilboMDJobTest }
+export { processBilboMDPDBJob, processBilboMDJobTest }

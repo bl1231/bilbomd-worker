@@ -1,5 +1,5 @@
 import { spawn, ChildProcess } from 'node:child_process'
-import { IBilboMDJob, IBilboMDAutoJob } from './model/Job'
+import { IJob, IBilboMDAutoJob } from './model/Job'
 import fs from 'fs-extra'
 import path from 'node:path'
 import { logger } from './loggers'
@@ -7,7 +7,7 @@ import { logger } from './loggers'
 const DATA_VOL = process.env.DATA_VOL ?? '/bilbomd/uploads'
 const FOXS_BIN = process.env.FOXS ?? '/usr/bin/foxs'
 
-const runSingleFoXS = async (DBjob: IBilboMDJob | IBilboMDAutoJob): Promise<void> => {
+const runSingleFoXS = async (DBjob: IJob | IBilboMDAutoJob): Promise<void> => {
   try {
     const jobDir = path.join(DATA_VOL, DBjob.uuid)
     const logFile = path.join(jobDir, 'initial_foxs_analysis.log')

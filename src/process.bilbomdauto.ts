@@ -9,7 +9,7 @@ import {
   runFoxs,
   runMultiFoxs,
   prepareResults,
-  runPaeToConst,
+  runPaeToConstInp,
   runAutoRg
 } from './bilbomd.functions'
 import { runSingleFoXS } from './foxs_analysis'
@@ -59,7 +59,7 @@ const processBilboMDAutoJobTest = async (MQjob: BullMQJob) => {
   await initializeJob(MQjob, foundJob)
 
   // Use PAE to construct const.inp file
-  await runPaeToConst(foundJob)
+  await runPaeToConstInp(foundJob)
 
   // Use BioXTAS to calculate Rg_min and Rg_max
   await runAutoRg(foundJob)
@@ -90,7 +90,7 @@ const processBilboMDAutoJob = async (MQjob: BullMQJob) => {
 
   // Use PAE to construct const.inp file
   await MQjob.log('start pae to const')
-  await runPaeToConst(foundJob)
+  await runPaeToConstInp(foundJob)
   await MQjob.log('end pae to const')
   await MQjob.updateProgress(15)
 

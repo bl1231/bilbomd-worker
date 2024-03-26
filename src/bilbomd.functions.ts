@@ -8,7 +8,7 @@ import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
 import { User } from './model/User'
-import { IBilboMDJob, IBilboMDAutoJob } from './model/Job'
+import { IJob, IBilboMDPDBJob, IBilboMDCRDJob, IBilboMDAutoJob } from './model/Job'
 import { sendJobCompleteEmail } from './mailer'
 import { exec } from 'node:child_process'
 
@@ -75,7 +75,7 @@ type MultiFoxsParams = Params & {
 const handleError = async (
   error: Error | unknown,
   MQjob: BullMQJob,
-  DBjob: IBilboMDJob,
+  DBjob: IJob,
   errorMessage?: string
 ) => {
   const errorMsg =
@@ -104,7 +104,7 @@ const handleError = async (
   throw new Error('BilboMD failed')
 }
 
-const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const initializeJob = async (MQJob: BullMQJob, DBjob: IJob): Promise<void> => {
   try {
     // Make sure the user exists in MongoDB
     const foundUser = await User.findById(DBjob.user).lean().exec()
@@ -126,7 +126,7 @@ const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDJob): Promise<void
   }
 }
 
-const cleanupJob = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const cleanupJob = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
   try {
     // Update MongoDB job status and completion time
     DBjob.status = 'Completed'
@@ -152,7 +152,7 @@ const cleanupJob = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> =
   }
 }
 
-const updateJobStatus = async (job: IBilboMDJob, status: string): Promise<void> => {
+const updateJobStatus = async (job: IJob, status: string): Promise<void> => {
   job.status = status
   await job.save()
 }
@@ -444,14 +444,16 @@ const spawnPaeToConst = async (params: PaeParams): Promise<string> => {
   })
 }
 
-const runPaeToConst = async (DBjob: IBilboMDAutoJob): Promise<void> => {
+const runPaeToConstInp = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  // I'm struggling with Typescript here. Since a BilboMDAutoJob will not
+  // have a CRD file when it is first created. I know it's not considered
+  // safe, but I'm going to use type assertion for now.
   const params: PaeParams = {
-    in_crd: DBjob.crd_file,
+    in_crd: DBjob.crd_file as string,
     in_pae: DBjob.pae_file,
     out_dir: outputDir
   }
-  // logger.info(`runPaeToConst: ${JSON.stringify(params, null, 2)}`)
   await spawnPaeToConst(params)
   DBjob.const_inp_file = 'const.inp'
   await DBjob.save()
@@ -511,7 +513,7 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   })
 }
 
-const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
   const params: CharmmParams = {
     out_dir: outputDir,
@@ -530,7 +532,7 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> 
   }
 }
 
-const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
   const params: CharmmHeatParams = {
     out_dir: outputDir,
@@ -552,7 +554,7 @@ const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
 
 const runMolecularDynamics = async (
   MQjob: BullMQJob,
-  DBjob: IBilboMDJob
+  DBjob: IBilboMDCRDJob
 ): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
   const params: CharmmMDParams = {
@@ -589,7 +591,7 @@ const runMolecularDynamics = async (
   }
 }
 
-const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
 
   const foxsParams: FoxsParams = {
@@ -649,7 +651,7 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
   }
 }
 
-const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
   const multifoxsParams: MultiFoxsParams = {
     out_dir: outputDir,
@@ -665,7 +667,7 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void>
   }
 }
 
-const prepareResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const prepareResults = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
   try {
     const outputDir = path.join(DATA_VOL, DBjob.uuid)
     const multiFoxsDir = path.join(outputDir, 'multifoxs')
@@ -735,7 +737,7 @@ const prepareResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<voi
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const createReadmeFile = async (
-  DBjob: IBilboMDJob,
+  DBjob: IBilboMDCRDJob,
   numEnsembles: number,
   resultsDir: string
 ): Promise<void> => {
@@ -817,7 +819,7 @@ Thank you for using BilboMD
 
 export {
   initializeJob,
-  runPaeToConst,
+  runPaeToConstInp,
   runAutoRg,
   runMinimize,
   runHeat,
