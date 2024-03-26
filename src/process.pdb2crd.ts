@@ -1,5 +1,5 @@
 import { Job as BullMQJob } from 'bullmq'
-import { BilboMdAutoJob } from './model/Job'
+import { Job } from './model/Job'
 import { logger } from './loggers'
 import fs from 'fs-extra'
 import path from 'path'
@@ -27,8 +27,8 @@ const cleanupJob = async (MQjob: BullMQJob) => {
 
 const processPdb2CrdJob = async (MQJob: BullMQJob) => {
   await MQJob.updateProgress(1)
-
-  const foundJob = await BilboMdAutoJob.findOne({ uuid: MQJob.data.uuid })
+  logger.info(`UUID: ${MQJob.data.uuid}`)
+  const foundJob = await Job.findOne({ uuid: MQJob.data.uuid })
     .populate({
       path: 'user',
       select: 'email'
@@ -46,8 +46,11 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
 
   // Create pdb_2_crd.inp file
   await MQJob.log('start pdb_2_crd')
-  if (foundJob) {
-    await createCharmmInpFile({ uuid: foundJob.uuid, pdb_file: foundJob.pdb_file })
+  if (foundJob && 'pdb_file' in foundJob) {
+    await createCharmmInpFile({
+      uuid: foundJob.uuid,
+      pdb_file: foundJob.pdb_file as string
+    })
   } else {
     await createCharmmInpFile({ uuid: MQJob.data.uuid, pdb_file: 'pdb_file.pdb' })
   }
