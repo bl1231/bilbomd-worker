@@ -124,7 +124,7 @@ const createCharmmInpFile = async (inpData: Pdb2CrdCharmmInputData) => {
 const spawnCharmm = (MQJob: BullMQJob): Promise<string> => {
   const workingDir = path.join(uploadFolder, MQJob.data.uuid)
   const outputFile = 'pdb2crd_charmm.log'
-  const inputFile = 'pdb_2_crd.inp'
+  const inputFile = 'pdb2crd_charmm.inp'
   const charmmArgs = ['-o', outputFile, '-i', inputFile]
   const charmmOpts = { cwd: workingDir }
 
