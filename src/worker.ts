@@ -2,7 +2,8 @@ import * as dotenv from 'dotenv'
 import { connectDB } from './db'
 import { Job, Worker, WorkerOptions } from 'bullmq'
 import { WorkerJob } from 'bullmq.jobs'
-import { processBilboMDJob } from './process.bilbomd'
+import { processBilboMDCRDJob } from './process.bilbomdcrd'
+import { processBilboMDPDBJob } from './process.bilbomdpdb'
 import { processBilboMDAutoJob } from './process.bilbomdauto'
 import { processPdb2CrdJob } from './process.pdb2crd'
 import { logger } from './loggers'
@@ -14,14 +15,20 @@ connectDB()
 const workerHandler = async (job: Job<WorkerJob>) => {
   logger.info(`workerHandler: ${JSON.stringify(job.data)}`)
   switch (job.data.type) {
-    case 'BilboMD': {
-      logger.info(`Start BilboMD job: ${job.name}`)
-      await processBilboMDJob(job)
+    case 'pdb': {
+      logger.info(`Start BilboMD PDB job: ${job.name}`)
+      await processBilboMDPDBJob(job)
       logger.info(`Finish job: ${job.name}`)
       return
     }
-    case 'BilboMDAuto': {
-      logger.info(`Start BilboMDAuto job: ${job.name}`)
+    case 'crd_psf': {
+      logger.info(`Start BilboMD CRD job: ${job.name}`)
+      await processBilboMDCRDJob(job)
+      logger.info(`Finish job: ${job.name}`)
+      return
+    }
+    case 'auto': {
+      logger.info(`Start BilboMD Auto job: ${job.name}`)
       await processBilboMDAutoJob(job)
       logger.info(`Finished job: ${job.name}`)
       return

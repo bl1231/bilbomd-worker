@@ -12,13 +12,18 @@ export interface MayFailOrNotJob {
   type: 'MayFailOrNot'
   data: { magicNumber: number }
 }
-export interface BilboMDJob extends Job {
-  type: 'BilboMD'
+export interface BilboMDPDBJob extends Job {
+  type: 'pdb'
+  data: { title: string; uuid: string; jobid: string }
+  id: string
+}
+export interface BilboMDCRDJob extends Job {
+  type: 'crd_psf'
   data: { title: string; uuid: string; jobid: string }
   id: string
 }
 export interface BilboMDAutoJob extends Job {
-  type: 'BilboMDAuto'
+  type: 'auto'
   data: { title: string; uuid: string; jobid: string }
   id: string
 }
@@ -32,6 +37,7 @@ export type WorkerJob =
   | HelloWorldJob
   | DoSomeHeavyComputingJob
   | MayFailOrNotJob
-  | BilboMDJob
+  | BilboMDPDBJob
+  | BilboMDCRDJob
   | BilboMDAutoJob
   | Pdb2CrdJob

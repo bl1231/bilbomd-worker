@@ -8,7 +8,7 @@ import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
 import { User } from './model/User'
-import { IBilboMDJob, IBilboMDAutoJob } from './model/Job'
+import { IJob, IBilboMDPDBJob, IBilboMDCRDJob, IBilboMDAutoJob } from './model/Job'
 import { sendJobCompleteEmail } from './mailer'
 import { exec } from 'node:child_process'
 
@@ -75,7 +75,7 @@ type MultiFoxsParams = Params & {
 const handleError = async (
   error: Error | unknown,
   MQjob: BullMQJob,
-  DBjob: IBilboMDJob,
+  DBjob: IJob,
   errorMessage?: string
 ) => {
   const errorMsg =
@@ -95,16 +95,14 @@ const handleError = async (
   if (MQjob.attemptsMade >= 3) {
     if (config.sendEmailNotifications) {
       sendJobCompleteEmail(DBjob.user.email, BILBOMD_URL, DBjob.id, DBjob.title, true)
-      logger.info(`email notification sent to ${DBjob.user.email}`)
+      logger.warn(`email notification sent to ${DBjob.user.email}`)
       await MQjob.log(`email notification sent to ${DBjob.user.email}`)
     }
-    logger.warn(`email notification sent to ${DBjob.user.email}`)
   }
-
   throw new Error('BilboMD failed')
 }
 
-const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const initializeJob = async (MQJob: BullMQJob, DBjob: IJob): Promise<void> => {
   try {
     // Make sure the user exists in MongoDB
     const foundUser = await User.findById(DBjob.user).lean().exec()
@@ -126,7 +124,7 @@ const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDJob): Promise<void
   }
 }
 
-const cleanupJob = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const cleanupJob = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
   try {
     // Update MongoDB job status and completion time
     DBjob.status = 'Completed'
@@ -143,16 +141,16 @@ const cleanupJob = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> =
     // Send job completion email and log the notification
     if (config.sendEmailNotifications) {
       sendJobCompleteEmail(user.email, BILBOMD_URL, DBjob.id, DBjob.title, false)
+      logger.info(`email notification sent to ${user.email}`)
+      await MQjob.log(`email notification sent to ${user.email}`)
     }
-    logger.info(`email notification sent to ${user.email}`)
-    await MQjob.log(`email notification sent to ${user.email}`)
   } catch (error) {
     logger.error(`Error in cleanupJob: ${error}`)
     throw error
   }
 }
 
-const updateJobStatus = async (job: IBilboMDJob, status: string): Promise<void> => {
+const updateJobStatus = async (job: IJob, status: string): Promise<void> => {
   job.status = status
   await job.save()
 }
@@ -444,14 +442,124 @@ const spawnPaeToConst = async (params: PaeParams): Promise<string> => {
   })
 }
 
-const runPaeToConst = async (DBjob: IBilboMDAutoJob): Promise<void> => {
+const createPdb2CrdCharmmInpFile = async (DBjob: IBilboMDPDBJob) => {
+  logger.info(`createPdb2CrdCharmmInpFile ${DBjob.title}`)
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const inputPDB = path.join(outputDir, DBjob.pdb_file)
+  const logFile = path.join(outputDir, 'pdb2crd.log')
+  const errorFile = path.join(outputDir, 'pdb2crd_error.log')
+  const logStream = fs.createWriteStream(logFile)
+  const errorStream = fs.createWriteStream(errorFile)
+  const pdb2crd_script = '/app/scripts/pdb2crd.py'
+  const args = [pdb2crd_script, inputPDB, '.']
+  // logger.info(`args for pdb2crd_script: ${args}`)
+
+  return new Promise((resolve, reject) => {
+    const pdb2crd: ChildProcess = spawn('python', args, { cwd: outputDir })
+    pdb2crd.stdout?.on('data', (data: Buffer) => {
+      const dataString = data.toString().trim()
+      logger.info(`createPdb2CrdCharmmInpFile stdout ${dataString}`)
+      logStream.write(dataString)
+    })
+    pdb2crd.stderr?.on('data', (data: Buffer) => {
+      logger.error('createPdb2CrdCharmmInpFile stderr', data.toString())
+      console.log(data)
+      errorStream.write(data.toString())
+    })
+    pdb2crd.on('error', (error) => {
+      logger.error('createPdb2CrdCharmmInpFile error:', error)
+      reject(error)
+    })
+    pdb2crd.on('exit', (code) => {
+      // Close streams explicitly once the process exits
+      const closeStreamsPromises = [
+        new Promise((resolveStream) => logStream.end(resolveStream)),
+        new Promise((resolveStream) => errorStream.end(resolveStream))
+      ]
+      Promise.all(closeStreamsPromises)
+        .then(() => {
+          // Only proceed once all streams are closed
+          if (code === 0) {
+            logger.info(`createPdb2CrdCharmmInpFile success with exit code: ${code}`)
+            resolve(code.toString())
+          } else {
+            logger.error(`createPdb2CrdCharmmInpFile error with exit code: ${code}`)
+            reject(new Error(`createPdb2CrdCharmmInpFile error with exit code: ${code}`))
+          }
+        })
+        .catch((streamError) => {
+          logger.error(`Error closing file streams: ${streamError}`)
+          reject(streamError)
+        })
+    })
+  })
+}
+
+const spawnPdb2CrdCharmm = (DBjob: IBilboMDPDBJob): Promise<void> => {
+  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputFile = 'pdb2crd_charmm.log'
+  const inputFile = 'pdb2crd_charmm.inp'
+  const charmmArgs = ['-o', outputFile, '-i', inputFile]
+  const charmmOpts = { cwd: outputDir }
+
+  return new Promise((resolve, reject) => {
+    const charmm = spawn(CHARMM_BIN, charmmArgs, charmmOpts)
+    let charmmOutput = '' // Accumulates stdout and stderr
+
+    // Collect output from stdout
+    charmm.stdout.on('data', (data) => {
+      charmmOutput += data.toString()
+    })
+
+    // Optionally, capture stderr if you want to log errors or failed execution details
+    charmm.stderr.on('data', (data) => {
+      charmmOutput += data.toString()
+    })
+
+    charmm.on('error', (error) => {
+      logger.error(`CHARMM process encountered an error: ${error.message}`)
+      reject(new Error(`CHARMM process encountered an error: ${error.message}`))
+    })
+
+    charmm.on('close', (code) => {
+      if (code === 0) {
+        logger.info(`CHARMM execution succeeded: ${inputFile}, exit code: ${code}`)
+        DBjob.psf_file = 'bilbomd_pdb2crd.psf'
+        DBjob.crd_file = 'bilbomd_pdb2crd.crd'
+        resolve()
+      } else {
+        logger.error(
+          `CHARMM execution failed: ${inputFile}, exit code: ${code}, error: ${charmmOutput}`
+        )
+        reject(
+          new Error(
+            `CHARMM execution failed: ${inputFile}, exit code: ${code}, error: ${charmmOutput}`
+          )
+        )
+      }
+    })
+  })
+}
+
+const runPdb2Crd = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void> => {
+  try {
+    await createPdb2CrdCharmmInpFile(DBjob)
+    await spawnPdb2CrdCharmm(DBjob)
+  } catch (error) {
+    await handleError(error, MQjob, DBjob, 'pdb2crd')
+  }
+}
+
+const runPaeToConstInp = async (DBjob: IBilboMDAutoJob): Promise<void> => {
+  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  // I'm struggling with Typescript here. Since a BilboMDAutoJob will not
+  // have a CRD file when it is first created. I know it's not considered
+  // safe, but I'm going to use type assertion for now.
   const params: PaeParams = {
-    in_crd: DBjob.crd_file,
+    in_crd: DBjob.crd_file as string,
     in_pae: DBjob.pae_file,
     out_dir: outputDir
   }
-  // logger.info(`runPaeToConst: ${JSON.stringify(params, null, 2)}`)
   await spawnPaeToConst(params)
   DBjob.const_inp_file = 'const.inp'
   await DBjob.save()
@@ -511,7 +619,7 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   })
 }
 
-const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
   const params: CharmmParams = {
     out_dir: outputDir,
@@ -530,7 +638,7 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> 
   }
 }
 
-const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
   const params: CharmmHeatParams = {
     out_dir: outputDir,
@@ -552,7 +660,7 @@ const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
 
 const runMolecularDynamics = async (
   MQjob: BullMQJob,
-  DBjob: IBilboMDJob
+  DBjob: IBilboMDCRDJob
 ): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
   const params: CharmmMDParams = {
@@ -589,7 +697,7 @@ const runMolecularDynamics = async (
   }
 }
 
-const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
 
   const foxsParams: FoxsParams = {
@@ -649,7 +757,7 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
   }
 }
 
-const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
   const multifoxsParams: MultiFoxsParams = {
     out_dir: outputDir,
@@ -665,7 +773,7 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void>
   }
 }
 
-const prepareResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<void> => {
+const prepareResults = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
   try {
     const outputDir = path.join(DATA_VOL, DBjob.uuid)
     const multiFoxsDir = path.join(outputDir, 'multifoxs')
@@ -735,7 +843,7 @@ const prepareResults = async (MQjob: BullMQJob, DBjob: IBilboMDJob): Promise<voi
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const createReadmeFile = async (
-  DBjob: IBilboMDJob,
+  DBjob: IBilboMDCRDJob,
   numEnsembles: number,
   resultsDir: string
 ): Promise<void> => {
@@ -817,7 +925,8 @@ Thank you for using BilboMD
 
 export {
   initializeJob,
-  runPaeToConst,
+  runPdb2Crd,
+  runPaeToConstInp,
   runAutoRg,
   runMinimize,
   runHeat,

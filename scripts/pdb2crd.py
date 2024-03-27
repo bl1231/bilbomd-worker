@@ -301,7 +301,7 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
     """
     Write the CHARMM input file
     """
-    output_file = f"{output_dir}/pdb_2_crd.inp"
+    output_file = f"{output_dir}/pdb2crd_charmm.inp"
     # timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(output_file, mode="w", encoding="utf8") as outfile:
         outfile.write("* PURPOSE: Convert PDB file to CRD and PSF\n")
