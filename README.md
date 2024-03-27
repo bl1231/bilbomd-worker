@@ -46,6 +46,8 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.5.2
+  - Changes to allow PDB files for BilboMD Classic
 - 1.5.1
   - Changes to allow PDB files for BilboMD Auto
 - 1.5.0
