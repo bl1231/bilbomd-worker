@@ -2,6 +2,7 @@ import { Job as BullMQJob } from 'bullmq'
 import { BilboMdPDBJob } from './model/Job'
 import {
   initializeJob,
+  runPdb2Crd,
   runMinimize,
   runHeat,
   runMolecularDynamics,
@@ -10,7 +11,7 @@ import {
   prepareResults,
   cleanupJob
 } from './bilbomd.functions'
-import { processPdb2CrdJob } from './process.pdb2crd'
+
 import { runSingleFoXS } from './foxs_analysis'
 
 const processBilboMDJobTest = async (MQjob: BullMQJob) => {
@@ -48,7 +49,7 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
 
   // PDB to CRD/PSF for 'pdb' mode
   await MQjob.log('start PDB to CRD/PSF conversion')
-  await processPdb2CrdJob(MQjob)
+  await runPdb2Crd(MQjob, foundJob)
   await MQjob.log('end PDB to CRD/PSF conversion')
   await MQjob.updateProgress(25)
 
