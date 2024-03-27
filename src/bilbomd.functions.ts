@@ -95,12 +95,10 @@ const handleError = async (
   if (MQjob.attemptsMade >= 3) {
     if (config.sendEmailNotifications) {
       sendJobCompleteEmail(DBjob.user.email, BILBOMD_URL, DBjob.id, DBjob.title, true)
-      logger.info(`email notification sent to ${DBjob.user.email}`)
+      logger.warn(`email notification sent to ${DBjob.user.email}`)
       await MQjob.log(`email notification sent to ${DBjob.user.email}`)
     }
-    logger.warn(`email notification sent to ${DBjob.user.email}`)
   }
-
   throw new Error('BilboMD failed')
 }
 
@@ -143,9 +141,9 @@ const cleanupJob = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
     // Send job completion email and log the notification
     if (config.sendEmailNotifications) {
       sendJobCompleteEmail(user.email, BILBOMD_URL, DBjob.id, DBjob.title, false)
+      logger.info(`email notification sent to ${user.email}`)
+      await MQjob.log(`email notification sent to ${user.email}`)
     }
-    logger.info(`email notification sent to ${user.email}`)
-    await MQjob.log(`email notification sent to ${user.email}`)
   } catch (error) {
     logger.error(`Error in cleanupJob: ${error}`)
     throw error

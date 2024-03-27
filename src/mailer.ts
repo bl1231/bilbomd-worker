@@ -4,10 +4,11 @@ import path from 'path'
 import { logger } from './loggers'
 
 const user = process.env.SEND_EMAIL_USER
+const name = process.env.BILBOMD_FQDN
 const viewPath = path.resolve(__dirname, './templates/mailer/')
 
 const transporter = nodemailer.createTransport({
-  name: 'bl1231-local.als.lbl.gov',
+  name: name,
   host: 'smtp-relay.gmail.com',
   port: 25,
   secure: false

@@ -14,6 +14,7 @@ import {
 } from './bilbomd.functions'
 import { runSingleFoXS } from './foxs_analysis'
 import { logger } from './loggers'
+import { config } from './config/config'
 
 const bilbomdUrl: string = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
 
@@ -36,9 +37,11 @@ const cleanupJob = async (MQjob: BullMQJob, DBJob: IBilboMDAutoJob) => {
   DBJob.status = 'Completed'
   DBJob.time_completed = new Date()
   await DBJob.save()
-  sendJobCompleteEmail(DBJob.user.email, bilbomdUrl, DBJob.id, DBJob.title, false)
-  logger.info(`email notification sent to ${DBJob.user.email}`)
-  await MQjob.log(`email notification sent to ${DBJob.user.email}`)
+  if (config.sendEmailNotifications) {
+    sendJobCompleteEmail(DBJob.user.email, bilbomdUrl, DBJob.id, DBJob.title, false)
+    logger.info(`email notification sent to ${DBJob.user.email}`)
+    await MQjob.log(`email notification sent to ${DBJob.user.email}`)
+  }
 }
 
 const processBilboMDAutoJobTest = async (MQjob: BullMQJob) => {
