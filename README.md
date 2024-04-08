@@ -51,7 +51,7 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
-- 1.5.3
+- 1.5.4
   - Sync `pae_ratios.py` script with `bilbomd-backend`.
 - 1.5.2
   - Changes to allow PDB files for BilboMD Classic
