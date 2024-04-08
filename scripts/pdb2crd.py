@@ -40,7 +40,8 @@ def determine_molecule_type(lines):
             "TYR",
         ]
     )
-    dna_residues = set(["DA", "DC", "DG", "DT", "DI"])
+    dna_residues = set(["DA", "DC", "DG", "DT", "DI",
+                       "ADE", "CYT", "GUA", "THY"])
     rna_residues = set(["A", "C", "G", "U", "I"])
     carbohydrate_residues = set(
         [
@@ -76,6 +77,7 @@ def determine_molecule_type(lines):
     for line in lines:
         if line.startswith(("ATOM", "HETATM")):
             residue = line[17:20].strip()
+            # print(residue)
             if residue in protein_residues:
                 return "PRO"
             elif residue in dna_residues:
@@ -111,7 +113,8 @@ def remove_water(lines):
     processed_lines = []
     for line in lines:
         if line.startswith(("ATOM", "HETATM")):
-            residue_name = line[17:20]  # Extract the residue name from columns 18-20
+            # Extract the residue name from columns 18-20
+            residue_name = line[17:20]
             if residue_name != "HOH":
                 processed_lines.append(line)  # Only append if not water
         else:
@@ -229,7 +232,8 @@ def apply_charmm_residue_names(lines):
     processed_lines = []
     for line in lines:
         if line.startswith(("ATOM", "HETATM")):
-            residue_name = line[17:20]  # Extract the residue name from columns 18-20
+            # Extract the residue name from columns 18-20
+            residue_name = line[17:20]
             # print(f"old: {residue_name}")
             # Check if the residue name needs to be replaced
             if residue_name in residue_replacements:
@@ -317,17 +321,19 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
         outfile.write("\n")
 
         for chain_id, chain_data in chains.items():
-            molecule_type = chain_data["type"]  # Use the determined molecule type
+            # Use the determined molecule type
+            molecule_type = chain_data["type"]
             suffix = "_uc" if chain_id.isupper() else ""
             chain_filename = (
                 f"{chain_id.lower()}{suffix}_{pdb_file_path.split('/')[-1].lower()}"
             )
-            chain_file = f"{output_dir}/{chain_filename}"
+            # chain_file = f"{output_dir}/{chain_filename}"
             # print(chain_file)
 
             # Adjust the generation and reading commands based on molecule_type
             if molecule_type == "PRO":
-                outfile.write(f"open read unit 12 card name {chain_filename}\n")
+                outfile.write(
+                    f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate {molecule_type}{chain_data['chainid']} "
@@ -339,7 +345,8 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
                 outfile.write("close unit 12\n")
                 outfile.write("\n")
             elif molecule_type == "DNA" or molecule_type == "RNA":
-                outfile.write(f"open read unit 12 card name {chain_filename}\n")
+                outfile.write(
+                    f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate {molecule_type}{chain_data['chainid']} "
@@ -353,7 +360,8 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
             elif molecule_type == "CAR":
                 chain_id = chain_data["chainid"]
                 suffix = "R" if chain_id.isupper() else "L"
-                outfile.write(f"open read unit 12 card name {chain_filename}\n")
+                outfile.write(
+                    f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate CA{suffix}{chain_data['chainid'].upper()} setup\n"
@@ -381,7 +389,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Split a PDB file into separate chain files for CHARMM."
     )
-    parser.add_argument("pdb_file", type=str, help="Path to the PDB file to be split.")
+    parser.add_argument("pdb_file", type=str,
+                        help="Path to the PDB file to be split.")
     parser.add_argument(
         "output_dir", type=str, help="Directory to save the split chain files."
     )
