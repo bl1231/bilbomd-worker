@@ -44,8 +44,15 @@ All of these env settings (and some others) reside in a single `.env` file that 
 - [bilbomd-mongodb](https://hub.docker.com/_/mongo) (official docker image from [Docker Hub](https://hub.docker.com/))
 - [bilbomd-redis](https://hub.docker.com/_/redis)(official docker image [Docker Hub](https://hub.docker.com/))
 
+## Authors
+
+- Scott Classen sclassen at lbl dot gov
+- Michal Hammel mhammel at lbl dot gov
+
 ## Version History
 
+- 1.5.3
+  - Sync `pae_ratios.py` script with `bilbomd-backend`.
 - 1.5.2
   - Changes to allow PDB files for BilboMD Classic
 - 1.5.1
