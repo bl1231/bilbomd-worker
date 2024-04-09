@@ -112,3 +112,4 @@ build
 *.zip
 
 test/
+test-data/
