@@ -51,6 +51,9 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.5.5
+  - Fix bug in `pdb2crd.py` script for substituting CHARMM residues names in DNA.
+  - update dependencies
 - 1.5.4
   - Sync `pae_ratios.py` script with `bilbomd-backend`.
 - 1.5.2
