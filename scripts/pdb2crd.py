@@ -24,6 +24,26 @@ COLUMNS        DATA  TYPE    FIELD        DEFINITION
 77 - 78        LString(2)    element      Element symbol, right-justified.
 79 - 80        LString(2)    charge       Charge  on the atom.
 
+CRD specification from the CHARMM io documentation:
+
+The CARD file format is the standard means in CHARMM for
+providing a human readable and writable coordinate file. The format is
+as follows:
+
+* Normal format for less than 100000 atoms and PSF IDs with less than
+five characters
+         title
+         NATOM (I5)
+         ATOMNO RESNO   RES  TYPE  X     Y     Z   SEGID RESID Weighting
+           I5    I5  1X A4 1X A4 F10.5 F10.5 F10.5 1X A4 1X A4 F10.5
+
+* Expanded format for more than 100000 atoms (upto 10**10) and with
+upto 8 character PSF IDs. (versions c31a1 and later)
+         title
+         NATOM (I10)
+         ATOMNO RESNO   RES  TYPE  X     Y     Z   SEGID RESID Weighting
+           I10   I10 2X A8 2X A8       3F20.10     2X A8 2X A8 F20.10
+
 """
 
 import argparse
