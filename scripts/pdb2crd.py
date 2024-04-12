@@ -322,7 +322,7 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate {molecule_type}{chain_data['chainid']} "
-                    f"setup warn first NONE last CTER\n"
+                    f"setup warn first NTER last CTER\n"
                 )
                 outfile.write("rewind unit 12\n")
                 outfile.write("read coor pdb unit 12 append\n")
