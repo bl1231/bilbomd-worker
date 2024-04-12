@@ -3,6 +3,27 @@ Splits a PDB file into individual files.
 Each file containing one chain from the input PDB file.
 Sanitizes the PDB files to be used by CHARMM in order to convert to CRD and PSF files.
 Writes a CHARMM-compatible pdb_2_crd.inp file for CHARMM.
+
+PDB specification from https://www.wwpdb.org/documentation/file-format-content/format33/sect1.html
+
+COLUMNS        DATA  TYPE    FIELD        DEFINITION
+-------------------------------------------------------------------------------------
+ 1 -  6        Record name   "ATOM  "
+ 7 - 11        Integer       serial       Atom  serial number.
+13 - 16        Atom          name         Atom name.
+17             Character     altLoc       Alternate location indicator.
+18 - 20        Residue name  resName      Residue name.
+22             Character     chainID      Chain identifier.
+23 - 26        Integer       resSeq       Residue sequence number.
+27             AChar         iCode        Code for insertion of residues.
+31 - 38        Real(8.3)     x            Orthogonal coordinates for X in Angstroms.
+39 - 46        Real(8.3)     y            Orthogonal coordinates for Y in Angstroms.
+47 - 54        Real(8.3)     z            Orthogonal coordinates for Z in Angstroms.
+55 - 60        Real(6.2)     occupancy    Occupancy.
+61 - 66        Real(6.2)     tempFactor   Temperature  factor.
+77 - 78        LString(2)    element      Element symbol, right-justified.
+79 - 80        LString(2)    charge       Charge  on the atom.
+
 """
 
 import argparse
@@ -40,7 +61,8 @@ def determine_molecule_type(lines):
             "TYR",
         ]
     )
-    dna_residues = set(["DA", "DC", "DG", "DT", "DI", "ADE", "CYT", "GUA", "THY"])
+    dna_residues = set(["DA", "DC", "DG", "DT", "DI",
+                       "ADE", "CYT", "GUA", "THY"])
     rna_residues = set(["A", "C", "G", "U", "I"])
     carbohydrate_residues = set(
         [
@@ -91,7 +113,7 @@ def determine_molecule_type(lines):
 def get_chain_filename(chain_id, pdb_filename):
     """
     Generates a filename for the chain file. Appends '_uc' to the filename for uppercase chain IDs
-    to differentiate from lowercase ones, since CHARMM requires lowercase filenames.
+    to differentiate from lowercase ones, since CHARMM requires lowercase filenames in all input files.
 
     :param chain_id: The chain ID from the PDB file.
     :param pdb_filename: The original PDB filename.
@@ -125,69 +147,13 @@ def remove_water(lines):
 def remove_alt_conformers(lines):
     """
     Remove lines where the 27th column (index 26 in Python) is not a space.
-    This is teh column used by PDB to denote an alternate conformation.
+    This is the column used by PDB to denote an alternate conformation.
 
     :param lines: List of strings (lines from the PDB file).
     :return: List of strings with lines removed according to the condition.
     """
     processed_lines = [line for line in lines if line[26] == " "]
     return processed_lines
-
-
-def split_and_process_pdb(pdb_file_path: str, output_dir: str):
-    """
-    Reads a PDB file, splits it by chains, processes each chain in memory,
-    and writes each chain to a separate file in the specified output directory.
-    """
-    chains = {}  # Dictionary to hold chain data, key = chain ID, value = list of lines
-    # Assuming `chains` is a dictionary where each key is a chain ID,
-    # and each value is now a dictionary with 'lines' and 'type' keys.
-    # chains[chain_id] = {"lines": [], "type": None}
-
-    with open(pdb_file_path, "r", encoding="utf-8") as pdb_file:
-        for line in pdb_file:
-            if line.startswith(("ATOM", "HETATM")):
-                record_type = line[:6].strip()
-                chain_id = line[21]  # Extract chain ID
-
-                # Create a unique key for each chain that includes both chain ID and record type
-                unique_chain_key = f"{record_type}_{chain_id}"
-
-                # Initialize the chain in the dictionary if not already present
-                if unique_chain_key not in chains:
-                    chains[unique_chain_key] = {
-                        "lines": [],
-                        "type": None,
-                        "chainid": chain_id,
-                    }
-                chains[unique_chain_key]["lines"].append(line)
-
-    # Determine molecule type for each chain
-    for chain_id, chain_data in chains.items():
-        chain_data["type"] = determine_molecule_type(chain_data["lines"])
-
-    # Process and write each chain to a separate file
-    for chain_id, chain_data in chains.items():
-        # Apply any processing here, e.g., renaming residues, renumbering, etc.
-        # These could be done in a single for x in x loop if we wanted
-        # to be more efficient
-        processed_lines = remove_water(chain_data["lines"])
-        processed_lines = remove_alt_conformers(processed_lines)
-        processed_lines = apply_charmm_residue_names(processed_lines)
-        processed_lines = replace_hetatm(processed_lines)
-        processed_lines = renumber_residues(processed_lines)
-
-        chain_filename = get_chain_filename(chain_id, pdb_file_path)
-        print(
-            f"Writing processed chain to: {chain_filename} chainID: {chain_data['chainid']} type: {chain_data['type']}"
-        )
-        with open(
-            output_dir + "/" + chain_filename, "w", encoding="utf-8"
-        ) as chain_file:
-            chain_file.writelines(processed_lines)
-            chain_file.write("TER\n")
-
-    write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path)
 
 
 def apply_charmm_residue_names(lines):
@@ -247,7 +213,7 @@ def apply_charmm_residue_names(lines):
 
 def replace_hetatm(lines):
     """
-    Replace all HETATM
+    Replace all HETATM with ATOM
     """
     processed_lines = []
     for line in lines:
@@ -331,7 +297,8 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
 
             # Adjust the generation and reading commands based on molecule_type
             if molecule_type == "PRO":
-                outfile.write(f"open read unit 12 card name {chain_filename}\n")
+                outfile.write(
+                    f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate {molecule_type}{chain_data['chainid']} "
@@ -343,7 +310,8 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
                 outfile.write("close unit 12\n")
                 outfile.write("\n")
             elif molecule_type == "DNA" or molecule_type == "RNA":
-                outfile.write(f"open read unit 12 card name {chain_filename}\n")
+                outfile.write(
+                    f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate {molecule_type}{chain_data['chainid']} "
@@ -357,7 +325,8 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
             elif molecule_type == "CAR":
                 chain_id = chain_data["chainid"]
                 suffix = "R" if chain_id.isupper() else "L"
-                outfile.write(f"open read unit 12 card name {chain_filename}\n")
+                outfile.write(
+                    f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate CA{suffix}{chain_data['chainid'].upper()} setup\n"
@@ -381,14 +350,75 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
         outfile.write("stop\n")
 
 
+def split_and_process_pdb(pdb_file_path: str, output_dir: str):
+    """
+    Reads a PDB file, splits it by chains, processes each chain in memory,
+    and writes each chain to a separate file in the specified output directory.
+    """
+    chains = {}  # Dictionary to hold chain data, key = chain ID, value = list of lines
+    # Assuming `chains` is a dictionary where each key is a chain ID,
+    # and each value is now a dictionary with 'lines' and 'type' keys.
+    # chains[chain_id] = {"lines": [], "type": None}
+
+    with open(pdb_file_path, "r", encoding="utf-8") as pdb_file:
+        for line in pdb_file:
+            if line.startswith(("ATOM", "HETATM")):
+                record_type = line[:6].strip()
+                chain_id = line[21]  # Extract chain ID
+
+                # Create a unique key for each chain that includes both chain ID and record type
+                unique_chain_key = f"{record_type}_{chain_id}"
+
+                # Initialize the chain in the dictionary if not already present
+                if unique_chain_key not in chains:
+                    chains[unique_chain_key] = {
+                        "lines": [],
+                        "type": None,
+                        "chainid": chain_id,
+                    }
+                chains[unique_chain_key]["lines"].append(line)
+
+    # Determine molecule type for each chain
+    for chain_id, chain_data in chains.items():
+        chain_data["type"] = determine_molecule_type(chain_data["lines"])
+
+    # Process and write each chain to a separate file
+    for chain_id, chain_data in chains.items():
+        # Apply any processing here, e.g., renaming residues, renumbering, etc.
+        # These could be done in a single for x in x loop if we wanted
+        # to be more efficient
+        processed_lines = remove_water(chain_data["lines"])
+        processed_lines = remove_alt_conformers(processed_lines)
+        processed_lines = apply_charmm_residue_names(processed_lines)
+        processed_lines = replace_hetatm(processed_lines)
+        # commenting this out since we really shouldn't be renumbering peoples input PDB files
+        # processed_lines = renumber_residues(processed_lines)
+
+        chain_filename = get_chain_filename(chain_id, pdb_file_path)
+        print(
+            f"Writing processed chain to: {chain_filename} chainID: {chain_data['chainid']} type: {chain_data['type']}"
+        )
+        with open(
+            output_dir + "/" + chain_filename, "w", encoding="utf-8"
+        ) as chain_file:
+            chain_file.writelines(processed_lines)
+            chain_file.write("TER\n")
+
+    write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Split a PDB file into separate chain files for CHARMM."
     )
-    parser.add_argument("pdb_file", type=str, help="Path to the PDB file to be split.")
-    parser.add_argument(
-        "output_dir", type=str, help="Directory to save the split chain files."
-    )
+    parser.add_argument("pdb_file",
+                        type=str,
+                        help="Path to the PDB file to be split."
+                        )
+    parser.add_argument("output_dir",
+                        type=str,
+                        help="Directory to save the split chain files."
+                        )
     args = parser.parse_args()
 
     split_and_process_pdb(args.pdb_file, args.output_dir)
