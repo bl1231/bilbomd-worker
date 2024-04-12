@@ -81,8 +81,7 @@ def determine_molecule_type(lines):
             "TYR",
         ]
     )
-    dna_residues = set(["DA", "DC", "DG", "DT", "DI",
-                       "ADE", "CYT", "GUA", "THY"])
+    dna_residues = set(["DA", "DC", "DG", "DT", "DI", "ADE", "CYT", "GUA", "THY"])
     rna_residues = set(["A", "C", "G", "U", "I"])
     carbohydrate_residues = set(
         [
@@ -317,8 +316,7 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
 
             # Adjust the generation and reading commands based on molecule_type
             if molecule_type == "PRO":
-                outfile.write(
-                    f"open read unit 12 card name {chain_filename}\n")
+                outfile.write(f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate {molecule_type}{chain_data['chainid']} "
@@ -330,8 +328,7 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
                 outfile.write("close unit 12\n")
                 outfile.write("\n")
             elif molecule_type == "DNA" or molecule_type == "RNA":
-                outfile.write(
-                    f"open read unit 12 card name {chain_filename}\n")
+                outfile.write(f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate {molecule_type}{chain_data['chainid']} "
@@ -345,8 +342,7 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
             elif molecule_type == "CAR":
                 chain_id = chain_data["chainid"]
                 suffix = "R" if chain_id.isupper() else "L"
-                outfile.write(
-                    f"open read unit 12 card name {chain_filename}\n")
+                outfile.write(f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate CA{suffix}{chain_data['chainid'].upper()} setup\n"
@@ -412,7 +408,7 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
         processed_lines = apply_charmm_residue_names(processed_lines)
         processed_lines = replace_hetatm(processed_lines)
         # commenting this out since we really shouldn't be renumbering peoples input PDB files
-        # processed_lines = renumber_residues(processed_lines)
+        processed_lines = renumber_residues(processed_lines)
 
         chain_filename = get_chain_filename(chain_id, pdb_file_path)
         print(
@@ -431,14 +427,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Split a PDB file into separate chain files for CHARMM."
     )
-    parser.add_argument("pdb_file",
-                        type=str,
-                        help="Path to the PDB file to be split."
-                        )
-    parser.add_argument("output_dir",
-                        type=str,
-                        help="Directory to save the split chain files."
-                        )
+    parser.add_argument("pdb_file", type=str, help="Path to the PDB file to be split.")
+    parser.add_argument(
+        "output_dir", type=str, help="Directory to save the split chain files."
+    )
     args = parser.parse_args()
 
     split_and_process_pdb(args.pdb_file, args.output_dir)
