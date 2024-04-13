@@ -363,8 +363,6 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
                 outfile.write(
                     f"define test sele segid {charmmgui_chain_id} .and. .not. init show end\n")
                 outfile.write("\n")
-                outfile.write("energy\n")
-                outfile.write("\n")
                 outfile.write("! WRITE INDIVIDUAL CHAIN CRD/PSF\n")
                 outfile.write(
                     f"open unit 2 write card name {chain_filename}.psf\n")
@@ -402,11 +400,13 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
                 outfile.write("close unit 12\n")
                 outfile.write("\n")
 
-        outfile.write("ic fill preserve\n")
-        outfile.write("ic parameter\n")
-        outfile.write("ic build\n")
-        outfile.write("coord init sele type h* end\n")
-        outfile.write("hbuild\n")
+        # outfile.write("ic fill preserve\n")
+        # outfile.write("ic parameter\n")
+        # outfile.write("ic build\n")
+        # outfile.write("coord init sele type h* end\n")
+        # outfile.write("hbuild\n")
+        outfile.write("energy\n")
+        outfile.write("\n")
         outfile.write("IOFO EXTE\n")
         outfile.write("\n")
         outfile.write("write psf card name bilbomd_pdb2crd.psf\n")
