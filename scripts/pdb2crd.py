@@ -47,6 +47,7 @@ upto 8 character PSF IDs. (versions c31a1 and later)
 """
 
 import argparse
+import os
 
 # from datetime import datetime
 
@@ -81,7 +82,8 @@ def determine_molecule_type(lines):
             "TYR",
         ]
     )
-    dna_residues = set(["DA", "DC", "DG", "DT", "DI", "ADE", "CYT", "GUA", "THY"])
+    dna_residues = set(["DA", "DC", "DG", "DT", "DI",
+                       "ADE", "CYT", "GUA", "THY"])
     rna_residues = set(["A", "C", "G", "U", "I"])
     carbohydrate_residues = set(
         [
@@ -305,30 +307,76 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
         outfile.write("\n")
 
         for chain_id, chain_data in chains.items():
+            lines = chain_data["lines"]
+            if lines:  # Ensure there's at least one line to process
+                # Extract characters from position 23 to 26
+                start_res_num_str = lines[0][22:26]
+                # Convert to integer and subtract 1
+                start_res_num = int(start_res_num_str) - 1
+
+                # Now `start_res_num` is an integer that you can use in your computations or file writings
+                # For example, if you need it as a string later on:
+                start_res_num_str = str(start_res_num)
             # Use the determined molecule type
             molecule_type = chain_data["type"]
             suffix = "_uc" if chain_id.isupper() else ""
-            chain_filename = (
-                f"{chain_id.lower()}{suffix}_{pdb_file_path.split('/')[-1].lower()}"
-            )
-            # chain_file = f"{output_dir}/{chain_filename}"
-            # print(chain_file)
+            # chain_filename = (
+            #     f"{chain_id.lower()}{suffix}_{pdb_file_path.split('/')[-1].lower()}"
+            # )
+            # Get the base filename without extension
+            base_filename = os.path.splitext(
+                os.path.basename(pdb_file_path))[0].lower()
+            chain_filename = f"{chain_id.lower()}{suffix}_{base_filename}"
+            charmmgui_chain_id = f"{molecule_type}{chain_data['chainid']}"
 
             # Adjust the generation and reading commands based on molecule_type
             if molecule_type == "PRO":
-                outfile.write(f"open read unit 12 card name {chain_filename}\n")
-                outfile.write("read sequ pdb unit 12\n")
+                outfile.write("! ------------------------------------------\n")
                 outfile.write(
-                    f"generate {molecule_type}{chain_data['chainid']} "
+                    "! READ SEQUENCE AND COORDINATES FROM PDB FILE\n")
+                outfile.write(
+                    f"open unit 1 read card name {chain_filename}.pdb\n")
+                outfile.write("read sequ pdb unit 1\n")
+
+                outfile.write("rewind unit 1\n")
+                outfile.write(
+                    f"generate {charmmgui_chain_id} "
                     f"setup warn first NTER last CTER\n"
                 )
-                outfile.write("rewind unit 12\n")
-                outfile.write("read coor pdb unit 12 append\n")
-                outfile.write("hbuild sele hydrogen end\n")
-                outfile.write("close unit 12\n")
+                outfile.write(
+                    f"read coor pdb unit 1 offset -{start_res_num_str}\n")
+                outfile.write("close unit 1\n")
                 outfile.write("\n")
+                outfile.write("! ATTEMPT TO PLACE ANY MISSING HEAVY ATOMS\n")
+                outfile.write("ic purge\n")
+                outfile.write("ic param\n")
+                outfile.write("ic fill preserve\n")
+                outfile.write("ic build\n")
+                outfile.write(
+                    f"define test sele segid {charmmgui_chain_id} .and. (.not. type H* ) .and. (.not. init ) show end\n")
+                outfile.write("\n")
+                outfile.write("! REBUILD ALL H ATOM COORDS\n")
+                outfile.write(
+                    f"coor init sele segid {charmmgui_chain_id} .and. type H* end\n")
+                outfile.write(
+                    f"hbuild sele segid {charmmgui_chain_id} .and. type H* end\n")
+                outfile.write(
+                    f"define test sele segid {charmmgui_chain_id} .and. .not. init show end\n")
+                outfile.write("\n")
+                outfile.write("energy\n")
+                outfile.write("\n")
+                outfile.write("! WRITE INDIVIDUAL CHAIN CRD/PSF\n")
+                outfile.write(
+                    f"open unit 2 write card name {chain_filename}.psf\n")
+                outfile.write("write psf card unit 2\n")
+                outfile.write(
+                    f"open unit 2 write card name {chain_filename}.crd\n")
+                outfile.write("write coor card unit 2\n")
+                outfile.write("\n")
+
             elif molecule_type == "DNA" or molecule_type == "RNA":
-                outfile.write(f"open read unit 12 card name {chain_filename}\n")
+                outfile.write(
+                    f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate {molecule_type}{chain_data['chainid']} "
@@ -342,7 +390,8 @@ def write_pdb_2_crd_inp_file(chains, output_dir, pdb_file_path):
             elif molecule_type == "CAR":
                 chain_id = chain_data["chainid"]
                 suffix = "R" if chain_id.isupper() else "L"
-                outfile.write(f"open read unit 12 card name {chain_filename}\n")
+                outfile.write(
+                    f"open read unit 12 card name {chain_filename}\n")
                 outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate CA{suffix}{chain_data['chainid'].upper()} setup\n"
@@ -408,7 +457,15 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
         processed_lines = apply_charmm_residue_names(processed_lines)
         processed_lines = replace_hetatm(processed_lines)
         # commenting this out since we really shouldn't be renumbering peoples input PDB files
-        processed_lines = renumber_residues(processed_lines)
+        # processed_lines = renumber_residues(processed_lines)
+
+        if processed_lines:  # Check if there are any lines after processing
+            first_line = processed_lines[0]
+            start_res_num = first_line[22:26]
+            # last_line = processed_lines[-1]
+            # print(f"First line: {first_line}")
+            # print(f"Last line: {last_line}")
+            print(start_res_num)
 
         chain_filename = get_chain_filename(chain_id, pdb_file_path)
         print(
@@ -427,7 +484,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Split a PDB file into separate chain files for CHARMM."
     )
-    parser.add_argument("pdb_file", type=str, help="Path to the PDB file to be split.")
+    parser.add_argument("pdb_file", type=str,
+                        help="Path to the PDB file to be split.")
     parser.add_argument(
         "output_dir", type=str, help="Directory to save the split chain files."
     )
