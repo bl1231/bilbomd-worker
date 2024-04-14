@@ -425,6 +425,7 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         outfile.write(f"STREAM {TOPO_FILES}\n")
         outfile.write("\n")
         outfile.write("\n")
+        # loop over each chain
         for chain_id, chain_data in chains.items():
             molecule_type = chain_data["type"]
             charmmgui_chain_id = f"{molecule_type}{chain_data['chainid']}"
@@ -440,17 +441,20 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
             outfile.write("read coor unit 1 card resid\n")
             outfile.write("close unit 1\n")
             outfile.write("\n")
+        # end chain loop
         outfile.write("\n")
         outfile.write("! Print heavy atoms with unknown coordinates\n")
         outfile.write("coor print sele ( .not. INIT ) .and. ( .not. hydrogen ) end\n")
         outfile.write("\n")
-        outfile.write("\n")
+        outfile.write("! Write PSF file\n")
         outfile.write("open write unit 10 card name bilbomd_pdb2crd.psf\n")
         outfile.write("write psf  unit 10 card\n")
         outfile.write("\n")
+        outfile.write("! Write CRD file\n")
         outfile.write("open write card unit 10 name bilbomd_pdb2crd.crd\n")
         outfile.write("write coor unit 10 card\n")
         outfile.write("\n")
+        outfile.write("! Write CHARMM PDB file\n")
         outfile.write("open write card unit 10 name bilbomd_pdb2crd.pdb\n")
         outfile.write("write coor pdb  unit 10 official\n")
         outfile.write("\n")
