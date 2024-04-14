@@ -49,8 +49,6 @@ upto 8 character PSF IDs. (versions c31a1 and later)
 import argparse
 import os
 
-# from datetime import datetime
-
 TOPO_FILES = "/app/scripts/bilbomd_top_par_files.str"
 
 
@@ -132,8 +130,9 @@ def determine_molecule_type(lines):
 
 def get_chain_filename(chain_id, pdb_filename):
     """
-    Generates a filename for the chain file. Appends '_uc' to the filename for uppercase chain IDs
-    to differentiate from lowercase ones, since CHARMM requires lowercase filenames in all input files.
+    Generates a filename for the chain file. Appends '_uc' to the filename
+    for uppercase chain IDs to differentiate from lowercase ones, since CHARMM
+    requires lowercase filenames in all input files.
 
     :param chain_id: The chain ID from the PDB file.
     :param pdb_filename: The original PDB filename.
@@ -339,7 +338,8 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
                 outfile.write("ic fill preserve\n")
                 outfile.write("ic build\n")
                 outfile.write(
-                    f"define test sele segid {charmmgui_chain_id} .and. (.not. type H* ) .and. (.not. init ) show end\n"
+                    f"define test sele segid {charmmgui_chain_id} .and. "
+                    f"(.not. type H* ) .and. (.not. init ) show end\n"
                 )
                 outfile.write("\n")
                 outfile.write("! REBUILD ALL H ATOM COORDS\n")
@@ -426,7 +426,7 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         outfile.write("\n")
         outfile.write("\n")
         # loop over each chain
-        for chain_id, chain_data in chains.items():
+        for _, chain_data in chains.items():
             molecule_type = chain_data["type"]
             charmmgui_chain_id = f"{molecule_type}{chain_data['chainid']}"
             outfile.write(f"! Read {charmmgui_chain_id}\n")
@@ -490,8 +490,8 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
     with open(pdb_file_path, "r", encoding="utf-8") as pdb_file:
         for line in pdb_file:
             if line.startswith(("ATOM", "HETATM")):
-                record_type = line[:6].strip()
-                chain_id = line[21]  # Extract chain ID
+                record_type = line[:6].strip()  # ATOM or HETATM
+                chain_id = line[21]  # Chain ID
 
                 # Create a unique key for each chain that includes both chain ID and record type
                 unique_chain_key = f"{record_type}_{chain_id}"
