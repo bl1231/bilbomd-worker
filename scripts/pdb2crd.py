@@ -352,7 +352,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
                 f"read coor pdb unit 1 offset -{start_res_num_str}\n")
             outfile.write("close unit 1\n")
             outfile.write("\n")
-            outfile.write("! ATTEMPT TO PLACE ANY MISSING HEAVY ATOMS\n")
+            outfile.write("! PLACE ANY MISSING HEAVY ATOMS\n")
             outfile.write("ic purge\n")
             outfile.write("ic param\n")
             outfile.write("ic fill preserve\n")
@@ -373,11 +373,11 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
                 f"define test sele segid {charmmgui_chain_id} .and. .not. init show end\n"
             )
             outfile.write("\n")
+            outfile.write("! CALCULATE ENERGY\n")
             outfile.write("energy\n")
             outfile.write("\n")
-            outfile.write("IOFOrmat EXTEnded\n")
-            outfile.write("\n")
             outfile.write("! WRITE INDIVIDUAL CHAIN CRD/PSF\n")
+            outfile.write("IOFOrmat EXTEnded\n")
             outfile.write(
                 f"write psf card name bilbomd_pdb2crd_{charmmgui_chain_id}.psf\n"
             )
