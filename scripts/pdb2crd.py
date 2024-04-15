@@ -290,6 +290,12 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
     """
     Write individual CHARMM input file to convert each chain to a CRD file.
     """
+    charmm_generate_options = {
+        "PRO": "setup warn first NTER last CTER",
+        "DNA": "setup warn first 5TER last 3TER",
+        "RNA": "setup warn first 5TER last 3TER",
+        "CAR": "setup"
+    }
     for chain_id, chain_data in chains.items():
         molecule_type = chain_data["type"]
         # our little hack to always use lower case file name for CHARMM
@@ -298,7 +304,17 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
         base_filename = os.path.splitext(
             os.path.basename(pdb_file_path))[0].lower()
         chain_filename = f"{chain_id.lower()}{suffix}_{base_filename}"
-        charmmgui_chain_id = f"{molecule_type}{chain_data['chainid']}"
+        # need to account for CAR vs CAL.... only for Carbohydrates at the moment.
+        # but should probably make this work for Protein and DNA/RNA
+        # CAR is for uppercase Chain IDs
+        # CAL is for lowercase Chain IDs
+        if molecule_type == "CAR":
+            carb_suffix = "R" if chain_id.isupper() else "L"
+
+            charmmgui_chain_id = f"CA{carb_suffix}{chain_data['chainid'].upper()}"
+        else:
+            charmmgui_chain_id = f"{molecule_type}{chain_data['chainid']}"
+
         output_file = f"{output_dir}/pdb2crd_charmm_{charmmgui_chain_id.lower()}.inp"
         lines = chain_data["lines"]
         if lines:  # Ensure there's at least one line to process
@@ -329,25 +345,9 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             outfile.write("read sequ pdb unit 1\n")
 
             outfile.write("rewind unit 1\n")
-            if molecule_type == "PRO":
-                outfile.write(
-                    f"generate {charmmgui_chain_id} "
-                    f"setup warn first NTER last CTER\n"
-                )
-
-            elif molecule_type == "DNA" or molecule_type == "RNA":
-                outfile.write(
-                    f"generate {charmmgui_chain_id} "
-                    f"setup warn first 5TER last 3TER\n"
-                )
-
-            elif molecule_type == "CAR":
-                chain_id = chain_data["chainid"]
-                suffix = "R" if chain_id.isupper() else "L"
-                outfile.write(
-                    f"generate CA{suffix}{chain_data['chainid'].upper()} setup\n"
-                )
-
+            outfile.write(
+                f"generate {charmmgui_chain_id} {charmm_generate_options[molecule_type]}\n"
+            )
             outfile.write(
                 f"read coor pdb unit 1 offset -{start_res_num_str}\n")
             outfile.write("close unit 1\n")
