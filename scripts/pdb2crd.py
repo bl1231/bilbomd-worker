@@ -401,10 +401,10 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
     # charmmgui_chain_id = f"{molecule_type}{chain_data['chainid']}"
     output_file = f"{output_dir}/pdb2crd_charmm_meld.inp"
     with open(output_file, mode="w", encoding="utf8") as outfile:
-        outfile.write("* PURPOSE: Convert PDB file to CRD and PSF\n")
+        outfile.write("* PURPOSE: Join All Individual Chain CRD Files\n")
         outfile.write("* AUTHOR: Michal Hammel\n")
         outfile.write("* AUTHOR: Scott Classen\n")
-        outfile.write(f"* PDB: {pdb_file_path}\n")
+        outfile.write(f"* ORIGINAL INPUT PDB: {pdb_file_path}\n")
         outfile.write("*\n")
         outfile.write("\n")
         outfile.write("DIMENS CHSIZE 5000000 MAXRES 3000000\n")
@@ -416,17 +416,30 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         outfile.write("\n")
         outfile.write("\n")
         # loop over each chain
-        for _, chain_data in chains.items():
+        for chain_id, chain_data in chains.items():
             molecule_type = chain_data["type"]
-            charmmgui_chain_id = f"{molecule_type}{chain_data['chainid']}"
+            # need to account for CAR vs CAL.... only for Carbohydrates at the moment.
+            # but should probably make this work for Protein and DNA/RNA
+            # CAR is for uppercase Chain IDs A-Z
+            # CAL is for lowercase Chain IDs a-z
+            if molecule_type == "CAR":
+                carb_suffix = "R" if chain_id.isupper() else "L"
+
+                charmmgui_chain_id = f"CA{carb_suffix}{chain_data['chainid'].upper()}"
+            else:
+                charmmgui_chain_id = f"{molecule_type}{chain_data['chainid']}"
+
             outfile.write(f"! Read {charmmgui_chain_id}\n")
             outfile.write(
                 f"open read card unit 1 name bilbomd_pdb2crd_{charmmgui_chain_id.lower()}.crd\n"
             )
             outfile.write("read sequence coor unit 1 resid\n")
-            outfile.write(
-                f"generate {charmmgui_chain_id} setup warn first NTER last CTER\n"
-            )
+            # not sure we need to do this again since we already ran "generate"
+            # when converting PDB to CRD
+            #
+            # outfile.write(
+            #     f"generate {charmmgui_chain_id} setup warn first NTER last CTER\n"
+            # )
             outfile.write("rewind unit 1\n")
             outfile.write("read coor unit 1 card resid\n")
             outfile.write("close unit 1\n")
