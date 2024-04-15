@@ -80,7 +80,8 @@ def determine_molecule_type(lines):
             "TYR",
         ]
     )
-    dna_residues = set(["DA", "DC", "DG", "DT", "DI", "ADE", "CYT", "GUA", "THY"])
+    dna_residues = set(["DA", "DC", "DG", "DT", "DI",
+                       "ADE", "CYT", "GUA", "THY"])
     rna_residues = set(["A", "C", "G", "U", "I"])
     carbohydrate_residues = set(
         [
@@ -291,9 +292,11 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
     """
     for chain_id, chain_data in chains.items():
         molecule_type = chain_data["type"]
+        # our little hack to always use lower case file name for CHARMM
         suffix = "_uc" if chain_id.isupper() else ""
         # Get the base filename without extension
-        base_filename = os.path.splitext(os.path.basename(pdb_file_path))[0].lower()
+        base_filename = os.path.splitext(
+            os.path.basename(pdb_file_path))[0].lower()
         chain_filename = f"{chain_id.lower()}{suffix}_{base_filename}"
         charmmgui_chain_id = f"{molecule_type}{chain_data['chainid']}"
         output_file = f"{output_dir}/pdb2crd_charmm_{charmmgui_chain_id.lower()}.inp"
@@ -303,7 +306,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             start_res_num_str = lines[0][22:26]
             # Convert to integer and subtract 1
             start_res_num = int(start_res_num_str) - 1
-            # Need string?
+            # Need string?... convert back to str
             start_res_num_str = str(start_res_num)
         with open(output_file, mode="w", encoding="utf8") as outfile:
             outfile.write("* PURPOSE: Convert PDB file to CRD and PSF\n")
@@ -316,74 +319,60 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             outfile.write("\n")
             outfile.write(f"STREAM {TOPO_FILES}\n")
             outfile.write("\n")
-            if molecule_type == "PRO":
-                outfile.write(
-                    f"! {charmmgui_chain_id} ------------------------------------------\n"
-                )
-                outfile.write("! READ SEQUENCE AND COORDINATES FROM PDB FILE\n")
-                outfile.write(f"open unit 1 read card name {chain_filename}.pdb\n")
-                outfile.write("read sequ pdb unit 1\n")
+            outfile.write(
+                f"! {charmmgui_chain_id} --------------------------------------\n"
+            )
+            outfile.write(
+                "! READ SEQUENCE AND COORDINATES FROM PDB FILE\n")
+            outfile.write(
+                f"open unit 1 read card name {chain_filename}.pdb\n")
+            outfile.write("read sequ pdb unit 1\n")
 
-                outfile.write("rewind unit 1\n")
+            outfile.write("rewind unit 1\n")
+            if molecule_type == "PRO":
                 outfile.write(
                     f"generate {charmmgui_chain_id} "
                     f"setup warn first NTER last CTER\n"
                 )
-                outfile.write(f"read coor pdb unit 1 offset -{start_res_num_str}\n")
-                outfile.write("close unit 1\n")
-                outfile.write("\n")
-                outfile.write("! ATTEMPT TO PLACE ANY MISSING HEAVY ATOMS\n")
-                outfile.write("ic purge\n")
-                outfile.write("ic param\n")
-                outfile.write("ic fill preserve\n")
-                outfile.write("ic build\n")
-                outfile.write(
-                    f"define test sele segid {charmmgui_chain_id} .and. "
-                    f"(.not. type H* ) .and. (.not. init ) show end\n"
-                )
-                outfile.write("\n")
-                outfile.write("! REBUILD ALL H ATOM COORDS\n")
-                outfile.write(
-                    f"coor init sele segid {charmmgui_chain_id} .and. type H* end\n"
-                )
-                outfile.write(
-                    f"hbuild sele segid {charmmgui_chain_id} .and. type H* end\n"
-                )
-                outfile.write(
-                    f"define test sele segid {charmmgui_chain_id} .and. .not. init show end\n"
-                )
-                outfile.write("\n")
-                # outfile.write("! WRITE INDIVIDUAL CHAIN CRD/PSF\n")
-                # outfile.write(f"open unit 2 write card name {chain_filename}.psf\n")
-                # outfile.write("write psf card unit 2\n")
-                # outfile.write(f"open unit 2 write card name {chain_filename}.crd\n")
-                # outfile.write("write coor card unit 2\n")
-                # outfile.write("\n")
+
             elif molecule_type == "DNA" or molecule_type == "RNA":
-                outfile.write(f"open read unit 12 card name {chain_filename}\n")
-                outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
-                    f"generate {molecule_type}{chain_data['chainid']} "
+                    f"generate {charmmgui_chain_id} "
                     f"setup warn first 5TER last 3TER\n"
                 )
-                outfile.write("rewind unit 12\n")
-                outfile.write("read coor pdb unit 12 append\n")
-                outfile.write("hbuild sele hydrogen end\n")
-                outfile.write("close unit 12\n")
-                outfile.write("\n")
+
             elif molecule_type == "CAR":
                 chain_id = chain_data["chainid"]
                 suffix = "R" if chain_id.isupper() else "L"
-                outfile.write(f"open read unit 12 card name {chain_filename}\n")
-                outfile.write("read sequ pdb unit 12\n")
                 outfile.write(
                     f"generate CA{suffix}{chain_data['chainid'].upper()} setup\n"
                 )
-                outfile.write("rewind unit 12\n")
-                outfile.write("read coor pdb unit 12 append\n")
-                outfile.write("hbuild sele hydrogen end\n")
-                outfile.write("close unit 12\n")
-                outfile.write("\n")
+
+            outfile.write(
+                f"read coor pdb unit 1 offset -{start_res_num_str}\n")
+            outfile.write("close unit 1\n")
+            outfile.write("\n")
+            outfile.write("! ATTEMPT TO PLACE ANY MISSING HEAVY ATOMS\n")
+            outfile.write("ic purge\n")
+            outfile.write("ic param\n")
+            outfile.write("ic fill preserve\n")
+            outfile.write("ic build\n")
+            outfile.write(
+                f"define test sele segid {charmmgui_chain_id} .and. "
+                f"(.not. type H* ) .and. (.not. init ) show end\n"
+            )
+            outfile.write("\n")
+            outfile.write("! REBUILD ALL H ATOM COORDS\n")
+            outfile.write(
+                f"coor init sele segid {charmmgui_chain_id} .and. type H* end\n"
+            )
+            outfile.write(
+                f"hbuild sele segid {charmmgui_chain_id} .and. type H* end\n"
+            )
+            outfile.write(
+                f"define test sele segid {charmmgui_chain_id} .and. .not. init show end\n"
+            )
+            outfile.write("\n")
             outfile.write("energy\n")
             outfile.write("\n")
             outfile.write("IOFOrmat EXTEnded\n")
@@ -398,6 +387,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             outfile.write(
                 f"write coor pdb name bilbomd_pdb2crd_{charmmgui_chain_id}.pdb\n"
             )
+            outfile.write("\n")
             outfile.write("stop\n")
 
 
@@ -444,7 +434,8 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         # end chain loop
         outfile.write("\n")
         outfile.write("! Print heavy atoms with unknown coordinates\n")
-        outfile.write("coor print sele ( .not. INIT ) .and. ( .not. hydrogen ) end\n")
+        outfile.write(
+            "coor print sele ( .not. INIT ) .and. ( .not. hydrogen ) end\n")
         outfile.write("\n")
         outfile.write("! Write PSF file\n")
         outfile.write("open write unit 10 card name bilbomd_pdb2crd.psf\n")
@@ -474,7 +465,6 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         outfile.write("*\n")
         outfile.write("\n")
         outfile.write("stop\n")
-        outfile.write("\n")
 
 
 def split_and_process_pdb(pdb_file_path: str, output_dir: str):
@@ -549,7 +539,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Split a PDB file into separate chain files for CHARMM."
     )
-    parser.add_argument("pdb_file", type=str, help="Path to the PDB file to be split.")
+    parser.add_argument("pdb_file", type=str,
+                        help="Path to the PDB file to be split.")
     parser.add_argument(
         "output_dir", type=str, help="Directory to save the split chain files."
     )
