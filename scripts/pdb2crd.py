@@ -309,7 +309,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             outfile.write("* PURPOSE: Convert PDB file to CRD and PSF\n")
             outfile.write("* AUTHOR: Michal Hammel\n")
             outfile.write("* AUTHOR: Scott Classen\n")
-            outfile.write(f"* PDB: {pdb_file_path}\n")
+            outfile.write(f"* INPUT PDB: {pdb_file_path}\n")
             outfile.write("*\n")
             outfile.write("\n")
             outfile.write("bomlev -2\n")
