@@ -291,7 +291,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
     Write individual CHARMM input file to convert each chain to a CRD file.
     """
     charmm_generate_options = {
-        "PRO": "setup warn first NTER last CTER",
+        "PRO": "setup warn first none last CTER",
         "DNA": "setup warn first 5TER last 3TER",
         "RNA": "setup warn first 5TER last 3TER",
         "CAR": "setup"
