@@ -159,7 +159,7 @@ const createCharmmInpFile = async (
 
 const spawnCharmm = (MQJob: BullMQJob, inputFiles: string[]): Promise<string[]> => {
   const workingDir = path.join(uploadFolder, MQJob.data.uuid)
-  logger.info(`inputFiles for job ${MQJob.data.uuid}:\n${inputFiles.join('\n')}`)
+  logger.info(`inputFiles for job ${MQJob.data.uuid}: ${inputFiles.join('\n')}`)
 
   // Create an array of promises, each promise corresponds to one charmm job
   const promises = inputFiles.map((inputFile) => {
