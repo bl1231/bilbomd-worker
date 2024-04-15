@@ -389,12 +389,19 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             )
             outfile.write("\n")
             outfile.write("stop\n")
+        print(f"FILE_CREATED: {output_file.split('/')[-1]}")
 
 
 def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
     """
     Melds individual chain CRD files into a sinle CRD file for subsequent CHARMM steps
     """
+    charmm_generate_options = {
+        "PRO": "setup warn first none last CTER",
+        "DNA": "setup warn first 5TER last 3TER",
+        "RNA": "setup warn first 5TER last 3TER",
+        "CAR": "setup"
+    }
     # Get the base filename without extension
     # base_filename = os.path.splitext(os.path.basename(pdb_file_path))[0].lower()
     # chain_filename = f"{chain_id.lower()}{suffix}_{base_filename}"
@@ -437,9 +444,9 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
             # not sure we need to do this again since we already ran "generate"
             # when converting PDB to CRD
             #
-            # outfile.write(
-            #     f"generate {charmmgui_chain_id} setup warn first NTER last CTER\n"
-            # )
+            outfile.write(
+                f"generate {charmmgui_chain_id} {charmm_generate_options[molecule_type]}\n"
+            )
             outfile.write("rewind unit 1\n")
             outfile.write("read coor unit 1 card resid\n")
             outfile.write("close unit 1\n")
@@ -478,6 +485,7 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         outfile.write("*\n")
         outfile.write("\n")
         outfile.write("stop\n")
+    # print(f"FILE_CREATED: {output_file.split('/')[-1]}")
 
 
 def split_and_process_pdb(pdb_file_path: str, output_dir: str):
@@ -531,12 +539,13 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
             end_res_num = last_line[22:26]
 
         chain_filename = get_chain_filename(chain_id, pdb_file_path)
-        print(
-            f"Writing processed chain to: {chain_filename} "
-            f"chainID: {chain_data['chainid']} "
-            f"type: {chain_data['type']} "
-            f"start: {start_res_num} end: {end_res_num}"
-        )
+        # DEBUG ONLY
+        # print(
+        #     f"Writing processed chain to: {chain_filename} "
+        #     f"chainID: {chain_data['chainid']} "
+        #     f"type: {chain_data['type']} "
+        #     f"start: {start_res_num} end: {end_res_num}"
+        # )
         with open(
             output_dir + "/" + chain_filename, "w", encoding="utf-8"
         ) as chain_file:

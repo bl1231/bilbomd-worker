@@ -3,7 +3,7 @@ import { Job } from './model/Job'
 import { logger } from './loggers'
 import fs from 'fs-extra'
 import path from 'path'
-import { spawn, ChildProcess } from 'node:child_process'
+import { spawn } from 'node:child_process'
 
 const uploadFolder = process.env.DATA_VOL ?? '/bilbomd/uploads'
 const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
@@ -26,88 +26,124 @@ const cleanupJob = async (MQjob: BullMQJob) => {
 }
 
 const processPdb2CrdJob = async (MQJob: BullMQJob) => {
-  await MQJob.updateProgress(1)
-  logger.info(`UUID: ${MQJob.data.uuid}`)
-  const foundJob = await Job.findOne({ uuid: MQJob.data.uuid })
-    .populate({
-      path: 'user',
-      select: 'email'
+  try {
+    await MQJob.updateProgress(1)
+    logger.info(`UUID: ${MQJob.data.uuid}`)
+    const foundJob = await Job.findOne({ uuid: MQJob.data.uuid })
+      .populate({
+        path: 'user',
+        select: 'email'
+      })
+      .exec()
+
+    if (!foundJob) {
+      logger.warn(
+        `No MongoDB entry found for: ${MQJob.data.uuid}. Must be from PAE Jiffy.`
+      )
+      // return // Consider if you want to continue or exit the function here
+    } else {
+      logger.info(`MongoDB entry for ${MQJob.data.type} Job found: ${foundJob.uuid}`)
+    }
+
+    // Initialize
+    await initializeJob(MQJob)
+    await MQJob.log('start pdb2crd')
+
+    let charmmInpFiles: string[] = []
+
+    charmmInpFiles = await createCharmmInpFile({
+      uuid: MQJob.data.uuid,
+      pdb_file: MQJob.data.pdb_file
     })
-    .exec()
+    logger.info(`charmmInpFiles: ${charmmInpFiles}`)
+    await MQJob.log('end pdb2crd')
+    await MQJob.updateProgress(15)
 
-  if (!foundJob) {
-    logger.warn(`No MongoDB entry found for: ${MQJob.data.uuid}. Must be from PAE Jiffy.`)
-  } else {
-    logger.warn(`MongoDB entry for ${MQJob.data.type} Job found: ${foundJob.uuid}`)
+    // Run CHARMM to create individual crd and psf files
+    await MQJob.log('start pdb2crd charmm for individual chains')
+    await spawnCharmm(MQJob, charmmInpFiles)
+    await MQJob.log('end pdb2crd charmm for individual chains')
+    await MQJob.updateProgress(35)
+
+    // Run CHARMM to meld all CRD files into bilbomd_pdb2crd.crd
+    await MQJob.log('start pdb2crd charmm meld')
+    charmmInpFiles = ['pdb2crd_charmm_meld.inp']
+    await spawnCharmm(MQJob, charmmInpFiles)
+    await MQJob.log('end pdb2crd charmm meld')
+    await MQJob.updateProgress(65)
+  } catch (error) {
+    logger.error(`Failed processing PDB2CRD Job: ${error}`)
+    await MQJob.log(`Error processing job: ${error}`)
+  } finally {
+    // Cleanup
+    await cleanupJob(MQJob)
+    await MQJob.updateProgress(100)
   }
-
-  // Initialize
-  await initializeJob(MQJob)
-
-  // Create pdb2crd.inp file
-  await MQJob.log('start pdb2crd')
-  if (foundJob && 'pdb_file' in foundJob) {
-    await createCharmmInpFile({
-      uuid: foundJob.uuid,
-      pdb_file: foundJob.pdb_file as string
-    })
-  } else {
-    await createCharmmInpFile({ uuid: MQJob.data.uuid, pdb_file: 'pdb_file.pdb' })
-  }
-  await MQJob.log('end pdb2crd')
-  await MQJob.updateProgress(15)
-
-  // Run CHARMM to create crd and psf files
-  await MQJob.log('start pdb2crd charmm')
-  await spawnCharmm(MQJob)
-  await MQJob.log('end pdb2crd charmm')
-  await MQJob.updateProgress(35)
-
-  // Cleanup
-  await cleanupJob(MQJob)
-  await MQJob.updateProgress(100)
 }
 
-const createCharmmInpFile = async (inpData: Pdb2CrdCharmmInputData) => {
+const createCharmmInpFile = async (
+  inpData: Pdb2CrdCharmmInputData
+): Promise<string[]> => {
   logger.info('in createCharmmInpFile')
   const workingDir = path.join(uploadFolder, inpData.uuid)
   const inputPDB = path.join(workingDir, inpData.pdb_file)
-  const logFile = path.join(workingDir, 'pdb2crd.log')
-  const errorFile = path.join(workingDir, 'pdb2crd_error.log')
+  const logFile = path.join(workingDir, 'pdb2crd-python.log')
+  const errorFile = path.join(workingDir, 'pdb2crd-python_error.log')
   const logStream = fs.createWriteStream(logFile)
   const errorStream = fs.createWriteStream(errorFile)
   const pdb2crd_script = '/app/scripts/pdb2crd.py'
   const args = [pdb2crd_script, inputPDB, '.']
-  logger.info(`args for pdb2crd_script: ${args}`)
 
-  return new Promise((resolve, reject) => {
-    const pdb2crd: ChildProcess = spawn('python', args, { cwd: workingDir })
-    pdb2crd.stdout?.on('data', (data: Buffer) => {
-      const dataString = data.toString().trim()
-      logger.info(`createCharmmInpFile stdout ${dataString}`)
-      logStream.write(dataString)
+  return new Promise<string[]>((resolve, reject) => {
+    const pdb2crd = spawn('python', args, { cwd: workingDir })
+
+    pdb2crd.stdout.on('data', (data: Buffer) => {
+      logStream.write(data.toString())
     })
-    pdb2crd.stderr?.on('data', (data: Buffer) => {
-      logger.error('createCharmmInpFile stderr', data.toString())
-      console.log(data)
-      errorStream.write(data.toString())
+
+    pdb2crd.stderr.on('data', (data: Buffer) => {
+      const errorString = data.toString().trim()
+      logger.error('createCharmmInpFile stderr:', errorString)
+      errorStream.write(errorString + '\n')
     })
+
     pdb2crd.on('error', (error) => {
       logger.error('createCharmmInpFile error:', error)
       reject(error)
     })
-    pdb2crd.on('exit', (code) => {
-      // Close streams explicitly once the process exits
+
+    pdb2crd.on('close', (code) => {
+      // Close streams explicitly once the process closes
       const closeStreamsPromises = [
         new Promise((resolveStream) => logStream.end(resolveStream)),
         new Promise((resolveStream) => errorStream.end(resolveStream))
       ]
+
       Promise.all(closeStreamsPromises)
         .then(() => {
-          // Only proceed once all streams are closed
           if (code === 0) {
-            logger.info(`createCharmmInpFile success with exit code: ${code}`)
-            resolve(code.toString())
+            // Read the log file to extract the output filenames
+            fs.readFile(logFile, 'utf8', (err, data) => {
+              if (err) {
+                logger.error('Failed to read log file:', err)
+                reject(new Error('Failed to read log file'))
+                return
+              }
+
+              const outputFiles: string[] = []
+              const lines = data.split('\n')
+              lines.forEach((line) => {
+                line = line.trim()
+                if (line.startsWith('FILE_CREATED:')) {
+                  const inpFile = line.split(':')[1].trim()
+                  logger.info(`inpFile: ${inpFile}`)
+                  outputFiles.push(inpFile)
+                }
+              })
+
+              logger.info(`Successfully parsed output files: ${outputFiles.join(', ')}`)
+              resolve(outputFiles)
+            })
           } else {
             logger.error(`createCharmmInpFile error with exit code: ${code}`)
             reject(new Error(`createCharmmInpFile error with exit code: ${code}`))
@@ -115,54 +151,67 @@ const createCharmmInpFile = async (inpData: Pdb2CrdCharmmInputData) => {
         })
         .catch((streamError) => {
           logger.error(`Error closing file streams: ${streamError}`)
-          reject(streamError)
+          reject(new Error(`Error closing file streams: ${streamError}`))
         })
     })
   })
 }
 
-const spawnCharmm = (MQJob: BullMQJob): Promise<string> => {
+const spawnCharmm = (MQJob: BullMQJob, inputFiles: string[]): Promise<string[]> => {
   const workingDir = path.join(uploadFolder, MQJob.data.uuid)
-  const outputFile = 'pdb2crd_charmm.log'
-  const inputFile = 'pdb2crd_charmm.inp'
-  const charmmArgs = ['-o', outputFile, '-i', inputFile]
-  const charmmOpts = { cwd: workingDir }
+  logger.info(`inputFiles for job ${MQJob.data.uuid}:\n${inputFiles.join('\n')}`)
 
-  return new Promise((resolve, reject) => {
-    const charmm = spawn(CHARMM_BIN, charmmArgs, charmmOpts)
-    let charmmOutput = '' // Accumulates stdout and stderr
+  // Create an array of promises, each promise corresponds to one charmm job
+  const promises = inputFiles.map((inputFile) => {
+    const outputFile = `${inputFile.split('.')[0]}.log`
+    // logger.info(`in: ${inputFile} out: ${outputFile}`)
+    const charmmArgs = ['-o', outputFile, '-i', inputFile]
+    logger.info(`charmmArgs: ${charmmArgs}`)
+    const charmmOpts = { cwd: workingDir }
 
-    // Collect output from stdout
-    charmm.stdout.on('data', (data) => {
-      charmmOutput += data.toString()
-    })
+    return new Promise<string>((resolve, reject) => {
+      const charmm = spawn(CHARMM_BIN, charmmArgs, charmmOpts)
+      let charmmOutput = ''
 
-    // Optionally, capture stderr if you want to log errors or failed execution details
-    charmm.stderr.on('data', (data) => {
-      charmmOutput += data.toString()
-    })
+      charmm.stdout.on('data', (data) => {
+        charmmOutput += data.toString()
+      })
 
-    charmm.on('error', (error) => {
-      logger.error(`CHARMM process encountered an error: ${error.message}`)
-      reject(new Error(`CHARMM process encountered an error: ${error.message}`))
-    })
+      charmm.stderr.on('data', (data) => {
+        charmmOutput += data.toString()
+      })
 
-    charmm.on('close', (code) => {
-      if (code === 0) {
-        logger.info(`CHARMM execution succeeded: ${inputFile}, exit code: ${code}`)
-        resolve(charmmOutput) // Resolve with charmmOutput to provide execution details
-      } else {
+      charmm.on('error', (error) => {
         logger.error(
-          `CHARMM execution failed: ${inputFile}, exit code: ${code}, error: ${charmmOutput}`
+          `CHARMM process for file ${inputFile} encountered an error: ${error.message}`
         )
         reject(
           new Error(
-            `CHARMM execution failed: ${inputFile}, exit code: ${code}, error: ${charmmOutput}`
+            `CHARMM process for file ${inputFile} encountered an error: ${error.message}`
           )
         )
-      }
+      })
+
+      charmm.on('close', (code) => {
+        if (code === 0) {
+          MQJob.log(`pdb2crd done with ${inputFile}`)
+          logger.info(`CHARMM execution succeeded: ${inputFile}, exit code: ${code}`)
+          resolve(charmmOutput)
+        } else {
+          logger.error(
+            `CHARMM execution failed: ${inputFile}, exit code: ${code}, error: ${charmmOutput}`
+          )
+          reject(
+            new Error(
+              `CHARMM execution failed: ${inputFile}, exit code: ${code}, error: ${charmmOutput}`
+            )
+          )
+        }
+      })
     })
   })
+
+  return Promise.all(promises)
 }
 
 export { processPdb2CrdJob }
