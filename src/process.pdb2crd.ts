@@ -44,8 +44,8 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
   // Initialize
   await initializeJob(MQJob)
 
-  // Create pdb_2_crd.inp file
-  await MQJob.log('start pdb_2_crd')
+  // Create pdb2crd.inp file
+  await MQJob.log('start pdb2crd')
   if (foundJob && 'pdb_file' in foundJob) {
     await createCharmmInpFile({
       uuid: foundJob.uuid,
@@ -54,13 +54,13 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
   } else {
     await createCharmmInpFile({ uuid: MQJob.data.uuid, pdb_file: 'pdb_file.pdb' })
   }
-  await MQJob.log('end pdb_2_crd')
+  await MQJob.log('end pdb2crd')
   await MQJob.updateProgress(15)
 
   // Run CHARMM to create crd and psf files
-  await MQJob.log('start pdb_2_crd charmm')
+  await MQJob.log('start pdb2crd charmm')
   await spawnCharmm(MQJob)
-  await MQJob.log('end pdb_2_crd charmm')
+  await MQJob.log('end pdb2crd charmm')
   await MQJob.updateProgress(35)
 
   // Cleanup
