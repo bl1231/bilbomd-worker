@@ -546,9 +546,20 @@ const runPdb2Crd = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void
   try {
     // await createCharmmInpFiles(DBjob)
     let charmmInpFiles: string[] = []
-    charmmInpFiles = await createPdb2CrdCharmmInpFiles(MQjob)
-    logger.info(`runPdb2Crd: ${charmmInpFiles}`)
+
+    charmmInpFiles = await createPdb2CrdCharmmInpFiles({
+      uuid: DBjob.uuid,
+      pdb_file: DBjob.pdb_file
+    })
+    // logger.info(`runPdb2Crd: ${charmmInpFiles}`)
+    // CHARMM pdb2crd convert individual chains
     await spawnPdb2CrdCharmm(MQjob, charmmInpFiles)
+    // CHARMM pdb2crd meld individual crd files
+    charmmInpFiles = ['pdb2crd_charmm_meld.inp']
+    await spawnPdb2CrdCharmm(MQjob, charmmInpFiles)
+    // Update MongoDB
+    DBjob.psf_file = 'bilbomd_pdb2crd.psf'
+    DBjob.crd_file = 'bilbomd_pdb2crd.crd'
   } catch (error) {
     await handleError(error, MQjob, DBjob, 'pdb2crd')
   }
