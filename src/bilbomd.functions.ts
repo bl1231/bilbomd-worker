@@ -816,6 +816,10 @@ const prepareResults = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<
 
     // Copy the original uploaded crd, psf, and dat files
     const filesToCopy = [DBjob.crd_file, DBjob.psf_file, DBjob.data_file]
+    // Add the optional pdb_file if it exists
+    if (DBjob.pdb_file) {
+      filesToCopy.push(DBjob.pdb_file)
+    }
     for (const file of filesToCopy) {
       await execPromise(`cp ${path.join(outputDir, file)} .`, { cwd: resultsDir })
       MQjob.log(`Gathered ${file}`)
