@@ -8,10 +8,10 @@ import { spawn } from 'node:child_process'
 const uploadFolder = process.env.DATA_VOL ?? '/bilbomd/uploads'
 const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
 
-// interface Pdb2CrdCharmmInputData {
-//   uuid: string
-//   pdb_file: string
-// }
+interface Pdb2CrdCharmmInputData {
+  uuid: string
+  pdb_file: string
+}
 
 const initializeJob = async (MQJob: BullMQJob) => {
   logger.info('-------------------------------------')
@@ -51,7 +51,10 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
 
     let charmmInpFiles: string[] = []
 
-    charmmInpFiles = await createPdb2CrdCharmmInpFiles(MQJob)
+    charmmInpFiles = await createPdb2CrdCharmmInpFiles({
+      uuid: MQJob.data.uuid,
+      pdb_file: MQJob.data.pdb_file
+    })
     logger.info(`charmmInpFiles: ${charmmInpFiles}`)
     await MQJob.log('end pdb2crd')
     await MQJob.updateProgress(15)
@@ -78,10 +81,12 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
   }
 }
 
-const createPdb2CrdCharmmInpFiles = async (MQJob: BullMQJob): Promise<string[]> => {
-  logger.info('in createCharmmInpFile')
-  const workingDir = path.join(uploadFolder, MQJob.data.uuid)
-  const inputPDB = path.join(workingDir, MQJob.data.pdb_file)
+const createPdb2CrdCharmmInpFiles = async (
+  data: Pdb2CrdCharmmInputData
+): Promise<string[]> => {
+  logger.info(`in createCharmmInpFile: ${JSON.stringify(data)}`)
+  const workingDir = path.join(uploadFolder, data.uuid)
+  const inputPDB = path.join(workingDir, data.pdb_file)
   const logFile = path.join(workingDir, 'pdb2crd-python.log')
   const errorFile = path.join(workingDir, 'pdb2crd-python_error.log')
   const logStream = fs.createWriteStream(logFile)
