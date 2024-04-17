@@ -51,9 +51,15 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.6.0
+  - Extensive changes to `pdb2crd.py` in order to preserve incoming residue numbering.
+  - Refactor for the changes in `pdb2crd.py`
+  - Create one `CRD` file per chain then combine before running the rest of the BilboMD pipeline.
+  - Make sure original files are included in `results.tar.gz` file
+  - Create `results.tar.gz` files with unique names (e.g. `results-2ff9f312.tar.gz`)
 - 1.5.5
   - Fix bug in `pdb2crd.py` script for substituting CHARMM residues names in DNA.
-  - update dependencies
+  - Update dependencies
 - 1.5.4
   - Sync `pae_ratios.py` script with `bilbomd-backend`.
 - 1.5.2
