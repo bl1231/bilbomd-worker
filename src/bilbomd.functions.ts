@@ -788,7 +788,10 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<vo
   }
 }
 
-const prepareResults = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
+const prepareResults = async (
+  MQjob: BullMQJob,
+  DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob
+): Promise<void> => {
   try {
     const outputDir = path.join(DATA_VOL, DBjob.uuid)
     const multiFoxsDir = path.join(outputDir, 'multifoxs')
@@ -814,12 +817,22 @@ const prepareResults = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<
     await execPromise(`cp ${outputDir}/${inpFile} .`, { cwd: resultsDir })
     MQjob.log('Gather const.inp file')
 
-    // Copy the original uploaded crd, psf, and dat files
-    const filesToCopy = [DBjob.crd_file, DBjob.psf_file, DBjob.data_file]
-    // Add the optional pdb_file if it exists
-    if (DBjob.pdb_file) {
+    // Ensure required files exist
+    const filesToCopy = [DBjob.data_file] // data_file should exist for all job types
+
+    if ('crd_file' in DBjob && DBjob.crd_file) {
+      filesToCopy.push(DBjob.crd_file)
+    }
+    if ('psf_file' in DBjob && DBjob.psf_file) {
+      filesToCopy.push(DBjob.psf_file)
+    }
+    if ('pdb_file' in DBjob && DBjob.pdb_file) {
       filesToCopy.push(DBjob.pdb_file)
     }
+    if ('pae_file' in DBjob) {
+      filesToCopy.push(DBjob.pae_file)
+    }
+    // Copy all files to the results directory.
     for (const file of filesToCopy) {
       await execPromise(`cp ${path.join(outputDir, file)} .`, { cwd: resultsDir })
       MQjob.log(`Gathered ${file}`)
@@ -853,19 +866,58 @@ const prepareResults = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<
     await createReadmeFile(DBjob, numEnsembles, resultsDir)
     MQjob.log(`wrote README.md file`)
 
-    await execPromise(`tar czvf results.tar.gz results`, { cwd: outputDir })
-    MQjob.log('created results.tar.gz file')
+    const uuidPrefix = DBjob.uuid.split('-')[0] // Split the UUID and get the first part
+    const archiveName = `results-${uuidPrefix}.tar.gz` // Construct the archive name
+
+    await execPromise(`tar czvf ${archiveName} results`, { cwd: outputDir })
+
+    MQjob.log(`created ${archiveName} file`)
   } catch (error) {
     await handleError(error, MQjob, DBjob, 'prepareResults')
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const createReadmeFile = async (
-  DBjob: IBilboMDCRDJob,
+  DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob,
   numEnsembles: number,
   resultsDir: string
 ): Promise<void> => {
+  let originalFiles = ``
+  switch (DBjob.__t) {
+    case 'BilboMdCRD': {
+      const crdJob = DBjob as IBilboMDCRDJob
+      originalFiles = `
+- Original CRD file: ${crdJob.crd_file}
+- Original PSF file: ${crdJob.psf_file}
+- Original experimental SAXS data file: ${crdJob.data_file}
+- Original const.inp file: ${crdJob.const_inp_file}
+`
+      break
+    }
+    case 'BilboMdPDB': {
+      const pdbJob = DBjob as IBilboMDPDBJob
+      originalFiles = `
+- Original PDB file: ${pdbJob.pdb_file}
+- Generated CRD file: ${pdbJob.crd_file}
+- Generated PSF file: ${pdbJob.psf_file}
+- Original experimental SAXS data file: ${pdbJob.data_file}
+- Original const.inp file: ${pdbJob.const_inp_file}
+`
+      break
+    }
+    case 'BilboMdAuto': {
+      const autoJob = DBjob as IBilboMDAutoJob
+      originalFiles = `
+- Original PDB file: ${autoJob.pdb_file}
+- Original PAE file: ${autoJob.pae_file}
+- Generated CRD file: ${autoJob.crd_file}
+- Generated PSF file: ${autoJob.psf_file}
+- Original experimental SAXS data file: ${autoJob.data_file}
+- Generated const.inp file: ${autoJob.const_inp_file}
+`
+      break
+    }
+  }
   const readmeContent = `
 # BilboMD Job Results
 
@@ -878,12 +930,7 @@ This directory contains the results for your ${DBjob.title} BilboMD job.
 - Completed:  ${new Date().toString()}
 
 ## Contents
-
-- Original CRD file:  ${DBjob.crd_file}
-- Original PSF file:  ${DBjob.psf_file}
-- Original experimental SAXS data file:  ${DBjob.data_file}
-- Original const.inp file:  ${DBjob.const_inp_file}
-
+${originalFiles}
 The Ensemble files will be present in multiple copies. There is one file for each ensemble size.
 
 - Number of ensembles for this BilboMD run: ${numEnsembles}
@@ -938,8 +985,13 @@ Pelikan M, Hura GL, Hammel M. Structure and flexibility within proteins as ident
 Thank you for using BilboMD
 `
   const readmePath = path.join(resultsDir, 'README.md')
-  await fs.writeFile(readmePath, readmeContent)
-  logger.info('README file created successfully.')
+  try {
+    await fs.writeFile(readmePath, readmeContent)
+    logger.info('README file created successfully.')
+  } catch (error) {
+    logger.error('Failed to create README file:', error)
+    throw new Error('Failed to create README file')
+  }
 }
 
 export {
