@@ -27,7 +27,7 @@ traj iread 50 nrea 1 begin @begin stop @stop skip @step
 set tr @begin
 LABEL ILP
 traj read
-write coor pdb name foxs/{{run}}/{{inp_basename}}_@tr.pdb
+write coor pdb name foxs/{{run}}/{{inp_basename}}_@tr.pdb official
 define heavy sele type CA end
 coor rgyr
 COOR MAXD SELE heavy END SELE heavy END

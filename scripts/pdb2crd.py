@@ -80,8 +80,7 @@ def determine_molecule_type(lines):
             "TYR",
         ]
     )
-    dna_residues = set(["DA", "DC", "DG", "DT", "DI",
-                       "ADE", "CYT", "GUA", "THY"])
+    dna_residues = set(["DA", "DC", "DG", "DT", "DI", "ADE", "CYT", "GUA", "THY"])
     rna_residues = set(["A", "C", "G", "U", "I"])
     carbohydrate_residues = set(
         [
@@ -294,15 +293,14 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
         "PRO": "setup warn first none last CTER",
         "DNA": "setup warn first 5TER last 3TER",
         "RNA": "setup warn first 5TER last 3TER",
-        "CAR": "setup"
+        "CAR": "setup",
     }
     for chain_id, chain_data in chains.items():
         molecule_type = chain_data["type"]
         # our little hack to always use lower case file name for CHARMM
         suffix = "_uc" if chain_id.isupper() else ""
         # Get the base filename without extension
-        base_filename = os.path.splitext(
-            os.path.basename(pdb_file_path))[0].lower()
+        base_filename = os.path.splitext(os.path.basename(pdb_file_path))[0].lower()
         chain_filename = f"{chain_id.lower()}{suffix}_{base_filename}"
         # need to account for CAR vs CAL.... only for Carbohydrates at the moment.
         # but should probably make this work for Protein and DNA/RNA
@@ -338,18 +336,15 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             outfile.write(
                 f"! {charmmgui_chain_id} --------------------------------------\n"
             )
-            outfile.write(
-                "! READ SEQUENCE AND COORDINATES FROM PDB FILE\n")
-            outfile.write(
-                f"open unit 1 read card name {chain_filename}.pdb\n")
+            outfile.write("! READ SEQUENCE AND COORDINATES FROM PDB FILE\n")
+            outfile.write(f"open unit 1 read card name {chain_filename}.pdb\n")
             outfile.write("read sequ pdb unit 1\n")
 
             outfile.write("rewind unit 1\n")
             outfile.write(
                 f"generate {charmmgui_chain_id} {charmm_generate_options[molecule_type]}\n"
             )
-            outfile.write(
-                f"read coor pdb unit 1 offset -{start_res_num_str}\n")
+            outfile.write(f"read coor pdb unit 1 offset -{start_res_num_str}\n")
             outfile.write("close unit 1\n")
             outfile.write("\n")
             outfile.write("! PLACE ANY MISSING HEAVY ATOMS\n")
@@ -366,9 +361,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             outfile.write(
                 f"coor init sele segid {charmmgui_chain_id} .and. type H* end\n"
             )
-            outfile.write(
-                f"hbuild sele segid {charmmgui_chain_id} .and. type H* end\n"
-            )
+            outfile.write(f"hbuild sele segid {charmmgui_chain_id} .and. type H* end\n")
             outfile.write(
                 f"define test sele segid {charmmgui_chain_id} .and. .not. init show end\n"
             )
@@ -385,7 +378,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
                 f"write coor card name bilbomd_pdb2crd_{charmmgui_chain_id}.crd\n"
             )
             outfile.write(
-                f"write coor pdb name bilbomd_pdb2crd_{charmmgui_chain_id}.pdb\n"
+                f"write coor pdb name bilbomd_pdb2crd_{charmmgui_chain_id}.pdb official\n"
             )
             outfile.write("\n")
             outfile.write("stop\n")
@@ -400,7 +393,7 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         "PRO": "setup warn first none last CTER",
         "DNA": "setup warn first 5TER last 3TER",
         "RNA": "setup warn first 5TER last 3TER",
-        "CAR": "setup"
+        "CAR": "setup",
     }
     # Get the base filename without extension
     # base_filename = os.path.splitext(os.path.basename(pdb_file_path))[0].lower()
@@ -454,8 +447,7 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         # end chain loop
         outfile.write("\n")
         outfile.write("! Print heavy atoms with unknown coordinates\n")
-        outfile.write(
-            "coor print sele ( .not. INIT ) .and. ( .not. hydrogen ) end\n")
+        outfile.write("coor print sele ( .not. INIT ) .and. ( .not. hydrogen ) end\n")
         outfile.write("\n")
         outfile.write("! Write PSF file\n")
         outfile.write("open write unit 10 card name bilbomd_pdb2crd.psf\n")
@@ -561,8 +553,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Split a PDB file into separate chain files for CHARMM."
     )
-    parser.add_argument("pdb_file", type=str,
-                        help="Path to the PDB file to be split.")
+    parser.add_argument("pdb_file", type=str, help="Path to the PDB file to be split.")
     parser.add_argument(
         "output_dir", type=str, help="Directory to save the split chain files."
     )
