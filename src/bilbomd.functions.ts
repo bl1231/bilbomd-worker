@@ -863,6 +863,7 @@ const createReadmeFile = async (
 - Original PSF file: ${crdJob.psf_file}
 - Original experimental SAXS data file: ${crdJob.data_file}
 - Original const.inp file: ${crdJob.const_inp_file}
+- Generated minimized PDB file: minimized_output.pdb
 `
       break
     }
@@ -874,6 +875,7 @@ const createReadmeFile = async (
 - Generated PSF file: ${pdbJob.psf_file}
 - Original experimental SAXS data file: ${pdbJob.data_file}
 - Original const.inp file: ${pdbJob.const_inp_file}
+- Generated minimized PDB file: minimized_output.pdb
 `
       break
     }
@@ -886,6 +888,7 @@ const createReadmeFile = async (
 - Generated PSF file: ${autoJob.psf_file}
 - Original experimental SAXS data file: ${autoJob.data_file}
 - Generated const.inp file: ${autoJob.const_inp_file}
+- Generated minimized PDB file: minimized_output.pdb
 `
       break
     }
