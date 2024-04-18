@@ -38,11 +38,11 @@ def calculate_rg(file_path):
     rg_min = round(rg * 0.8)
     rg_max = round(rg * 1.5)
 
-    # Clamp rg_min to be no less than 10
-    rg_min = max(10, rg_min)
+    # Clamp rg_min to be no less than 10 and no more than 100
+    rg_min = max(10, min(100, rg_min))
 
-    # Clamp rg_max to be no more than 100
-    rg_max = min(100, rg_max)
+    # Clamp rg_max to be no less than 10 and no more than 100
+    rg_max = max(10, min(100, rg_max))
 
     # Create a dictionary with the results
     result_dict = {"rg": round(rg), "rg_min": rg_min, "rg_max": rg_max}
