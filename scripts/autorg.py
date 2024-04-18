@@ -14,6 +14,10 @@ def parse_args():
 
 
 def calculate_rg(file_path):
+    """
+    Simple function that takes SAXS data as input and uses BioXTAS
+      to calculate a min_rg and max_rg for use in BilboMD
+    """
     profiles = raw.load_profiles(file_path)
     gi_profile = profiles[0]
     guinier_results = raw.auto_guinier(gi_profile)
@@ -33,6 +37,12 @@ def calculate_rg(file_path):
 
     rg_min = round(rg * 0.8)
     rg_max = round(rg * 1.5)
+
+    # Clamp rg_min to be no less than 10
+    rg_min = max(10, rg_min)
+
+    # Clamp rg_max to be no more than 100
+    rg_max = min(100, rg_max)
 
     # Create a dictionary with the results
     result_dict = {"rg": round(rg), "rg_min": rg_min, "rg_max": rg_max}
