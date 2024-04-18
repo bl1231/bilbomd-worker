@@ -73,6 +73,14 @@ type MultiFoxsParams = Params & {
   data_file: string
 }
 
+interface FileCopyParams {
+  source: string
+  destination: string
+  filename: string
+  MQjob: BullMQJob
+  isCritical: boolean
+}
+
 const handleError = async (
   error: Error | unknown,
   MQjob: BullMQJob,
@@ -443,105 +451,6 @@ const spawnPaeToConst = async (params: PaeParams): Promise<string> => {
   })
 }
 
-// const createPdb2CrdCharmmInpFile = async (DBjob: IBilboMDPDBJob): Promise<string[]> => {
-//   logger.info(`createPdb2CrdCharmmInpFile ${DBjob.title}`)
-//   const outputDir = path.join(DATA_VOL, DBjob.uuid)
-//   const inputPDB = path.join(outputDir, DBjob.pdb_file)
-//   const logFile = path.join(outputDir, 'pdb2crd-python.log')
-//   const errorFile = path.join(outputDir, 'pdb2crd-python_error.log')
-//   const logStream = fs.createWriteStream(logFile)
-//   const errorStream = fs.createWriteStream(errorFile)
-//   const pdb2crd_script = '/app/scripts/pdb2crd.py'
-//   const args = [pdb2crd_script, inputPDB, '.']
-//   // logger.info(`args for pdb2crd_script: ${args}`)
-
-//   return new Promise((resolve, reject) => {
-//     const pdb2crd: ChildProcess = spawn('python', args, { cwd: outputDir })
-//     pdb2crd.stdout?.on('data', (data: Buffer) => {
-//       const dataString = data.toString().trim()
-//       logger.info(`createPdb2CrdCharmmInpFile stdout ${dataString}`)
-//       logStream.write(dataString)
-//     })
-//     pdb2crd.stderr?.on('data', (data: Buffer) => {
-//       logger.error('createPdb2CrdCharmmInpFile stderr', data.toString())
-//       console.log(data)
-//       errorStream.write(data.toString())
-//     })
-//     pdb2crd.on('error', (error) => {
-//       logger.error('createPdb2CrdCharmmInpFile error:', error)
-//       reject(error)
-//     })
-//     pdb2crd.on('exit', (code) => {
-//       // Close streams explicitly once the process exits
-//       const closeStreamsPromises = [
-//         new Promise((resolveStream) => logStream.end(resolveStream)),
-//         new Promise((resolveStream) => errorStream.end(resolveStream))
-//       ]
-//       Promise.all(closeStreamsPromises)
-//         .then(() => {
-//           // Only proceed once all streams are closed
-//           if (code === 0) {
-//             logger.info(`createPdb2CrdCharmmInpFile success with exit code: ${code}`)
-//             resolve(code.toString())
-//           } else {
-//             logger.error(`createPdb2CrdCharmmInpFile error with exit code: ${code}`)
-//             reject(new Error(`createPdb2CrdCharmmInpFile error with exit code: ${code}`))
-//           }
-//         })
-//         .catch((streamError) => {
-//           logger.error(`Error closing file streams: ${streamError}`)
-//           reject(streamError)
-//         })
-//     })
-//   })
-// }
-
-// const spawnPdb2CrdCharmm = (DBjob: IBilboMDPDBJob): Promise<void> => {
-//   const outputDir = path.join(DATA_VOL, DBjob.uuid)
-//   const outputFile = 'pdb2crd_charmm.log'
-//   const inputFile = 'pdb2crd_charmm.inp'
-//   const charmmArgs = ['-o', outputFile, '-i', inputFile]
-//   const charmmOpts = { cwd: outputDir }
-
-//   return new Promise((resolve, reject) => {
-//     const charmm = spawn(CHARMM_BIN, charmmArgs, charmmOpts)
-//     let charmmOutput = '' // Accumulates stdout and stderr
-
-//     // Collect output from stdout
-//     charmm.stdout.on('data', (data) => {
-//       charmmOutput += data.toString()
-//     })
-
-//     // Optionally, capture stderr if you want to log errors or failed execution details
-//     charmm.stderr.on('data', (data) => {
-//       charmmOutput += data.toString()
-//     })
-
-//     charmm.on('error', (error) => {
-//       logger.error(`CHARMM process encountered an error: ${error.message}`)
-//       reject(new Error(`CHARMM process encountered an error: ${error.message}`))
-//     })
-
-//     charmm.on('close', (code) => {
-//       if (code === 0) {
-//         logger.info(`CHARMM execution succeeded: ${inputFile}, exit code: ${code}`)
-//         DBjob.psf_file = 'bilbomd_pdb2crd.psf'
-//         DBjob.crd_file = 'bilbomd_pdb2crd.crd'
-//         resolve()
-//       } else {
-//         logger.error(
-//           `CHARMM execution failed: ${inputFile}, exit code: ${code}, error: ${charmmOutput}`
-//         )
-//         reject(
-//           new Error(
-//             `CHARMM execution failed: ${inputFile}, exit code: ${code}, error: ${charmmOutput}`
-//           )
-//         )
-//       }
-//     })
-//   })
-// }
-
 const runPdb2Crd = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void> => {
   try {
     // await createCharmmInpFiles(DBjob)
@@ -788,6 +697,24 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<vo
   }
 }
 
+const copyFiles = async ({
+  source,
+  destination,
+  filename,
+  MQjob,
+  isCritical
+}: FileCopyParams): Promise<void> => {
+  try {
+    await execPromise(`cp ${source} ${destination}`)
+    MQjob.log(`Gathered ${filename}`)
+  } catch (error) {
+    logger.error(`Error copying ${filename}: ${error}`)
+    if (isCritical) {
+      throw new Error(`Critical error copying ${filename}: ${error}`)
+    }
+  }
+}
+
 const prepareResults = async (
   MQjob: BullMQJob,
   DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob
@@ -797,46 +724,82 @@ const prepareResults = async (
     const multiFoxsDir = path.join(outputDir, 'multifoxs')
     const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
     const resultsDir = path.join(outputDir, 'results')
-    const inpFile = DBjob.const_inp_file
 
     // Create new empty results directory
-    await makeDir(resultsDir)
-    MQjob.log('Create results directory')
+    try {
+      await makeDir(resultsDir)
+      MQjob.log('Create results directory')
+    } catch (error) {
+      logger.error(`Error creating results directory: ${error}`)
+      // Decide whether to continue or throw based on your application's requirements
+    }
+
+    // Copy the minimized PDB
+    await copyFiles({
+      source: `${outputDir}/minimization_output.pdb`,
+      destination: resultsDir,
+      filename: 'minimization_output.pdb',
+      MQjob,
+      isCritical: false
+    })
 
     // Copy ensemble_size_*.txt files
-    await execPromise(`cp ${multiFoxsDir}/ensembles_size*.txt .`, { cwd: resultsDir })
-    MQjob.log('Gather ensembles_size*.txt files')
+    await copyFiles({
+      source: `${multiFoxsDir}/ensembles_size*.txt`,
+      destination: resultsDir,
+      filename: 'ensembles_size*.txt',
+      MQjob,
+      isCritical: false
+    })
 
     // Copy multi_state_model_*_1_1.dat files
-    await execPromise(`cp ${multiFoxsDir}/multi_state_model_*_1_1.dat .`, {
-      cwd: resultsDir
+    await copyFiles({
+      source: `${multiFoxsDir}/multi_state_model_*_1_1.dat`,
+      destination: resultsDir,
+      filename: 'multi_state_model_*_1_1.dat',
+      MQjob,
+      isCritical: false
     })
-    MQjob.log('Gather multi_state_model_*_1_1.dat files')
 
-    // Copy the CHARMM const.inp file
-    await execPromise(`cp ${outputDir}/${inpFile} .`, { cwd: resultsDir })
-    MQjob.log('Gather const.inp file')
+    // Gather original uploaded files
+    const filesToCopy = [
+      { file: DBjob.data_file, label: 'data_file' } // Assuming pdb_file is common
+    ]
 
-    // Ensure required files exist
-    const filesToCopy = [DBjob.data_file] // data_file should exist for all job types
+    if ('pdb_file' in DBjob && DBjob.pdb_file) {
+      filesToCopy.push({ file: DBjob.pdb_file, label: 'pdb_file' })
+    }
 
     if ('crd_file' in DBjob && DBjob.crd_file) {
-      filesToCopy.push(DBjob.crd_file)
+      filesToCopy.push({ file: DBjob.crd_file, label: 'crd_file' })
     }
+
     if ('psf_file' in DBjob && DBjob.psf_file) {
-      filesToCopy.push(DBjob.psf_file)
+      filesToCopy.push({ file: DBjob.psf_file, label: 'psf_file' })
     }
-    if ('pdb_file' in DBjob && DBjob.pdb_file) {
-      filesToCopy.push(DBjob.pdb_file)
+
+    if ('pae_file' in DBjob && DBjob.pae_file) {
+      filesToCopy.push({ file: DBjob.pae_file, label: 'pae_file' })
     }
-    if ('pae_file' in DBjob) {
-      filesToCopy.push(DBjob.pae_file)
+
+    if ('const_inp_file' in DBjob && DBjob.const_inp_file) {
+      filesToCopy.push({ file: DBjob.const_inp_file, label: 'const_inp_file' })
     }
-    // Copy all files to the results directory.
-    for (const file of filesToCopy) {
-      await execPromise(`cp ${path.join(outputDir, file)} .`, { cwd: resultsDir })
-      MQjob.log(`Gathered ${file}`)
+
+    for (const { file, label } of filesToCopy) {
+      if (file) {
+        await copyFiles({
+          source: path.join(outputDir, file),
+          destination: resultsDir,
+          filename: label,
+          MQjob,
+          isCritical: false
+        })
+      } else {
+        logger.warn(`Expected file for '${label}' is undefined.`)
+      }
     }
+
     // Only want to add N best PDBs equal to number_of_states N in logfile.
     const numEnsembles = await getNumEnsembles(logFile)
     logger.info(`prepareResults numEnsembles: ${numEnsembles}`)
@@ -863,15 +826,24 @@ const prepareResults = async (
       }
     }
 
-    await createReadmeFile(DBjob, numEnsembles, resultsDir)
-    MQjob.log(`wrote README.md file`)
+    // Create Job-specific README file.
+    try {
+      await createReadmeFile(DBjob, numEnsembles, resultsDir)
+      MQjob.log(`wrote README.md file`)
+    } catch (error) {
+      logger.error(`Error creating README file: ${error}`)
+    }
 
-    const uuidPrefix = DBjob.uuid.split('-')[0] // Split the UUID and get the first part
-    const archiveName = `results-${uuidPrefix}.tar.gz` // Construct the archive name
-
-    await execPromise(`tar czvf ${archiveName} results`, { cwd: outputDir })
-
-    MQjob.log(`created ${archiveName} file`)
+    // Create the results tar.gz file
+    try {
+      const uuidPrefix = DBjob.uuid.split('-')[0]
+      const archiveName = `results-${uuidPrefix}.tar.gz`
+      await execPromise(`tar czvf ${archiveName} results`, { cwd: outputDir })
+      MQjob.log(`created ${archiveName} file`)
+    } catch (error) {
+      logger.error(`Error creating tar file: ${error}`)
+      throw error // Critical error, rethrow or handle specifically if necessary
+    }
   } catch (error) {
     await handleError(error, MQjob, DBjob, 'prepareResults')
   }
