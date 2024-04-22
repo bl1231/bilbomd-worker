@@ -299,6 +299,8 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
         molecule_type = chain_data["type"]
         # our little hack to always use lower case file name for CHARMM
         suffix = "_uc" if chain_id.isupper() else ""
+        # input filename:
+        input_filename = os.path.basename(pdb_file_path)
         # Get the base filename without extension
         base_filename = os.path.splitext(os.path.basename(pdb_file_path))[0].lower()
         chain_filename = f"{chain_id.lower()}{suffix}_{base_filename}"
@@ -326,7 +328,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             outfile.write("* PURPOSE: Convert PDB file to CRD and PSF\n")
             outfile.write("* AUTHOR: Michal Hammel\n")
             outfile.write("* AUTHOR: Scott Classen\n")
-            outfile.write(f"* INPUT PDB: {pdb_file_path}\n")
+            outfile.write(f"* INPUT PDB: {input_filename}\n")
             outfile.write("*\n")
             outfile.write("\n")
             outfile.write("bomlev -2\n")
@@ -395,16 +397,14 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         "RNA": "setup warn first 5TER last 3TER",
         "CAR": "setup",
     }
-    # Get the base filename without extension
-    # base_filename = os.path.splitext(os.path.basename(pdb_file_path))[0].lower()
-    # chain_filename = f"{chain_id.lower()}{suffix}_{base_filename}"
-    # charmmgui_chain_id = f"{molecule_type}{chain_data['chainid']}"
+    # Get the input filename:
+    input_filename = os.path.basename(pdb_file_path)
     output_file = f"{output_dir}/pdb2crd_charmm_meld.inp"
     with open(output_file, mode="w", encoding="utf8") as outfile:
         outfile.write("* PURPOSE: Join All Individual Chain CRD Files\n")
         outfile.write("* AUTHOR: Michal Hammel\n")
         outfile.write("* AUTHOR: Scott Classen\n")
-        outfile.write(f"* ORIGINAL INPUT PDB: {pdb_file_path}\n")
+        outfile.write(f"* ORIGINAL INPUT PDB: {input_filename}\n")
         outfile.write("*\n")
         outfile.write("\n")
         outfile.write("DIMENS CHSIZE 5000000 MAXRES 3000000\n")
@@ -524,11 +524,11 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
         # commenting this out since we really shouldn't be renumbering peoples input PDB files
         # processed_lines = renumber_residues(processed_lines)
 
-        if processed_lines:  # Check if there are any lines after processing
-            first_line = processed_lines[0]
-            last_line = processed_lines[-1]
-            start_res_num = first_line[22:26]
-            end_res_num = last_line[22:26]
+        # if processed_lines:  # Check if there are any lines after processing
+        #     first_line = processed_lines[0]
+        #     last_line = processed_lines[-1]
+        #     start_res_num = first_line[22:26]
+        #     end_res_num = last_line[22:26]
 
         chain_filename = get_chain_filename(chain_id, pdb_file_path)
         # DEBUG ONLY
