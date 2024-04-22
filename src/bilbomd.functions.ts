@@ -743,6 +743,15 @@ const prepareResults = async (
       isCritical: false
     })
 
+    // Copy the DAT file for the minimized PDB
+    await copyFiles({
+      source: `${outputDir}/minimization_output.pdb.dat`,
+      destination: resultsDir,
+      filename: 'minimization_output.pdb.dat',
+      MQjob,
+      isCritical: false
+    })
+
     // Copy ensemble_size_*.txt files
     await copyFiles({
       source: `${multiFoxsDir}/ensembles_size*.txt`,
@@ -864,6 +873,7 @@ const createReadmeFile = async (
 - Original experimental SAXS data file: ${crdJob.data_file}
 - Original const.inp file: ${crdJob.const_inp_file}
 - Generated minimized PDB file: minimized_output.pdb
+- Generated minimized PDB DAT file: minimized_output.pdb.dat
 `
       break
     }
@@ -876,6 +886,7 @@ const createReadmeFile = async (
 - Original experimental SAXS data file: ${pdbJob.data_file}
 - Original const.inp file: ${pdbJob.const_inp_file}
 - Generated minimized PDB file: minimized_output.pdb
+- Generated minimized PDB DAT file: minimized_output.pdb.dat
 `
       break
     }
@@ -889,6 +900,7 @@ const createReadmeFile = async (
 - Original experimental SAXS data file: ${autoJob.data_file}
 - Generated const.inp file: ${autoJob.const_inp_file}
 - Generated minimized PDB file: minimized_output.pdb
+- Generated minimized PDB DAT file: minimized_output.pdb.dat
 `
       break
     }
