@@ -1,6 +1,6 @@
 # CHARMM instructions
 
-Manually copy a CHARMM source tar.gz file here.
+Before building docker image, you need to manually copy a CHARMM source tar.gz file here.
 
 - Head over to the [CHARMM website](https://academiccharmm.org/)
 - Register
