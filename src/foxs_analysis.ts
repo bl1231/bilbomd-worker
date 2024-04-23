@@ -22,8 +22,8 @@ const countDataPoints = async (filePath: string): Promise<number> => {
   }
   rl.close() // Explicitly close the readline interface
   logger.info(`countDataPoints original dat file has: ${count} points`)
-  logger.info(`countDataPoints adjusting counts to: ${count - 2} points`)
-  return count - 2
+  logger.info(`countDataPoints adjusting counts to: ${count - 1} points`)
+  return count - 1
 }
 
 const runSingleFoXS = async (DBjob: IJob | IBilboMDAutoJob): Promise<void> => {
