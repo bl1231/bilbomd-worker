@@ -195,6 +195,8 @@ template_dcd2pdb_file() {
     sed -i "s|{{inp_basename}}|${basename}|g" "${WORKDIR}/${inp_file}"
     sed -i "s|{{foxs_rg}}|${foxs_rg}|g" "${WORKDIR}/${inp_file}"
 
+    mkdir -p $WORKDIR/foxs/$foxs_run_dir
+
 }
 
 generate_dcd2pdb_input_files() {
@@ -215,13 +217,15 @@ generate_header_section() {
     cat << EOF > header
 #!/bin/bash
 #SBATCH --qos=regular
-#SBATCH --nodes=6
-#SBATCH --time=00:40:00
+#SBATCH --nodes=24
+#SBATCH --time=01:00:00
 #SBATCH --licenses=cfs,scratch
 #SBATCH --constraint=cpu
 #SBATCH --account=m4659
 #SBATCH --output=${WORKDIR}/slurm-%j.out
 #SBATCH --error=${WORKDIR}/slurm-%j.err
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=sclassen@lbl.gov
 
 EOF
 }
@@ -276,10 +280,7 @@ EOF
     echo "# Wait for all dynamics jobs to finish" >> dynamics
     echo "wait" >> dynamics
     echo "" >> dynamics
-    echo "# Copy results back to CFS" >> dynamics
-    echo "echo \"Copying results back to CFS...\"" >> dynamics
-    echo "cp -nR $WORKDIR/* $CFSDIR/" >> dynamics
-    echo "" >> dynamics
+
 }
 
 generate_dcd2pdb_section() {
@@ -291,6 +292,20 @@ EOF
         echo "echo \"Starting $inp\"" >> dcd2pdb
         echo "srun -n 1 podman-hpc run --rm --userns=keep-id --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.log -i $inp\" &" >> dcd2pdb
     done
+    echo "" >> dcd2pdb
+    echo "# Wait for all dcd2pdb jobs to finish" >> dcd2pdb
+    echo "wait" >> dcd2pdb
+    echo "" >> dcd2pdb
+}
+
+generate_end_section() {
+    cat << EOF > endsection
+# #####################################
+# Copy results back to CFS
+EOF
+    echo "echo \"Copying results back to CFS...\"" >> endsection
+    echo "cp -nR $WORKDIR/* $CFSDIR/" >> endsection
+    echo "" >> endsection
 }
 
 echo "---------------------------- START JOB PREP ----------------------------"
@@ -303,10 +318,12 @@ generate_pdb2crd_section
 generate_min_heat_section
 generate_dynamics_section
 generate_dcd2pdb_section
+generate_end_section
 
-cat header pdb2crd minheat dynamics dcd2pdb> bilbomd.slurm
 
-rm header pdb2crd minheat dynamics dcd2pdb
+cat header pdb2crd minheat dynamics dcd2pdb endsection > bilbomd.slurm
+
+rm header pdb2crd minheat dynamics dcd2pdb endsection
 echo "----------------------------- END JOB PREP -----------------------------"
 
-# sbatch bilbomd.slurm
+sbatch bilbomd.slurm
