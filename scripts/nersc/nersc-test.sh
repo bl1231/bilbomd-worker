@@ -194,8 +194,10 @@ template_dcd2pdb_file() {
     sed -i "s|{{run}}|${foxs_run_dir}|g" "${WORKDIR}/${inp_file}"
     sed -i "s|{{inp_basename}}|${basename}|g" "${WORKDIR}/${inp_file}"
     sed -i "s|{{foxs_rg}}|${foxs_rg}|g" "${WORKDIR}/${inp_file}"
-
+    # make all teh FoXS output directories where we will extrac PDBs from the DCD
     mkdir -p $WORKDIR/foxs/$foxs_run_dir
+    # Since CHARMM is always appending to this file we need to create it first.
+    touch $WORKDIR/${foxs_rg}
 
 }
 
