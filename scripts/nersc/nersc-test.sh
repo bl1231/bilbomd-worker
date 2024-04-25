@@ -29,13 +29,17 @@ export WORKER=bilbomd/bilbomd-worker:0.0.1
 pdb_file='buy1.pdb'
 saxs_dat=''
 constinp="const.inp"
+conf_sample=4
 
 # other globals
 g_md_inp_files=""
 g_pdb2crd_inp_files=""
+g_rgs=""
+g_dcd2pdb_inp_files=""
 charmm_topo_dir="/app/scripts/bilbomd_top_par_files.str"
 in_psf_file="bilbomd_pdb2crd.psf"
 in_crd_file="bilbomd_pdb2crd.crd"
+foxs_rg="foxs_rg.out"
 
 
 copyInputData() {
@@ -106,7 +110,7 @@ processTemplateFiles() {
     sed -i "s|{{constinp}}|$constinp|g" $WORKDIR/heat.inp
 }
 
-initializeJob() {
+initialize_job() {
     echo "Initialize Job"
     createWorkingDirectory
     copyInputData
@@ -118,7 +122,7 @@ generateMDInputFile() {
     local inp_file="$1"
     local inp_basename="$2"
     local rg_value="$3"
-    local conf_sample=4
+
     local timestep=0.001
 
     # Copy the template file to the new input file
@@ -152,7 +156,7 @@ generatePdb2CrdInputFile() {
     fi
 }
 
-calculateRgValues() {
+calculate_rg_values() {
     echo "Calculate Rg values"
     local rg_min=37
     local rg_max=69
@@ -168,6 +172,7 @@ calculateRgValues() {
         local inp_basename="${charmm_template}_rg${rg}"
         generateMDInputFile "$charmm_inp_file" "$inp_basename" "$rg"
         g_md_inp_files+="${charmm_inp_file} "
+        g_rgs+="${rg} "
     done
 
     # Trim the trailing space
@@ -175,8 +180,34 @@ calculateRgValues() {
     # echo "MD input files: $g_md_inp_files"
 }
 
-generateDCD2PDBInputFiles() {
-    echo "make em"
+template_dcd2pdb_file() {
+    local inp_file="$1"
+    local basename="$2"
+    local rg="$3"
+    local run="$4"
+    local foxs_run_dir="rg${rg}_run${run}"
+    local in_dcd="dynamics_rg${rg}_run${run}.dcd"
+    cp "${WORKDIR}/dcd2pdb.inp" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{charmm_topo_dir}}|${charmm_topo_dir}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{in_psf_file}}|${in_psf_file}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{in_dcd}}|${in_dcd}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{run}}|${foxs_run_dir}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{inp_basename}}|${basename}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{foxs_rg}}|${foxs_rg}|g" "${WORKDIR}/${inp_file}"
+
+}
+
+generate_dcd2pdb_input_files() {
+    echo "----------"
+    for rg in $g_rgs; do
+        for ((run=1;run<=${conf_sample};run+=1));do
+            dcd2pdb_inp_filename="dcd2pdb_rg${rg}_run${run}.inp"
+            dcd2pdb_inp_filebasename="${dcd2pdb_inp_filename%.inp}"
+            # echo "fn: ${dcd2pdb_inp_filename} bn: ${dcd2pdb_inp_filebasename} rg: ${rg} run: ${run}" 
+            template_dcd2pdb_file "$dcd2pdb_inp_filename" "$dcd2pdb_inp_filebasename" "$rg" "$run"
+            g_dcd2pdb_inp_files+="${dcd2pdb_inp_filename} "
+        done
+    done
 
 }
 
@@ -248,20 +279,34 @@ EOF
     echo "# Copy results back to CFS" >> dynamics
     echo "echo \"Copying results back to CFS...\"" >> dynamics
     echo "cp -nR $WORKDIR/* $CFSDIR/" >> dynamics
+    echo "" >> dynamics
+}
+
+generate_dcd2pdb_section() {
+    cat << EOF > dcd2pdb
+# #####################################
+# CHARMM Extract PDB from DCD Trajectories
+EOF
+    for inp in $g_dcd2pdb_inp_files; do
+        echo "echo \"Starting $inp\"" >> dcd2pdb
+        echo "srun -n 1 podman-hpc run --rm --userns=keep-id --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.log -i $inp\" &" >> dcd2pdb
+    done
 }
 
 echo "---------------------------- START JOB PREP ----------------------------"
 echo "----------------- ${UUID} -----------------"
-initializeJob
-calculateRgValues
+initialize_job
+calculate_rg_values
+generate_dcd2pdb_input_files
 generate_header_section
 generate_pdb2crd_section
 generate_min_heat_section
 generate_dynamics_section
+generate_dcd2pdb_section
 
-cat header pdb2crd minheat dynamics > bilbomd.slurm
+cat header pdb2crd minheat dynamics dcd2pdb> bilbomd.slurm
 
-rm header pdb2crd minheat dynamics
+rm header pdb2crd minheat dynamics dcd2pdb
 echo "----------------------------- END JOB PREP -----------------------------"
 
 # sbatch bilbomd.slurm
