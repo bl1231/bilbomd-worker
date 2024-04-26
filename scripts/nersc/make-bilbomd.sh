@@ -390,21 +390,30 @@ generate_foxs_scripts() {
             if [ -d "$dir_path" ]; then
                 local foxs_script="$WORKDIR/run_foxs_rg${rg}_run${run}.sh"
                 # echo "foxs_script: ${foxs_script}"
-                rm $foxs_script
-                touch $foxs_script
+                > $foxs_script
                 echo "#!/bin/bash" >> $foxs_script
                 inner_dir_path="/bilbomd/work/foxs/rg${rg}_run${run}"
                 # echo "inner_dir_path: ${inner_dir_path}"
                 echo "echo \"Processing directory: $inner_dir_path\"" >> $foxs_script
                 echo "cd $inner_dir_path" >> $foxs_script
+
+                # Define log files
+                echo "foxs_log=\"$inner_dir_path/foxs.log\"" >> $foxs_script
+                echo "foxs_error_log=\"$inner_dir_path/foxs_error.log\"" >> $foxs_script
+
+                # Ensure log files are empty initially or create them if they don't exist
+                echo "> \"\$foxs_log\"" >> $foxs_script
+                echo "> \"\$foxs_error_log\"" >> $foxs_script
+
                 # Check directory exists
                 echo "if [ -d \"$inner_dir_path\" ]; then" >> $foxs_script
+
                 # Loop through each PDB file
                 echo "  for pdbfile in *.pdb; do" >> $foxs_script
                 echo "    if [ -s \"\$pdbfile\" ]; then" >> $foxs_script
-                echo "      echo \"Running foxs on \$pdbfile\"" >> $foxs_script
+                echo "      echo \"Running FoXS on \$pdbfile\"" >> $foxs_script
                 # Run foxs on the file
-                echo "      foxs -p \"\$pdbfile\" && echo \"$inner_dir_path/\${pdbfile}.dat\" >> $inner_dir_path/foxs_rg${rg}_run${run}_dat_files.txt" >> $foxs_script
+                echo "      foxs -p \"\$pdbfile\" >> \"\$foxs_log\" 2>> \"\$foxs_error_log\" && echo \"$inner_dir_path/\${pdbfile}.dat\" >> $inner_dir_path/foxs_rg${rg}_run${run}_dat_files.txt" >> $foxs_script
                 echo "    else" >> $foxs_script
                 echo "      echo \"File is empty or missing: \$pdbfile\"" >> $foxs_script
                 echo "    fi" >> $foxs_script
@@ -425,11 +434,9 @@ generate_multifoxs_script() {
     local multifox_dir=$WORKDIR/multifoxs
     mkdir -p $multifox_dir
     local foxs_dat_files=$multifox_dir/foxs_dat_files.txt
-    rm $foxs_dat_files
-    touch $foxs_dat_files
+    > $foxs_dat_files
     local multifoxs_script="$WORKDIR/run_multifoxs.sh"
-    rm $multifoxs_script
-    touch $multifoxs_script
+    > $multifoxs_script
     chmod u+x $multifoxs_script
     # Catenate all /bilbomd/work/foxs/rg${rg}_run${run}/ files
     # /bilbomd/work/foxs/rg22_run1/foxs_rg22_run1_dat_files.txt
@@ -442,7 +449,7 @@ generate_multifoxs_script() {
             echo "cat ${dir_path}/foxs_rg${rg}_run${run}_dat_files.txt >> /bilbomd/work/multifoxs/foxs_dat_files.txt" >> $multifoxs_script
         done
     done
-    echo "cd /bilbomd/work/multifoxs && multifoxs -o ../$saxs_dat foxs_dat_files.txt" >> $multifoxs_script
+    echo "cd /bilbomd/work/multifoxs && multi_foxs -o ../$saxs_dat foxs_dat_files.txt" >> $multifoxs_script
 }
 
 generate_multifoxs_command() {
@@ -476,7 +483,7 @@ assemble_run_bilbomd_script() {
 }
 
 cleanup() {
-    rm header pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection endsection
+    rm header pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection
 }
 
 echo "---------------------------- START JOB PREP ----------------------------"
@@ -510,9 +517,9 @@ generate_bilbomd_slurm
 # 
 # generate_end_section
 # assemble_slurm_batch_file
-# cleanup
+cleanup
 
 echo "----------------------------- END JOB PREP -----------------------------"
 
 # Submit job
-sbatch bilbomd.slurm
+# sbatch bilbomd.slurm
