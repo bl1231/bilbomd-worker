@@ -127,4 +127,5 @@ RUN npm ci
 COPY --chown=bilbo:bilbomd . .
 
 # Fire that bad boy up.
-CMD ["npm", "start"]
+# Not needed for NERSC
+# CMD ["npm", "start"]
