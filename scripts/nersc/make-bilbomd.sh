@@ -28,17 +28,17 @@ UUID=$1
 
 # SBATCH STUFF
 project="m4659"
-queue="debug"
+queue="regular"
 constraint="gpu"
 nodes="1"
-time="00:20:00"
-mail-type="end,fail"
-mail-user="sclassen@lbl.gov"
+time="00:40:00"
+mailtype="end,fail"
+mailuser="sclassen@lbl.gov"
 
-export CFSDIR=${CFS}/${project}/bilbomd-uploads/${UUID}
-export WORKDIR=${PSCRATCH}/bilbmod/${UUID}
-export TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
-export WORKER=bilbomd/bilbomd-worker:0.0.2
+CFSDIR=${CFS}/${project}/bilbomd-uploads/${UUID}
+WORKDIR=${PSCRATCH}/bilbmod/${UUID}
+TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
+WORKER=bilbomd/bilbomd-worker:0.0.2
 
 
 # other globals
@@ -279,8 +279,8 @@ generate_bilbomd_slurm() {
 #SBATCH --account=${project}
 #SBATCH --output=${WORKDIR}/slurm-%j.out
 #SBATCH --error=${WORKDIR}/slurm-%j.err
-#SBATCH --mail-type=${mail-type}
-#SBATCH --mail-user=${mail-user}
+#SBATCH --mail-type=${mailtype}
+#SBATCH --mail-user=${mailuser}
 
 srun --job-name bilbomd podman-hpc run --rm --userns=keep-id --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "cd /bilbomd/work/ && ./run-bilbomd.sh"
 EOF
