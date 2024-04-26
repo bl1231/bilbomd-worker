@@ -411,7 +411,7 @@ generate_foxs_scripts() {
                 # Loop through each PDB file
                 echo "  for pdbfile in *.pdb; do" >> $foxs_script
                 echo "    if [ -s \"\$pdbfile\" ]; then" >> $foxs_script
-                echo "      echo \"Running FoXS on \$pdbfile\"" >> $foxs_script
+                # echo "      echo \"Running FoXS on \$pdbfile\"" >> $foxs_script
                 # Run foxs on the file
                 echo "      foxs -p \"\$pdbfile\" >> \"\$foxs_log\" 2>> \"\$foxs_error_log\" && echo \"$inner_dir_path/\${pdbfile}.dat\" >> $inner_dir_path/foxs_rg${rg}_run${run}_dat_files.txt" >> $foxs_script
                 echo "    else" >> $foxs_script
@@ -438,6 +438,7 @@ generate_multifoxs_script() {
     local multifoxs_script="$WORKDIR/run_multifoxs.sh"
     > $multifoxs_script
     chmod u+x $multifoxs_script
+
     # Catenate all /bilbomd/work/foxs/rg${rg}_run${run}/ files
     # /bilbomd/work/foxs/rg22_run1/foxs_rg22_run1_dat_files.txt
     echo "#!/bin/bash" >> $multifoxs_script
@@ -449,7 +450,7 @@ generate_multifoxs_script() {
             echo "cat ${dir_path}/foxs_rg${rg}_run${run}_dat_files.txt >> /bilbomd/work/multifoxs/foxs_dat_files.txt" >> $multifoxs_script
         done
     done
-    echo "cd /bilbomd/work/multifoxs && multi_foxs -o ../$saxs_dat foxs_dat_files.txt" >> $multifoxs_script
+    echo "cd /bilbomd/work/multifoxs && multi_foxs -o ../$saxs_dat foxs_dat_files.txt &> multi_foxs.log" >> $multifoxs_script
 }
 
 generate_multifoxs_command() {
@@ -509,14 +510,9 @@ generate_multifoxs_script
 assemble_run_bilbomd_script
 #
 generate_bilbomd_slurm
-# 
-# 
-# 
-# 
-# 
-# 
+
 # generate_end_section
-# assemble_slurm_batch_file
+
 cleanup
 
 echo "----------------------------- END JOB PREP -----------------------------"
