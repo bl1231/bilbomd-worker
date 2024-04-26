@@ -38,7 +38,7 @@ mail-user="sclassen@lbl.gov"
 export CFSDIR=${CFS}/${project}/bilbomd-uploads/${UUID}
 export WORKDIR=${PSCRATCH}/bilbmod/${UUID}
 export TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
-export WORKER=bilbomd/bilbomd-worker:0.0.1
+export WORKER=bilbomd/bilbomd-worker:0.0.2
 
 
 # other globals
