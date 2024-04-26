@@ -25,12 +25,15 @@ UUID=$1
 # UUID="52e8f8ca-5188-4714-a29d-dfcf9e311580"
 # pro_dna
 # UUID="c590f775-e276-4a19-a5a5-7dc2f7d40026"
+
+# SBATCH STUFF
 project="m4659"
 queue="debug"
-nodes=1
-time="00:30:00"
-# 2 CPU x 64 cores x 2 hyperthreads
-CORES_PER_NODE=256
+constraint="gpu"
+nodes="1"
+time="00:20:00"
+mail-type="end,fail"
+mail-user="sclassen@lbl.gov"
 
 export CFSDIR=${CFS}/${project}/bilbomd-uploads/${UUID}
 export WORKDIR=${PSCRATCH}/bilbmod/${UUID}
@@ -63,8 +66,10 @@ copy_input_data() {
 create_working_dir() {
     mkdir -p $WORKDIR
     if [ $? -eq 0 ]; then
-        echo "Perlmutter Scratch Working Directory created successfully:"
+        echo "Perlmutter Scratch Working Directory created successfully"
+        echo "---------------"
         echo "$WORKDIR"
+        echo "---------------"
     else
         echo "Failed to create directory: $WORKDIR" >&2
         exit 1
@@ -133,6 +138,14 @@ template_min_heat_files() {
 
 initialize_job() {
     echo "Initialize Job"
+    echo "---------------"
+    echo "queue: $queue"
+    echo "project: $project"
+    echo "constraint: $constraint"
+    echo "nodes: $nodes"
+    echo "time: $time"
+    echo "---------------"
+    echo ""
     create_working_dir
     copy_input_data
     read_job_params
@@ -262,12 +275,12 @@ generate_bilbomd_slurm() {
 #SBATCH --nodes=${nodes}
 #SBATCH --time=${time}
 #SBATCH --licenses=cfs,scratch
-#SBATCH --constraint=cpu
-#SBATCH --account=m4659
+#SBATCH --constraint=${constraint}
+#SBATCH --account=${project}
 #SBATCH --output=${WORKDIR}/slurm-%j.out
 #SBATCH --error=${WORKDIR}/slurm-%j.err
-#SBATCH --mail-type=END,FAIL
-#SBATCH --mail-user=sclassen@lbl.gov
+#SBATCH --mail-type=${mail-type}
+#SBATCH --mail-user=${mail-user}
 
 srun --job-name bilbomd podman-hpc run --rm --userns=keep-id --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "cd /bilbomd/work/ && ./run-bilbomd.sh"
 EOF
@@ -285,10 +298,6 @@ generate_pdb2crd_commands() {
 # ########################################
 # Convert PDB to CRD/PSF
 EOF
-    local num_pdb2crd_files=${#g_pdb2crd_inp_files[@]}
-    echo "PDB2CRD inp files: ${num_pdb2crd_files}"
-    local small_n=$((CORES_PER_NODE / num_pdb2crd_files))
-    echo "PDB2CRD Small N: ${small_n}"
     for inp in "${g_pdb2crd_inp_files[@]}"; do
         echo "echo \"Starting $inp\" &" >> pdb2crd
         local command="cd /bilbomd/work && charmm -o ${inp%.inp}.log -i ${inp} &"
@@ -468,23 +477,24 @@ EOF
     echo "" >> multifoxssection
 }
 
-# generate_end_section() {
-#     cat << EOF > endsection
-# # ########################################
-# # Copy results back to CFS
-# EOF
-#     echo "echo \"Copying results back to CFS...\"" >> endsection
-#     echo "cp -nR $WORKDIR/* $CFSDIR/" >> endsection
-#     echo "" >> endsection
-# }
+generate_copy_commands() {
+    cat << EOF > endsection
+# ########################################
+# Copy results back to CFS
+EOF
+    echo "echo \"Copying results back to CFS...\"" >> endsection
+    echo "#cp -nR $WORKDIR/* $CFSDIR/" >> endsection
+    echo "" >> endsection
+    echo "echo \"DONE ${UUID}\"" >> endsection
+}
 
 assemble_run_bilbomd_script() {
-    cat header pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection > $WORKDIR/run-bilbomd.sh
+    cat header pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection endsection> $WORKDIR/run-bilbomd.sh
     chmod u+x $WORKDIR/run-bilbomd.sh
 }
 
 cleanup() {
-    rm header pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection
+    rm header pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection endsection
 }
 
 echo "---------------------------- START JOB PREP ----------------------------"
@@ -506,13 +516,12 @@ generate_foxs_commands
 generate_foxs_scripts
 generate_multifoxs_command
 generate_multifoxs_script
+generate_copy_commands
 #
 assemble_run_bilbomd_script
 #
 generate_bilbomd_slurm
-
-# generate_end_section
-
+#
 cleanup
 
 echo "----------------------------- END JOB PREP -----------------------------"
