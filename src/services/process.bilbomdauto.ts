@@ -1,7 +1,7 @@
 import { Job as BullMQJob } from 'bullmq'
-import { BilboMdAutoJob, IBilboMDAutoJob } from './model/Job'
-import { User } from './model/User'
-import { sendJobCompleteEmail } from './mailer'
+import { BilboMdAutoJob, IBilboMDAutoJob } from '../models/Job'
+import { User } from '../models/User'
+import { sendJobCompleteEmail } from '../helpers/mailer'
 import {
   runMinimize,
   runHeat,
@@ -13,8 +13,8 @@ import {
   runAutoRg
 } from './bilbomd.functions'
 import { runSingleFoXS } from './foxs_analysis'
-import { logger } from './loggers'
-import { config } from './config/config'
+import { logger } from '../helpers/loggers'
+import { config } from '../config/config'
 
 const bilbomdUrl: string = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
 

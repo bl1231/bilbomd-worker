@@ -1,12 +1,12 @@
 import * as dotenv from 'dotenv'
-import { connectDB } from './db'
+import { connectDB } from './helpers/db'
 import { Job, Worker, WorkerOptions } from 'bullmq'
-import { WorkerJob } from 'bullmq.jobs'
-import { processBilboMDCRDJob } from './process.bilbomdcrd'
-import { processBilboMDPDBJob } from './process.bilbomdpdb'
-import { processBilboMDAutoJob } from './process.bilbomdauto'
-import { processPdb2CrdJob } from './process.pdb2crd'
-import { logger } from './loggers'
+import { WorkerJob } from 'types/jobtypes'
+import { processBilboMDCRDJob } from './services/process.bilbomdcrd'
+import { processBilboMDPDBJob } from './services/process.bilbomdpdb'
+import { processBilboMDAutoJob } from './services/process.bilbomdauto'
+import { processPdb2CrdJob } from './services/process.pdb2crd'
+import { logger } from './helpers/loggers'
 import { config } from 'config/config'
 
 dotenv.config()
@@ -17,8 +17,8 @@ const workerHandler = async (job: Job<WorkerJob>) => {
   logger.info(`workerHandler: ${JSON.stringify(job.data)}`)
   switch (job.data.type) {
     case 'pdb': {
-      if (config.runonOnNERSC) {
-        logger.info(`Start BilboMD PDB job: ${job.name}`)
+      if (config.runOnNERSC) {
+        logger.info(`Start BilboMD PDB job on NERSC: ${job.name}`)
         // await processBilboMDPDBJobAtNERSC(job)
         logger.info(`Finish job: ${job.name}`)
         return
