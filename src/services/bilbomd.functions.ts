@@ -14,7 +14,7 @@ import { exec } from 'node:child_process'
 import { createPdb2CrdCharmmInpFiles, spawnPdb2CrdCharmm } from './process.pdb2crd'
 
 const execPromise = promisify(exec)
-const TEMPLATES = path.resolve(__dirname, './templates/bilbomd')
+const TEMPLATES = path.resolve(__dirname, '../templates/bilbomd')
 
 const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
 const FOXS_BIN = process.env.FOXS ?? '/usr/bin/foxs'

@@ -7,7 +7,7 @@ import { processBilboMDPDBJob } from './services/process.bilbomdpdb'
 import { processBilboMDAutoJob } from './services/process.bilbomdauto'
 import { processPdb2CrdJob } from './services/process.pdb2crd'
 import { logger } from './helpers/loggers'
-import { config } from 'config/config'
+import { config } from './config/config'
 
 dotenv.config()
 
@@ -17,6 +17,7 @@ const workerHandler = async (job: Job<WorkerJob>) => {
   logger.info(`workerHandler: ${JSON.stringify(job.data)}`)
   switch (job.data.type) {
     case 'pdb': {
+      logger.info(`runOnNERSC is ${config.runOnNERSC}`)
       if (config.runOnNERSC) {
         logger.info(`Start BilboMD PDB job on NERSC: ${job.name}`)
         // await processBilboMDPDBJobAtNERSC(job)
