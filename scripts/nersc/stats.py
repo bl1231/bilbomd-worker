@@ -1,6 +1,8 @@
 import pandas as pd
 from datetime import datetime
-
+#
+# sacct --format=JobID,QOS,Submit,Start,End > stats.txt
+#
 def parse_time(time_str):
     return datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S')
 
