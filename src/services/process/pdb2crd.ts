@@ -1,6 +1,6 @@
 import { Job as BullMQJob } from 'bullmq'
-import { Job } from '../models/Job'
-import { logger } from '../helpers/loggers'
+import { Job } from '../../models/Job'
+import { logger } from '../../helpers/loggers'
 import fs from 'fs-extra'
 import path from 'path'
 import { spawn } from 'node:child_process'
