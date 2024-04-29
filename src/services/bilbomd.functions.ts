@@ -11,7 +11,7 @@ import { User } from '../models/User'
 import { IJob, IBilboMDPDBJob, IBilboMDCRDJob, IBilboMDAutoJob } from '../models/Job'
 import { sendJobCompleteEmail } from '../helpers/mailer'
 import { exec } from 'node:child_process'
-import { createPdb2CrdCharmmInpFiles, spawnPdb2CrdCharmm } from './process/pdb2crd'
+import { createPdb2CrdCharmmInpFiles, spawnPdb2CrdCharmm } from './process/pdb-to-crd'
 
 const execPromise = promisify(exec)
 const TEMPLATES = path.resolve(__dirname, '../templates/bilbomd')

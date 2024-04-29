@@ -10,7 +10,7 @@ import {
   prepareResults,
   cleanupJob
 } from '../bilbomd.functions'
-import { runSingleFoXS } from '../functions/foxs_analysis'
+import { runSingleFoXS } from '../functions/foxs-analysis'
 
 const processBilboMDJobTest = async (MQjob: BullMQJob) => {
   const foundJob = await BilboMdCRDJob.findOne({ _id: MQjob.data.jobid })

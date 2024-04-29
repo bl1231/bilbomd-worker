@@ -12,7 +12,7 @@ import {
   runPaeToConstInp,
   runAutoRg
 } from '../bilbomd.functions'
-import { runSingleFoXS } from '../functions/foxs_analysis'
+import { runSingleFoXS } from '../functions/foxs-analysis'
 import { logger } from '../../helpers/loggers'
 import { config } from '../../config/config'
 
