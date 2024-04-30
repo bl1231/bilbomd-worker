@@ -28,17 +28,26 @@ UUID=$1
 
 # SBATCH STUFF
 project="m4659"
-queue="regular"
+queue="debug"
 constraint="gpu"
 nodes="1"
-time="00:40:00"
+time="00:30:00"
 mailtype="end,fail"
 mailuser="sclassen@lbl.gov"
+
+if [ "$constraint" = "gpu" ]; then
+    NUM_CORES=128
+elif [ "$constraint" = "cpu" ]; then
+    NUM_CORES=256
+else
+    echo "Unknown constraint: $constraint"
+    exit 1  # Exit the script if the constraint is not recognized
+fi
 
 CFSDIR=${CFS}/${project}/bilbomd-uploads/${UUID}
 WORKDIR=${PSCRATCH}/bilbmod/${UUID}
 TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
-WORKER=bilbomd/bilbomd-worker:0.0.2
+WORKER=bilbomd/bilbomd-worker:0.0.3
 
 
 # other globals
@@ -320,12 +329,12 @@ generate_min_heat_commands(){
 # ########################################
 # CHARMM Minimize
 echo "Running CHARMM Minimize..."
-cd /bilbomd/work/ && charmm -o minimize.log -i minimize.inp
+cd /bilbomd/work/ && mpirun -np $((NUM_CORES/2)) charmm -o minimize.log -i minimize.inp
 
 # ########################################
 # CHARMM Heat
 echo "Running CHARMM Heat..."
-cd /bilbomd/work/ && charmm -o heat.log -i heat.inp
+cd /bilbomd/work/ && mpirun -np $((NUM_CORES/2)) charmm -o heat.log -i heat.inp
 
 EOF
 }
@@ -335,10 +344,11 @@ generate_dynamics_commands() {
 # ########################################
 # CHARMM Molecular Dynamics
 EOF
+    local num_inp_files=${#g_md_inp_files[@]}
     echo "echo \"Running CHARMM Molecular Dynamics...\"" >> dynamics
     for inp in "${g_md_inp_files[@]}"; do
         echo "echo \"Starting $inp\"" >> dynamics
-        local command="cd /bilbomd/work && charmm -o ${inp%.inp}.log -i ${inp} &"
+        local command="cd /bilbomd/work && mpirun -np $((NUM_CORES / num_inp_files - 1 )) charmm -o ${inp%.inp}.log -i ${inp} &"
         echo $command >> dynamics
     done
     echo "" >> dynamics
@@ -353,10 +363,11 @@ generate_dcd2pdb_commands() {
 # ########################################
 # CHARMM Extract PDB from DCD Trajectories
 EOF
+    local num_inp_files=${#g_dcd2pdb_inp_files[@]}
     echo "echo \"Running CHARMM Extract PDB from DCD Trajectories...\"" >> dcd2pdb
     for inp in "${g_dcd2pdb_inp_files[@]}"; do
         echo "echo \"Starting $inp\"" >> dcd2pdb
-        local command="cd /bilbomd/work && charmm -o ${inp%.inp}.log -i ${inp} &"
+        local command="cd /bilbomd/work && mpirun -np $((NUM_CORES / num_inp_files - 1 )) charmm -o ${inp%.inp}.log -i ${inp} &"
         echo $command >> dcd2pdb
     done
     echo "" >> dcd2pdb
@@ -459,7 +470,7 @@ generate_multifoxs_script() {
             echo "cat ${dir_path}/foxs_rg${rg}_run${run}_dat_files.txt >> /bilbomd/work/multifoxs/foxs_dat_files.txt" >> $multifoxs_script
         done
     done
-    echo "cd /bilbomd/work/multifoxs && multi_foxs -o ../$saxs_dat foxs_dat_files.txt &> multi_foxs.log" >> $multifoxs_script
+    echo "cd /bilbomd/work/multifoxs && mpirun -np 8 multi_foxs -o ../$saxs_dat foxs_dat_files.txt &> multi_foxs.log" >> $multifoxs_script
 }
 
 generate_multifoxs_command() {
