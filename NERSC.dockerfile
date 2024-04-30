@@ -2,7 +2,7 @@
 # Build stage 1 - Install build tools
 FROM ubuntu:22.04 AS builder
 RUN apt-get update && \
-    apt-get install -y cmake gcc gfortran g++
+    apt-get install -y cmake gcc gfortran g++ openmpi-bin libopenmpi-dev
 
 # -----------------------------------------------------------------------------
 # Build stage 2 - Configure CHARMM
