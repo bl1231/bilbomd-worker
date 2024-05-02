@@ -1,9 +1,9 @@
 import { Job as BullMQJob } from 'bullmq'
-import { BilboMdPDBJob } from 'models/Job'
-import { logger } from 'helpers/loggers'
-import { ensureValidToken } from 'services/functions/nersc-sf-api-tokens'
+import { BilboMdPDBJob } from '../../models/Job'
+import { logger } from '../../helpers/loggers'
+import { ensureValidToken } from '../../services/functions/nersc-sf-api-tokens'
 import { initializeJob, prepareResults, cleanupJob } from '../bilbomd.functions'
-import { submitJobToNersc, monitorJobAtNERSC } from 'services/functions/nersc-jobs'
+import { submitJobToNersc, monitorJobAtNERSC } from '../../services/functions/nersc-jobs'
 
 const processBilboMDJobNerscTest = async (MQjob: BullMQJob) => {
   const foundJob = await BilboMdPDBJob.findOne({ _id: MQjob.data.jobid })

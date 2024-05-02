@@ -1,6 +1,6 @@
 import axios from 'axios'
 import qs from 'qs'
-import { logger } from 'helpers/loggers'
+import { logger } from '../../helpers/loggers'
 
 const submitJobToNersc = async (token: string, UUID: string) => {
   const url = 'https://api.nersc.gov/api/v1.2/compute/jobs/perlmutter'

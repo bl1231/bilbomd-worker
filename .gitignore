@@ -114,3 +114,4 @@ build
 test/
 test-data/
 *.slurm
+openmpi/

@@ -1,3 +1,5 @@
+import { Job as BullMQJob } from 'bullmq'
+
 type Params = {
   out_dir: string
 }

@@ -2,7 +2,19 @@
 # Build stage 1 - Install build tools
 FROM ubuntu:22.04 AS builder
 RUN apt-get update && \
-    apt-get install -y cmake gcc gfortran g++
+    apt-get install -y cmake gcc gfortran g++ openmpi-bin libopenmpi-dev
+
+# -----------------------------------------------------------------------------
+# Build stage 1.2 - OpenMPI
+# FROM builder AS build_openmpi
+# COPY ./openmpi/openmpi-5.0.3.tar.gz /usr/local/src/
+# RUN tar -zxvf /usr/local/src/openmpi-5.0.3.tar.gz -C /usr/local/src && \
+#     rm /usr/local/src/openmpi-5.0.3.tar.gz
+
+# WORKDIR /usr/local/src/openmpi-5.0.3
+# RUN ./configure --with-slurm
+# RUN make -j8 all 2>&1 | tee make.out
+# RUN make install 2>&1 | tee install.out
 
 # -----------------------------------------------------------------------------
 # Build stage 2 - Configure CHARMM
@@ -99,7 +111,7 @@ RUN apt-get update && \
     echo "deb https://integrativemodeling.org/latest/download jammy/" >> /etc/apt/sources.list && \
     wget -O /etc/apt/trusted.gpg.d/salilab.asc https://salilab.org/~ben/pubkey256.asc && \
     apt-get update && \
-    apt-get install -y imp
+    apt-get install -y imp openmpi-bin libopenmpi-dev
 
 
 RUN mkdir -p /app/node_modules

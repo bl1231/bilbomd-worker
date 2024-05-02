@@ -88,13 +88,13 @@ create_working_dir() {
 read_job_params() {
     # Read parameters from JSON file
     pdb_file=$(jq -r '.pdb_file' $WORKDIR/params.json)
-    saxs_dat=$(jq -r '.saxs_dat' $WORKDIR/params.json)
+    saxs_data=$(jq -r '.saxs_data' $WORKDIR/params.json)
     constinp=$(jq -r '.constinp' $WORKDIR/params.json)
     conf_sample=$(jq -r '.conf_sample' $WORKDIR/params.json)
 
     # Echo the variables to verify they're read correctly
     echo "PDB file: $pdb_file"
-    echo "SAXS data: $saxs_dat"
+    echo "SAXS data: $saxs_data"
     echo "Constraint input: $constinp"
     echo "Confidence sample: $conf_sample"
 }
@@ -205,7 +205,7 @@ run_autorg(){
     # runs autoprg.py
     # which will return an onject with this shape
     # {"rg": 46, "rg_min": 37, "rg_max": 69}
-    local command="cd /bilbomd/work/ && python /app/scripts/autorg.py $saxs_dat > autorg_output.txt"
+    local command="cd /bilbomd/work/ && python /app/scripts/autorg.py $saxs_data > autorg_output.txt"
     podman-hpc run --rm --userns=keep-id --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command"
     if [[ -f "${WORKDIR}/autorg_output.txt" ]]; then
         local output=$(cat "${WORKDIR}/autorg_output.txt")
@@ -470,7 +470,7 @@ generate_multifoxs_script() {
             echo "cat ${dir_path}/foxs_rg${rg}_run${run}_dat_files.txt >> /bilbomd/work/multifoxs/foxs_dat_files.txt" >> $multifoxs_script
         done
     done
-    echo "cd /bilbomd/work/multifoxs && mpirun -np 8 multi_foxs -o ../$saxs_dat foxs_dat_files.txt &> multi_foxs.log" >> $multifoxs_script
+    echo "cd /bilbomd/work/multifoxs && mpirun -np 8 multi_foxs -o ../$saxs_data foxs_dat_files.txt &> multi_foxs.log" >> $multifoxs_script
 }
 
 generate_multifoxs_command() {
