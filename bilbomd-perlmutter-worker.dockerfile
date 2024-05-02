@@ -20,7 +20,7 @@ WORKDIR /usr/local/src/charmm
 RUN ./configure
 
 # Build CHARMM
-RUN make -j8 -C build/cmake install
+RUN make -j16 -C build/cmake install
 
 # -----------------------------------------------------------------------------
 # Build stage 3 - Copy CHARMM binary
@@ -29,7 +29,7 @@ FROM build_charmm AS bilbomd-worker-step1
 COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 
 # -----------------------------------------------------------------------------
-# Build stage 4 - Install NodeJS
+# Build stage 4 - Install NodeJS v20
 FROM bilbomd-worker-step1 AS bilbomd-worker-step2
 ARG NODE_MAJOR=20
 RUN apt-get update && \
@@ -89,10 +89,8 @@ RUN python setup.py build_ext --inplace && \
     pip install .
 
 # -----------------------------------------------------------------------------
-# Build stage 7 - IMP & worker app
-FROM bilbomd-worker-step4 AS bilbomd-worker
-ARG USER_ID=1001
-ARG GROUP_ID=1001
+# Build stage 7 - IMP
+FROM bilbomd-worker-step4 AS bilbomd-worker-step5
 
 RUN apt-get update && \
     apt-get install -y wget && \
@@ -101,31 +99,15 @@ RUN apt-get update && \
     apt-get update && \
     apt-get install -y imp
 
-
-RUN mkdir -p /app/node_modules
+# not sure this is needed...
 RUN mkdir -p /bilbomd/uploads
-# VOLUME [ "/bilbomd/uploads" ]
+
+# -----------------------------------------------------------------------------
+# Build stage 8 - worker app
+# need the python script files... I think that's all we need?
+FROM bilbomd-worker-step5 AS bilbomd-perlmutter-worker
+ARG USER_ID=1001
 WORKDIR /app
-
-# Create a user and group with the provided IDs
-RUN mkdir -p /home/bilbo
-RUN groupadd -g $GROUP_ID bilbomd && useradd -u $USER_ID -g $GROUP_ID -d /home/bilbo -s /bin/bash bilbo
-
-# Change ownership of directories to the user and group
-RUN chown -R bilbo:bilbomd /app /bilbomd/uploads /home/bilbo
-
-# Switch to the non-root user
-USER bilbo:bilbomd
-
-# Copy over the package*.json files
-COPY --chown=bilbo:bilbomd package*.json .
-
-# Install dependencies
-RUN npm ci
-
-# Copy the app code
-COPY --chown=bilbo:bilbomd . .
-
-# Fire that bad boy up.
-# Not needed for NERSC
-# CMD ["npm", "start"]
+COPY scripts/ scripts/
+#
+RUN chown -R $USER_ID:0 /app

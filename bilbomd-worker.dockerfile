@@ -5,18 +5,6 @@ RUN apt-get update && \
     apt-get install -y cmake gcc gfortran g++ openmpi-bin libopenmpi-dev
 
 # -----------------------------------------------------------------------------
-# Build stage 1.2 - OpenMPI
-# FROM builder AS build_openmpi
-# COPY ./openmpi/openmpi-5.0.3.tar.gz /usr/local/src/
-# RUN tar -zxvf /usr/local/src/openmpi-5.0.3.tar.gz -C /usr/local/src && \
-#     rm /usr/local/src/openmpi-5.0.3.tar.gz
-
-# WORKDIR /usr/local/src/openmpi-5.0.3
-# RUN ./configure --with-slurm
-# RUN make -j8 all 2>&1 | tee make.out
-# RUN make install 2>&1 | tee install.out
-
-# -----------------------------------------------------------------------------
 # Build stage 2 - Configure CHARMM
 FROM builder AS build_charmm
 ARG CHARMM_VER=c48b2
@@ -32,7 +20,7 @@ WORKDIR /usr/local/src/charmm
 RUN ./configure
 
 # Build CHARMM
-RUN make -j8 -C build/cmake install
+RUN make -j16 -C build/cmake install
 
 # -----------------------------------------------------------------------------
 # Build stage 3 - Copy CHARMM binary
@@ -101,10 +89,8 @@ RUN python setup.py build_ext --inplace && \
     pip install .
 
 # -----------------------------------------------------------------------------
-# Build stage 7 - IMP & worker app
-FROM bilbomd-worker-step4 AS bilbomd-worker
-ARG USER_ID=1001
-ARG GROUP_ID=1001
+# Build stage 7 - IMP 
+FROM bilbomd-worker-step4 AS bilbomd-worker-step5
 
 RUN apt-get update && \
     apt-get install -y wget && \
@@ -113,10 +99,14 @@ RUN apt-get update && \
     apt-get update && \
     apt-get install -y imp openmpi-bin libopenmpi-dev
 
+# -----------------------------------------------------------------------------
+# Build stage 8 - worker app
+FROM bilbomd-worker-step5 AS bilbomd-worker
+ARG USER_ID=1001
+ARG GROUP_ID=1001
 
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
-# VOLUME [ "/bilbomd/uploads" ]
 WORKDIR /app
 
 # Create a user and group with the provided IDs
@@ -125,6 +115,9 @@ RUN groupadd -g $GROUP_ID bilbomd && useradd -u $USER_ID -g $GROUP_ID -d /home/b
 
 # Change ownership of directories to the user and group
 RUN chown -R bilbo:bilbomd /app /bilbomd/uploads /home/bilbo
+
+# Update NPM
+RUN npm install -g npm@10.7.0
 
 # Switch to the non-root user
 USER bilbo:bilbomd

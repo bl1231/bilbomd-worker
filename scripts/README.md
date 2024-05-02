@@ -18,7 +18,7 @@ You will build our images locally on a login node. If you'd like to use this ima
 
 ```bash
 cd ~/projects/bilbomd/bilbomd-worker
-podman-hpc build -t bilbomd/bilbomd-worker:0.0.3 --build-arg CHARMM_VER=c48b2 --build-arg USER_ID=$UID -f NERSC.dockerfile
-podman-hpc migrate bilbomd/bilbomd-worker:0.0.3
+podman-hpc build -t bilbomd/bilbomd-perlmutter-worker:0.0.1 --build-arg CHARMM_VER=c48b2 --build-arg USER_ID=$UID -f bilbomd-perlmutter-worker.dockerfile
+podman-hpc migrate bilbomd/bilbomd-perlmutter-worker:0.0.1
 podman-hpc images
 ```
