@@ -12,13 +12,13 @@ const submitJobToNersc = async (token: string, UUID: string) => {
 
   const data = qs.stringify({
     isPath: 'true',
-    job: '/path/to/script',
+    job: '/global/cfs/cdirs/m4659/bilbomd-scripts/make-bilbomd.sh',
     args: UUID
   })
 
   try {
     const response = await axios.post(url, data, { headers })
-    console.log('Job submitted successfully:', response.data)
+    logger.info(`Job submitted successfully: ${JSON.stringify(response.data)}`)
     return response.data
   } catch (error) {
     console.error('Failed to submit job:', error)
@@ -29,7 +29,8 @@ const submitJobToNersc = async (token: string, UUID: string) => {
 const monitorJobAtNERSC = async (token: string, taskID: number): Promise<string> => {
   let status = 'pending'
   // How to add query params? ?sacct=true
-  const url = `https://api.nersc.gov/api/v1.2/compute/jobs/perlmutter/${taskID}?sacct=true`
+  // const url = `https://api.nersc.gov/api/v1.2/compute/jobs/perlmutter/${taskID}?sacct=true`
+  const url = `https://api.nersc.gov/api/v1.2/tasks/${taskID}`
   const headers = {
     accept: 'application/json',
     Authorization: `Bearer ${token}`
@@ -48,7 +49,7 @@ const monitorJobAtNERSC = async (token: string, taskID: number): Promise<string>
     //   ],
     //   "error": "string"
     // }
-    logger.info(statusResponse)
+    logger.info(`statusResponse: ${JSON.stringify(statusResponse.data, null, 2)}`)
     status = statusResponse.data.status
     // We will only get a limited set of statuses from /compute/jobs/perlmutter
     //
