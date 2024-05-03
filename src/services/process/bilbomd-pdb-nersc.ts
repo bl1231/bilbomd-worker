@@ -3,7 +3,11 @@ import { BilboMdPDBJob } from '../../models/Job'
 import { logger } from '../../helpers/loggers'
 import { ensureValidToken } from '../../services/functions/nersc-sf-api-tokens'
 import { initializeJob, prepareResults, cleanupJob } from '../bilbomd.functions'
-import { submitJobToNersc, monitorJobAtNERSC } from '../../services/functions/nersc-jobs'
+import {
+  prepareBilboMDSlurmScript,
+  submitJobToNersc,
+  monitorTaskAtNERSC
+} from '../../services/functions/nersc-jobs'
 
 const processBilboMDJobNerscTest = async (MQjob: BullMQJob) => {
   const foundJob = await BilboMdPDBJob.findOne({ _id: MQjob.data.jobid })
@@ -41,19 +45,13 @@ const processBilboMDPDBJobNersc = async (MQjob: BullMQJob) => {
     await initializeJob(MQjob, foundJob)
     await MQjob.updateProgress(10)
 
-    // SF API
-    const results = await submitJobToNersc(token, foundJob.uuid)
-    // 200 results will be:
-    // {
-    //   "task_id": "string",
-    //   "status": "OK",
-    //   "error": "string"
-    // }
-    const taskID = results.task_id
-    logger.info(`NERSC job ${results}`)
+    // Run make-bilbomd.sh script on a login node
+    const prepTaskID = await prepareBilboMDSlurmScript(token, foundJob.uuid)
+    await monitorTaskAtNERSC(token, prepTaskID)
 
-    // Poll for status
-    await monitorJobAtNERSC(token, taskID)
+    // Submit bilbomd.slurm
+    const jobTaskID = await submitJobToNersc(token, foundJob.uuid)
+    await monitorTaskAtNERSC(token, jobTaskID)
 
     // Prepare results
     await MQjob.log('start gather results')

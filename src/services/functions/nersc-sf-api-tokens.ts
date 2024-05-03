@@ -10,8 +10,8 @@ const privateKeyPath = '/secrets/priv_key.pem'
 let cachedToken: string | null = null
 let tokenExpiry: number | null = null
 
-// Function to generate a JWT for client assertion
-function generateClientAssertion(): string {
+// Generate a JWT for client assertion
+const generateClientAssertion = (): string => {
   const privateKey = fs.readFileSync(privateKeyPath, 'utf8')
   const payload = {
     iss: clientId,
@@ -24,7 +24,7 @@ function generateClientAssertion(): string {
 }
 
 // Exchange clientAssertion for an accessToken
-async function getAccessToken(clientAssertion: string): Promise<string> {
+const getAccessToken = async (clientAssertion: string): Promise<string> => {
   const params = new URLSearchParams()
   params.append('grant_type', 'client_credentials')
   params.append(
@@ -52,8 +52,8 @@ async function getAccessToken(clientAssertion: string): Promise<string> {
   }
 }
 
-// Function to ensure the token is valid, renewing if necessary
-async function ensureValidToken(): Promise<string> {
+// Ensure the token is valid, renewing if necessary
+const ensureValidToken = async (): Promise<string> => {
   if (!cachedToken || !tokenExpiry || tokenExpiry <= Math.floor(Date.now() / 1000)) {
     const clientAssertion = generateClientAssertion()
     return getAccessToken(clientAssertion)
