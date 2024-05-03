@@ -6,7 +6,8 @@ import { initializeJob, prepareResults, cleanupJob } from '../bilbomd.functions'
 import {
   prepareBilboMDSlurmScript,
   submitJobToNersc,
-  monitorTaskAtNERSC
+  monitorTaskAtNERSC,
+  monitorJobAtNERSC
 } from '../../services/functions/nersc-jobs'
 
 const processBilboMDJobNerscTest = async (MQjob: BullMQJob) => {
@@ -45,13 +46,29 @@ const processBilboMDPDBJobNersc = async (MQjob: BullMQJob) => {
     await initializeJob(MQjob, foundJob)
     await MQjob.updateProgress(10)
 
-    // Run make-bilbomd.sh script on a login node
+    // Run make-bilbomd.sh to prepare bilbomd.slurm
     const prepTaskID = await prepareBilboMDSlurmScript(token, foundJob.uuid)
-    await monitorTaskAtNERSC(token, prepTaskID)
+    const prepResult = await monitorTaskAtNERSC(token, prepTaskID)
+    logger.info(`prepResult: ${JSON.stringify(prepResult)}`)
+    // Not sure what to check yet....
+    // if (prepResult.result.status !== 'ok') {
+    //   throw new Error(`Unable to prepare Slurm batch file: ${prepResult}`)
+    // }
 
-    // Submit bilbomd.slurm
-    const jobTaskID = await submitJobToNersc(token, foundJob.uuid)
-    await monitorTaskAtNERSC(token, jobTaskID)
+    // Submit bilbomd.slurm to the queueing system
+    const taskID = await submitJobToNersc(token, foundJob.uuid)
+    const submitResult = await monitorTaskAtNERSC(token, taskID)
+    logger.info(`submitResult: ${JSON.stringify(submitResult)}`)
+    const submitResultObject = JSON.parse(submitResult.result)
+    const jobID = submitResultObject.jobid
+    logger.info(`JOBID: ${jobID}`)
+
+    // Watch the job
+    const jobResult = await monitorJobAtNERSC(token, jobID)
+    logger.info(`jobResult: ${JSON.stringify(jobResult)}`)
+    // if (jobResult.result.status !== 'ok') {
+    //   throw new Error(`Unable to run Slurm batch file: ${jobResult}`)
+    // }
 
     // Prepare results
     await MQjob.log('start gather results')

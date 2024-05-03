@@ -230,7 +230,7 @@ generate_md_input_files() {
     # Calculate the step size
     local step=$(($((rg_max - rg_min)) / 4))
     local step=$(( step > 0 ? step : 1 ))  # Ensuring that step is at least 1
-    echo "Rg step is: ${step}Å"
+    echo "Rg step is: ${step} Ang."
 
     # Base template for CHARMM files
     local charmm_template="dynamics"
@@ -279,7 +279,7 @@ generate_dcd2pdb_input_files() {
 
 generate_bilbomd_slurm() {
     cat << EOF > bilbomd.slurm
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --qos=${queue}
 #SBATCH --nodes=${nodes}
 #SBATCH --time=${time}
