@@ -47,7 +47,7 @@ fi
 CFSDIR=${CFS}/${project}/bilbomd-uploads/${UUID}
 WORKDIR=${PSCRATCH}/bilbmod/${UUID}
 TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
-WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.2
+WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.3
 
 
 # other globals
@@ -506,6 +506,8 @@ assemble_run_bilbomd_script() {
 
 cleanup() {
     rm header pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection endsection
+    # Move bilbomd.slurm to the working directory
+    mv bilbomd.slurm $WORKDIR/
 }
 
 echo "---------------------------- START JOB PREP ----------------------------"
@@ -536,6 +538,3 @@ generate_bilbomd_slurm
 cleanup
 
 echo "----------------------------- END JOB PREP -----------------------------"
-
-# Submit job
-# sbatch bilbomd.slurm
