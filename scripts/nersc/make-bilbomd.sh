@@ -47,7 +47,7 @@ fi
 CFSDIR=${CFS}/${project}/bilbomd-uploads/${UUID}
 WORKDIR=${PSCRATCH}/bilbmod/${UUID}
 TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
-WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.3
+WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.2
 
 
 # other globals
