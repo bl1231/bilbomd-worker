@@ -17,7 +17,7 @@ const generateClientAssertion = (): string => {
     iss: clientId,
     sub: clientId,
     aud: tokenUrl,
-    exp: Math.floor(Date.now() / 1000) + 5 * 60 // Current time + 5 minutes
+    exp: Math.floor(Date.now() / 1000) + 30 * 60 // Current time + 30 minutes
   }
   const assertion = jwt.sign(payload, privateKey, { algorithm: 'RS256' })
   return assertion
