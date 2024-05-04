@@ -50,10 +50,6 @@ const processBilboMDPDBJobNersc = async (MQjob: BullMQJob) => {
     const prepTaskID = await prepareBilboMDSlurmScript(token, foundJob.uuid)
     const prepResult = await monitorTaskAtNERSC(token, prepTaskID)
     logger.info(`prepResult: ${JSON.stringify(prepResult)}`)
-    // Not sure what to check yet....
-    // if (prepResult.result.status !== 'ok') {
-    //   throw new Error(`Unable to prepare Slurm batch file: ${prepResult}`)
-    // }
 
     // Submit bilbomd.slurm to the queueing system
     const taskID = await submitJobToNersc(token, foundJob.uuid)
@@ -66,9 +62,6 @@ const processBilboMDPDBJobNersc = async (MQjob: BullMQJob) => {
     // Watch the job
     const jobResult = await monitorJobAtNERSC(token, jobID)
     logger.info(`jobResult: ${JSON.stringify(jobResult)}`)
-    // if (jobResult.result.status !== 'ok') {
-    //   throw new Error(`Unable to run Slurm batch file: ${jobResult}`)
-    // }
 
     // Prepare results
     await MQjob.log('start gather results')
