@@ -494,7 +494,7 @@ generate_copy_commands() {
 # Copy results back to CFS
 EOF
     echo "echo \"Copying results back to CFS...\"" >> endsection
-    echo "#cp -nR $WORKDIR/* $CFSDIR/" >> endsection
+    echo "cp -nR $WORKDIR/* $CFSDIR/" >> endsection
     echo "" >> endsection
     echo "echo \"DONE ${UUID}\"" >> endsection
 }

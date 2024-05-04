@@ -102,19 +102,16 @@ const monitorJobAtNERSC = async (
     Authorization: `Bearer ${token}`
   }
 
+  let continueMonitoring = true // Control variable for the loop
   let statusResponse: JobStatusResponse = {
-    status: '',
-    error: '',
-    sacct_jobid: '',
-    sacct_state: '',
-    sacct_submit: '',
-    sacct_start: '',
-    sacct_end: ''
+    status: 'pending',
+    error: ''
   }
-  do {
+
+  while (continueMonitoring) {
     try {
       const response = await axios.get(url, { headers })
-      if (response.data.output[0]) {
+      if (response.data.output && response.data.output.length > 0) {
         const jobDetails = response.data.output[0]
         statusResponse = {
           status: response.data.status,
@@ -127,17 +124,31 @@ const monitorJobAtNERSC = async (
         }
         job_status = jobDetails.state
       } else {
-        logger.info(`No result field in response data...${JSON.stringify(response.data)}`)
+        logger.error('No job details found or output array is empty.')
+        job_status = 'FAILED' // Assume failure if no details are found
       }
-      logger.info(`monitorJobAtNERSC statusResponse: ${JSON.stringify(statusResponse)}`)
+      logger.info(`Current job status: ${job_status}`)
     } catch (error) {
-      logger.error(`monitorJobAtNERSC Error monitoring job: ${error}`)
+      logger.error(`Error monitoring job at NERSC: ${error}`)
       throw error
     }
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-  } while (job_status !== 'COMPLETED' && job_status !== 'FAILED')
 
-  return statusResponse
+    switch (job_status) {
+      case 'COMPLETED':
+      case 'FAILED':
+      case 'TIMEOUT':
+      case 'CANCELLED':
+      case 'NODE_FAIL':
+      case 'OUT_OF_MEMORY':
+        continueMonitoring = false // Stop monitoring if any of these statuses are met
+        break
+      default:
+        await new Promise((resolve) => setTimeout(resolve, 3000)) // Continue polling otherwise
+        break
+    }
+  }
+
+  return statusResponse // Return the final status
 }
 
 export {
