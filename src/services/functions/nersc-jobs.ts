@@ -68,12 +68,17 @@ const monitorTaskAtNERSC = async (
     accept: 'application/json',
     Authorization: `Bearer ${token}`
   }
-  let statusResponse
+  let statusResponse: TaskStatusResponse
   do {
     try {
-      statusResponse = await axios.get(url, { headers })
-      logger.info(`monitorTask: ${JSON.stringify(statusResponse.data)}`)
-      status = statusResponse.data.status
+      const response = await axios.get(url, { headers })
+      logger.info(`monitorTask: ${JSON.stringify(response.data)}`)
+      statusResponse = {
+        id: response.data.id,
+        status: response.data.status,
+        result: response.data.result
+      }
+      status = statusResponse.status
     } catch (error) {
       logger.error(`Error monitoring task: ${error}`)
       // Handle errors such as network issues, token expiration, etc.
@@ -82,41 +87,55 @@ const monitorTaskAtNERSC = async (
     await new Promise((resolve) => setTimeout(resolve, 2000)) // Wait 2 seconds
   } while (status !== 'completed' && status !== 'failed')
 
-  return statusResponse.data
+  return statusResponse
 }
 
 const monitorJobAtNERSC = async (
   token: string,
   jobID: string
 ): Promise<JobStatusResponse> => {
-  let status = 'pending'
+  let job_status = 'pending'
   const url = `${config.baseNerscApi}/compute/jobs/perlmutter/${jobID}?sacct=true`
-  logger.info(`url: ${url}`)
+  logger.info(`monitorJobAtNERSC url: ${url}`)
   const headers = {
     accept: 'application/json',
     Authorization: `Bearer ${token}`
   }
 
-  let statusResponse: JobStatusResponse
+  let statusResponse: JobStatusResponse = {
+    status: '',
+    error: '',
+    sacct_jobid: '',
+    sacct_state: '',
+    sacct_submit: '',
+    sacct_start: '',
+    sacct_end: ''
+  }
   do {
     try {
       const response = await axios.get(url, { headers })
-      const sacctResultObject = JSON.parse(response.data.output)
-      statusResponse = {
-        status: response.data.status,
-        error: response.data.error,
-        sacct_state: sacctResultObject.state
+      if (response.data.output[0]) {
+        const jobDetails = response.data.output[0]
+        statusResponse = {
+          status: response.data.status,
+          error: response.data.error,
+          sacct_jobid: jobDetails.jobid,
+          sacct_state: jobDetails.state,
+          sacct_submit: jobDetails.submit,
+          sacct_start: jobDetails.start,
+          sacct_end: jobDetails.end
+        }
+        job_status = jobDetails.state
+      } else {
+        logger.info(`No result field in response data...${JSON.stringify(response.data)}`)
       }
-      // logger.info(`monitorJob: ${JSON.stringify(statusResponse.data)}`)
-      status = statusResponse.status
-      logger.info(`monitorJob status: ${status}`)
+      logger.info(`monitorJobAtNERSC statusResponse: ${JSON.stringify(statusResponse)}`)
     } catch (error) {
-      logger.error(`Error monitoring job: ${error}`)
-      // Handle errors such as network issues, token expiration, etc.
+      logger.error(`monitorJobAtNERSC Error monitoring job: ${error}`)
       throw error
     }
-    await new Promise((resolve) => setTimeout(resolve, 2000)) // Wait 2 seconds
-  } while (status !== 'completed' && status !== 'failed')
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+  } while (job_status !== 'COMPLETED' && job_status !== 'FAILED')
 
   return statusResponse
 }
