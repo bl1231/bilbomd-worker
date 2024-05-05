@@ -49,28 +49,25 @@ const workerHandler = async (job: Job<WorkerJob>) => {
   }
 }
 
+const redisConn = {
+  host: 'redis',
+  port: 6379
+}
+
 const workerOptions: WorkerOptions = {
-  connection: {
-    host: 'redis',
-    port: 6379
-  },
+  connection: redisConn,
   concurrency: config.runOnNERSC ? 50 : 1,
   lockDuration: config.runOnNERSC ? 9000000 : 90000
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const worker = new Worker('bilbomd', workerHandler, workerOptions)
-logger.info(`BilboMD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
-
 const pdb2crdWorkerOptions: WorkerOptions = {
-  connection: {
-    host: 'redis',
-    port: 6379
-  },
+  connection: redisConn,
   concurrency: 20
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const worker = new Worker('bilbomd', workerHandler, workerOptions)
+logger.info(`BilboMD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
+
 const pdb2crdWorker = new Worker('pdb2crd', workerHandler, pdb2crdWorkerOptions)
 
 logger.info(`PDB2CRD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
