@@ -124,8 +124,8 @@ const monitorJobAtNERSC = async (
         }
         job_status = jobDetails.state
       } else {
-        logger.error('No job details found or output array is empty.')
-        job_status = 'FAILED' // Assume failure if no details are found
+        logger.warning('No job details found or output array is empty.')
+        // job_status = 'FAILED' // Assume failure if no details are found
       }
       logger.info(`Current job status: ${job_status}`)
     } catch (error) {
