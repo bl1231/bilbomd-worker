@@ -2,25 +2,24 @@ import axios from 'axios'
 import qs from 'qs'
 import { logger } from '../../helpers/loggers'
 import { config } from '../../config/config'
+import { ensureValidToken } from './nersc-sf-api-tokens'
 import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc'
 
-const prepareBilboMDSlurmScript = async (
-  token: string,
-  UUID: string
-): Promise<string> => {
-  const url = `${config.baseNerscApi}/utilities/command/perlmutter`
-  logger.info(`url: ${url}`)
+const prepareBilboMDSlurmScript = async (UUID: string): Promise<string> => {
+  const token = await ensureValidToken()
+  const url = `${config.nerscBaseAPI}/utilities/command/perlmutter`
+  // logger.info(`url: ${url}`)
   const headers = {
     accept: 'application/json',
     'Content-Type': 'application/x-www-form-urlencoded',
     Authorization: `Bearer ${token}`
   }
-  const cmd = `cd /global/cfs/cdirs/m4659/bilbomd-scripts/ && ./make-bilbomd.sh ${UUID}`
-  logger.info(`cmd: ${cmd}`)
+  const cmd = `cd ${config.nerscScriptDir} && ./make-bilbomd.sh ${UUID}`
+  // logger.info(`cmd: ${cmd}`)
   const data = qs.stringify({
     executable: `bash -c "${cmd}"`
   })
-  logger.info(`data: ${data}`)
+  // logger.info(`data: ${data}`)
   try {
     const response = await axios.post(url, data, { headers })
     logger.info(
@@ -33,14 +32,14 @@ const prepareBilboMDSlurmScript = async (
   }
 }
 
-const submitJobToNersc = async (token: string, UUID: string): Promise<string> => {
-  const url = `${config.baseNerscApi}/compute/jobs/perlmutter`
+const submitJobToNersc = async (UUID: string): Promise<string> => {
+  const token = await ensureValidToken()
+  const url = `${config.nerscBaseAPI}/compute/jobs/perlmutter`
   const headers = {
     accept: 'application/json',
     'Content-Type': 'application/x-www-form-urlencoded',
     Authorization: `Bearer ${token}`
   }
-  // const slurmFile = `/global/cfs/cdirs/m4659/bilbomd-scripts/${UUID}/bilbomd.slurm`
   const slurmFile = `/pscratch/sd/s/sclassen/bilbmod/${UUID}/bilbomd.slurm`
   const data = qs.stringify({
     isPath: 'true',
@@ -58,12 +57,10 @@ const submitJobToNersc = async (token: string, UUID: string): Promise<string> =>
   }
 }
 
-const monitorTaskAtNERSC = async (
-  token: string,
-  taskID: string
-): Promise<TaskStatusResponse> => {
+const monitorTaskAtNERSC = async (taskID: string): Promise<TaskStatusResponse> => {
+  const token = await ensureValidToken()
   let status = 'pending'
-  const url = `${config.baseNerscApi}/tasks/${taskID}`
+  const url = `${config.nerscBaseAPI}/tasks/${taskID}`
   const headers = {
     accept: 'application/json',
     Authorization: `Bearer ${token}`
@@ -84,18 +81,16 @@ const monitorTaskAtNERSC = async (
       // Handle errors such as network issues, token expiration, etc.
       throw error // Optionally retry or handle differently based on the error type
     }
-    await new Promise((resolve) => setTimeout(resolve, 2000)) // Wait 2 seconds
+    await new Promise((resolve) => setTimeout(resolve, 2000))
   } while (status !== 'completed' && status !== 'failed')
 
   return statusResponse
 }
 
-const monitorJobAtNERSC = async (
-  token: string,
-  jobID: string
-): Promise<JobStatusResponse> => {
+const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
+  const token = await ensureValidToken()
   let job_status = 'pending'
-  const url = `${config.baseNerscApi}/compute/jobs/perlmutter/${jobID}?sacct=true`
+  const url = `${config.nerscBaseAPI}/compute/jobs/perlmutter/${jobID}?sacct=true`
   logger.info(`monitorJobAtNERSC url: ${url}`)
   const headers = {
     accept: 'application/json',
