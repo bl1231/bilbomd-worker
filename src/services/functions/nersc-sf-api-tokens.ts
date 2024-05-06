@@ -53,8 +53,13 @@ const getAccessToken = async (clientAssertion: string): Promise<string> => {
 }
 
 // Ensure the token is valid, renewing if necessary
-const ensureValidToken = async (): Promise<string> => {
-  if (!cachedToken || !tokenExpiry || tokenExpiry <= Math.floor(Date.now() / 1000)) {
+const ensureValidToken = async (forceRefresh: boolean = false): Promise<string> => {
+  if (
+    forceRefresh ||
+    !cachedToken ||
+    !tokenExpiry ||
+    tokenExpiry <= Math.floor(Date.now() / 1000)
+  ) {
     const clientAssertion = generateClientAssertion()
     return getAccessToken(clientAssertion)
   } else {

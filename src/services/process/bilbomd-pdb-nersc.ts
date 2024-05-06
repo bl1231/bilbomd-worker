@@ -45,7 +45,7 @@ const processBilboMDPDBJobNersc = async (MQjob: BullMQJob) => {
     await MQjob.updateProgress(10)
 
     // Run make-bilbomd.sh to prepare bilbomd.slurm
-    const prepTaskID = await prepareBilboMDSlurmScript(foundJob.uuid)
+    const prepTaskID = await prepareBilboMDSlurmScript(foundJob)
     const prepResult = await monitorTaskAtNERSC(prepTaskID)
     logger.info(`prepResult: ${JSON.stringify(prepResult)}`)
 

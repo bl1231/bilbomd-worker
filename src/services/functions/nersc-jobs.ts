@@ -2,10 +2,14 @@ import axios from 'axios'
 import qs from 'qs'
 import { logger } from '../../helpers/loggers'
 import { config } from '../../config/config'
+import { IJob } from '../../models/Job'
 import { ensureValidToken } from './nersc-sf-api-tokens'
 import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc'
+// import { BilboMDAutoJob, BilboMDCRDJob, BilboMDPDBJob } from 'types/jobtypes'
 
-const prepareBilboMDSlurmScript = async (UUID: string): Promise<string> => {
+const prepareBilboMDSlurmScript = async (Job: IJob): Promise<string> => {
+  const UUID = Job.uuid
+  const jobType = Job.__t
   const token = await ensureValidToken()
   const url = `${config.nerscBaseAPI}/utilities/command/perlmutter`
   // logger.info(`url: ${url}`)
@@ -14,8 +18,8 @@ const prepareBilboMDSlurmScript = async (UUID: string): Promise<string> => {
     'Content-Type': 'application/x-www-form-urlencoded',
     Authorization: `Bearer ${token}`
   }
-  const cmd = `cd ${config.nerscScriptDir} && ./make-bilbomd.sh ${UUID}`
-  // logger.info(`cmd: ${cmd}`)
+  const cmd = `cd ${config.nerscScriptDir} && ./make-bilbomd.sh ${UUID} ${jobType}`
+  logger.info(`cmd: ${cmd}`)
   const data = qs.stringify({
     executable: `bash -c "${cmd}"`
   })
@@ -58,15 +62,19 @@ const submitJobToNersc = async (UUID: string): Promise<string> => {
 }
 
 const monitorTaskAtNERSC = async (taskID: string): Promise<TaskStatusResponse> => {
-  const token = await ensureValidToken()
-  let status = 'pending'
+  let token = await ensureValidToken()
   const url = `${config.nerscBaseAPI}/tasks/${taskID}`
-  const headers = {
-    accept: 'application/json',
-    Authorization: `Bearer ${token}`
-  }
-  let statusResponse: TaskStatusResponse
-  do {
+  logger.info(`monitorTaskAtNERSC url: ${url}`)
+
+  let status = 'pending'
+  let statusResponse: TaskStatusResponse | undefined
+
+  const makeRequest = async () => {
+    const headers = {
+      accept: 'application/json',
+      Authorization: `Bearer ${token}`
+    }
+
     try {
       const response = await axios.get(url, { headers })
       logger.info(`monitorTask: ${JSON.stringify(response.data)}`)
@@ -76,26 +84,42 @@ const monitorTaskAtNERSC = async (taskID: string): Promise<TaskStatusResponse> =
         result: response.data.result
       }
       status = statusResponse.status
+      logger.info(`monitorTaskAtNERSC status: ${status}`)
     } catch (error) {
-      logger.error(`Error monitoring task: ${error}`)
-      // Handle errors such as network issues, token expiration, etc.
-      throw error // Optionally retry or handle differently based on the error type
+      if (axios.isAxiosError(error)) {
+        // Now we can assume error is an AxiosError and access specific properties like error.response
+        if (error.response && error.response.status === 403) {
+          logger.error(`monitorTaskAtNERSC error: ${error}`)
+          // Check if the error is due to token expiration
+          token = await ensureValidToken(true) // Refresh the token
+          await makeRequest() // Retry the request with the new token
+        } else {
+          logger.error(`Axios error monitoring task: ${error.message}`)
+          throw error
+        }
+      } else {
+        logger.error(`Non-Axios error monitoring task: ${error}`)
+        throw error // Re-throw if it's not an Axios error
+      }
     }
+  }
+
+  do {
+    await makeRequest()
     await new Promise((resolve) => setTimeout(resolve, 2000))
   } while (status !== 'completed' && status !== 'failed')
+
+  if (!statusResponse) {
+    throw new Error('Failed to get a response from the NERSC API')
+  }
 
   return statusResponse
 }
 
 const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
-  const token = await ensureValidToken()
   let jobStatus = 'pending'
   const url = `${config.nerscBaseAPI}/compute/jobs/perlmutter/${jobID}?sacct=true`
   logger.info(`monitorJobAtNERSC url: ${url}`)
-  const headers = {
-    accept: 'application/json',
-    Authorization: `Bearer ${token}`
-  }
 
   let continueMonitoring = true // Control variable for the loop
   let statusResponse: JobStatusResponse = {
@@ -104,6 +128,12 @@ const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
   }
 
   while (continueMonitoring) {
+    const token = await ensureValidToken() // Fetch or refresh the token before each request
+    const headers = {
+      accept: 'application/json',
+      Authorization: `Bearer ${token}`
+    }
+
     try {
       const response = await axios.get(url, { headers })
       if (response.data.output && response.data.output.length > 0) {
@@ -123,6 +153,10 @@ const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
       }
       logger.info(`Current job status: ${jobStatus}`)
     } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 403) {
+        logger.info('Token may have expired, refreshing token...')
+        continue // Force token refresh on the next iteration if token has expired
+      }
       logger.error(`Error monitoring job at NERSC: ${error}`)
       throw error
     }
@@ -142,7 +176,7 @@ const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
     }
   }
 
-  return statusResponse // Return the final status
+  return statusResponse
 }
 
 export {
