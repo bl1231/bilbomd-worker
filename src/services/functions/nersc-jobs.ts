@@ -89,7 +89,7 @@ const monitorTaskAtNERSC = async (taskID: string): Promise<TaskStatusResponse> =
 
 const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
   const token = await ensureValidToken()
-  let job_status = 'pending'
+  let jobStatus = 'pending'
   const url = `${config.nerscBaseAPI}/compute/jobs/perlmutter/${jobID}?sacct=true`
   logger.info(`monitorJobAtNERSC url: ${url}`)
   const headers = {
@@ -99,8 +99,8 @@ const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
 
   let continueMonitoring = true // Control variable for the loop
   let statusResponse: JobStatusResponse = {
-    status: 'pending',
-    error: ''
+    api_status: 'pending',
+    api_error: ''
   }
 
   while (continueMonitoring) {
@@ -108,27 +108,26 @@ const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
       const response = await axios.get(url, { headers })
       if (response.data.output && response.data.output.length > 0) {
         const jobDetails = response.data.output[0]
+        jobStatus = jobDetails.state
         statusResponse = {
-          status: response.data.status,
-          error: response.data.error,
+          api_status: response.data.status,
+          api_error: response.data.error,
           sacct_jobid: jobDetails.jobid,
-          sacct_state: jobDetails.state,
+          sacct_state: jobStatus,
           sacct_submit: jobDetails.submit,
           sacct_start: jobDetails.start,
           sacct_end: jobDetails.end
         }
-        job_status = jobDetails.state
       } else {
         logger.warning('No job details found or output array is empty.')
-        // job_status = 'FAILED' // Assume failure if no details are found
       }
-      logger.info(`Current job status: ${job_status}`)
+      logger.info(`Current job status: ${jobStatus}`)
     } catch (error) {
       logger.error(`Error monitoring job at NERSC: ${error}`)
       throw error
     }
 
-    switch (job_status) {
+    switch (jobStatus) {
       case 'COMPLETED':
       case 'FAILED':
       case 'TIMEOUT':

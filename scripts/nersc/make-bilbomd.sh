@@ -291,7 +291,7 @@ generate_bilbomd_slurm() {
 #SBATCH --mail-type=${mailtype}
 #SBATCH --mail-user=${mailuser}
 
-srun --job-name bilbomd podman-hpc run --rm --userns=keep-id --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "cd /bilbomd/work/ && ./run-bilbomd.sh"
+srun --job-name bilbomd podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${CFSDIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && ./run-bilbomd.sh"
 EOF
 }
 
@@ -325,11 +325,27 @@ EOF
 }
 
 generate_min_heat_commands(){
+    profileSize=666
+    foxs_args=(
+    '--offset'
+    '--min_c1=0.99'
+    '--max_c1=1.05'
+    '--min_c2=-0.50'
+    '--max_c2=2.00'
+    "--profile_size=${profileSize}"
+    'minimization_output.pdb'
+    "${saxs_data}"
+)
     cat << EOF > minheat
 # ########################################
 # CHARMM Minimize
 echo "Running CHARMM Minimize..."
 cd /bilbomd/work/ && mpirun -np $((NUM_CORES/2)) charmm -o minimize.log -i minimize.inp
+
+# ########################################
+# FoXS Analysis of minimized PDB
+echo "Running Initial FoXS Analysis..."
+cd /bilbomd/work/ && foxs ${foxs_args[@]} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.log
 
 # ########################################
 # CHARMM Heat
@@ -413,6 +429,8 @@ generate_foxs_scripts() {
                 > $foxs_script
                 echo "#!/bin/bash" >> $foxs_script
                 inner_dir_path="/bilbomd/work/foxs/rg${rg}_run${run}"
+                # change in order to make extractPdbPaths happy
+                rel_inner_dir_path="../foxs/rg${rg}_run${run}"
                 # echo "inner_dir_path: ${inner_dir_path}"
                 echo "echo \"Processing directory: $inner_dir_path\"" >> $foxs_script
                 echo "cd $inner_dir_path" >> $foxs_script
@@ -433,7 +451,7 @@ generate_foxs_scripts() {
                 echo "    if [ -s \"\$pdbfile\" ]; then" >> $foxs_script
                 # echo "      echo \"Running FoXS on \$pdbfile\"" >> $foxs_script
                 # Run foxs on the file
-                echo "      foxs -p \"\$pdbfile\" >> \"\$foxs_log\" 2>> \"\$foxs_error_log\" && echo \"$inner_dir_path/\${pdbfile}.dat\" >> $inner_dir_path/foxs_rg${rg}_run${run}_dat_files.txt" >> $foxs_script
+                echo "      foxs -p \"\$pdbfile\" >> \"\$foxs_log\" 2>> \"\$foxs_error_log\" && echo \"$rel_inner_dir_path/\${pdbfile}.dat\" >> $inner_dir_path/foxs_rg${rg}_run${run}_dat_files.txt" >> $foxs_script
                 echo "    else" >> $foxs_script
                 echo "      echo \"File is empty or missing: \$pdbfile\"" >> $foxs_script
                 echo "    fi" >> $foxs_script
@@ -495,7 +513,7 @@ generate_copy_commands() {
 EOF
     echo "echo \"Copying results back to CFS...\"" >> endsection
     # echo "echo \"Copying $WORKDIR/ back to CFS $CFSDIR ...\"" >> endsection
-    echo "cp -nR $WORKDIR/* $CFSDIR/" >> endsection
+    echo "cp -nR /bilbomd/work/* /cfs/" >> endsection
     echo "" >> endsection
     echo "echo \"DONE ${UUID}\"" >> endsection
 }
@@ -509,6 +527,32 @@ cleanup() {
     rm header pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection endsection
     # Move bilbomd.slurm to the working directory
     mv bilbomd.slurm $WORKDIR/
+}
+
+countDataPoints() {
+    local filePath="$1"
+    local count=0
+
+    # Read each line of the file
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Trim leading and trailing whitespace
+        local trimmed=$(echo "$line" | awk '{$1=$1};1')
+
+        # Check that the line is not empty and does not start with '#'
+        if [[ -n "$trimmed" && "$trimmed" != \#* ]]; then
+            ((count++))
+        fi
+    done < "$filePath"
+
+    # Adjust count by subtracting 1
+    count=$((count - 1))
+
+    # Log the results to console (you can replace this with logging to a file if needed)
+    echo "countDataPoints original dat file has: $(($count + 1)) points"
+    echo "countDataPoints adjusting counts to: $count points"
+
+    # Return the adjusted count
+    echo $count
 }
 
 echo "---------------------------- START JOB PREP ----------------------------"

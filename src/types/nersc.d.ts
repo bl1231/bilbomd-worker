@@ -11,8 +11,8 @@ interface TaskStatusResponse {
 }
 
 interface JobStatusResponse {
-  status: string
-  error?: string | null
+  api_status: string
+  api_error?: string | null
   sacct_jobid?: string
   sacct_state?: string
   sacct_submit?: string

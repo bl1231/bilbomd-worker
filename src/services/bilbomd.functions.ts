@@ -225,6 +225,9 @@ const extractPdbPaths = (content: string): string[] => {
       }
       return ''
     })
+  // Extracts all PDBs
+  //
+  // logger.info(`extractPdbPaths pdbPaths: ${pdbPaths}`)
   return pdbPaths
 }
 
@@ -773,8 +776,10 @@ const prepareResults = async (
       // Iterate through each ensembles_siz_*.txt file
       for (let i = 1; i <= numEnsembles; i++) {
         const ensembleFile = path.join(multiFoxsDir, `ensembles_size_${i}.txt`)
+        logger.info(`prepareResults ensembleFile: ${ensembleFile}`)
         const ensembleFileContent = await fs.readFile(ensembleFile, 'utf8')
         const pdbFilesRelative = extractPdbPaths(ensembleFileContent)
+
         const pdbFilesFullPath = pdbFilesRelative.map((item) =>
           path.join(outputDir, item)
         )
