@@ -65,9 +65,11 @@ const pdb2crdWorkerOptions: WorkerOptions = {
   concurrency: 20
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const worker = new Worker('bilbomd', workerHandler, workerOptions)
 logger.info(`BilboMD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const pdb2crdWorker = new Worker('pdb2crd', workerHandler, pdb2crdWorkerOptions)
 
 logger.info(`PDB2CRD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
