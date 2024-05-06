@@ -14,12 +14,15 @@
 # #############################################################################
 
 # Check if an argument was provided
-if [ $# -eq 0 ]; then
-    echo "Usage: $0 <UUID>"
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 <UUID> <JOB_TYPE>"
     exit 1
 fi
 
+# | 'BilboMdPDB' | 'BilboMdCRD' | 'BilboMdAuto'
+
 UUID=$1
+JOB_TYPE=$2
 
 # buy1
 # UUID="52e8f8ca-5188-4714-a29d-dfcf9e311580"
@@ -86,18 +89,40 @@ create_working_dir() {
 }
 
 read_job_params() {
-    # Read parameters from JSON file
-    pdb_file=$(jq -r '.pdb_file' $WORKDIR/params.json)
+    echo "Reading job parameters for job type: $JOB_TYPE"
+
+    # Common parameters
     saxs_data=$(jq -r '.saxs_data' $WORKDIR/params.json)
     constinp=$(jq -r '.constinp' $WORKDIR/params.json)
     conf_sample=$(jq -r '.conf_sample' $WORKDIR/params.json)
+
+    if [ "$JOB_TYPE" = "BilboMdPDB" ]; then
+        # Job type specific for BilboMdPDB
+        pdb_file=$(jq -r '.pdb_file' $WORKDIR/params.json)
+        in_psf_file="bilbomd_pdb2crd.psf"
+        in_crd_file="bilbomd_pdb2crd.crd"
+        echo "Using static PSF and CRD files for BilboMdPDB."
+
+    elif [ "$JOB_TYPE" = "BilboMdCRD" ]; then
+        # Job type specific for BilboMdCRD
+        pdb_file=''  # Clear the pdb_file if it's not needed
+        in_psf_file=$(jq -r '.psf_file' $WORKDIR/params.json)
+        in_crd_file=$(jq -r '.crd_file' $WORKDIR/params.json)
+        echo "Using dynamic PSF and CRD files from parameters for BilboMdCRD."
+    else
+        echo "Error: Unrecognized JOB_TYPE '$JOB_TYPE'"
+        return 1  # Exit with an error status
+    fi
 
     # Echo the variables to verify they're read correctly
     echo "PDB file: $pdb_file"
     echo "SAXS data: $saxs_data"
     echo "Constraint input: $constinp"
     echo "Confidence sample: $conf_sample"
+    echo "PSF file: $in_psf_file"
+    echo "CRD file: $in_crd_file"
 }
+
 
 copy_template_files() {
     echo "Copy CHARMM input file templates"
@@ -519,7 +544,14 @@ EOF
 }
 
 assemble_run_bilbomd_script() {
-    cat header pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection endsection> $WORKDIR/run-bilbomd.sh
+    if [ "$JOB_TYPE" = "BilboMdPDB" ]; then
+        cat header pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection endsection> $WORKDIR/run-bilbomd.sh
+    elif [ "$JOB_TYPE" = "BilboMdCRD" ]; then
+        cat header minheat dynamics dcd2pdb foxssection multifoxssection endsection> $WORKDIR/run-bilbomd.sh
+    else
+        echo "Error: Unrecognized JOB_TYPE '$JOB_TYPE'"
+        return 1  # Exit with an error status
+    fi
     chmod u+x $WORKDIR/run-bilbomd.sh
 }
 
@@ -561,7 +593,9 @@ echo "----------------- ${UUID} -----------------"
 #
 initialize_job
 #
-generate_pdb2crd_input_files
+if [ "$JOB_TYPE" = "BilboMdPDB" ]; then
+    generate_pdb2crd_input_files
+fi
 generate_md_input_files
 generate_dcd2pdb_input_files
 #
