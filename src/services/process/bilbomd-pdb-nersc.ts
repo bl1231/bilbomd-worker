@@ -50,8 +50,8 @@ const processBilboMDPDBJobNersc = async (MQjob: BullMQJob) => {
     logger.info(`prepResult: ${JSON.stringify(prepResult)}`)
 
     // Submit bilbomd.slurm to the queueing system
-    const taskID = await submitJobToNersc(foundJob.uuid)
-    const submitResult = await monitorTaskAtNERSC(taskID)
+    const submitTaskID = await submitJobToNersc(foundJob)
+    const submitResult = await monitorTaskAtNERSC(submitTaskID)
     logger.info(`submitResult: ${JSON.stringify(submitResult)}`)
     const submitResultObject = JSON.parse(submitResult.result)
     const jobID = submitResultObject.jobid

@@ -91,18 +91,21 @@ const processBilboMDAutoJobNersc = async (MQjob: BullMQJob) => {
   const prepTaskID = await prepareBilboMDSlurmScript(foundJob)
   const prepResult = await monitorTaskAtNERSC(prepTaskID)
   logger.info(`prepResult: ${JSON.stringify(prepResult)}`)
+  await MQjob.updateProgress(20)
 
   // Submit bilbomd.slurm to the queueing system
-  const taskID = await submitJobToNersc(foundJob.uuid)
-  const submitResult = await monitorTaskAtNERSC(taskID)
+  const submitTaskID = await submitJobToNersc(foundJob)
+  const submitResult = await monitorTaskAtNERSC(submitTaskID)
   logger.info(`submitResult: ${JSON.stringify(submitResult)}`)
   const submitResultObject = JSON.parse(submitResult.result)
   const jobID = submitResultObject.jobid
   logger.info(`JOBID: ${jobID}`)
+  await MQjob.updateProgress(30)
 
   // Watch the job
   const jobResult = await monitorJobAtNERSC(jobID)
   logger.info(`jobResult: ${JSON.stringify(jobResult)}`)
+  await MQjob.updateProgress(90)
 
   // Prepare results
   await MQjob.log('start gather results')

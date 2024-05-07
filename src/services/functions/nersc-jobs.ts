@@ -36,7 +36,8 @@ const prepareBilboMDSlurmScript = async (Job: IJob): Promise<string> => {
   }
 }
 
-const submitJobToNersc = async (UUID: string): Promise<string> => {
+const submitJobToNersc = async (Job: IJob): Promise<string> => {
+  const UUID = Job.uuid
   const token = await ensureValidToken()
   const url = `${config.nerscBaseAPI}/compute/jobs/perlmutter`
   const headers = {

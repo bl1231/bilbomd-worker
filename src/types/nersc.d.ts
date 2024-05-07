@@ -20,6 +20,13 @@ interface JobStatusResponse {
   sacct_end?: string
 }
 
+interface NerscAccessToken {
+  access_token: string
+  scope: string
+  token_type: string
+  expires_in: number
+}
+
 // when ?sacct=false
 interface JobStatusOutput {
   account: 'm4659_g'
@@ -180,4 +187,4 @@ interface JobStatusOutputSacct {
   workdir: '/global/u2/s/sclassen'
 }
 
-export { TaskStatusResponse, JobStatusResponse }
+export { TaskStatusResponse, JobStatusResponse, NerscAccessToken }

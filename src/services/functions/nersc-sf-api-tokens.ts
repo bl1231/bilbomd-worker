@@ -2,6 +2,7 @@ import axios from 'axios'
 import jwt from 'jsonwebtoken'
 import fs from 'fs'
 import { logger } from '../../helpers/loggers'
+// import { NerscAccessToken } from '../../types/nersc'
 
 const tokenUrl = 'https://oidc.nersc.gov/c2id/token'
 const clientId = process.env.SFAPI_CLIENT_ID as string
@@ -34,21 +35,31 @@ const getAccessToken = async (clientAssertion: string): Promise<string> => {
   params.append('client_assertion', clientAssertion)
 
   try {
+    logger.info('getAccessToken about to request accessToken')
     const response = await axios.post(tokenUrl, params, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     })
+    logger.info(`Response from NERSC API: ${JSON.stringify(response.data, null, 2)}`)
     const accessToken = response.data.access_token
     const expiresIn = response.data.expires_in
+    const scope = response.data.scope
 
     // Update cache
     cachedToken = accessToken
     tokenExpiry = Math.floor(Date.now() / 1000) + expiresIn - 10 // Adjust for clock skew
 
-    logger.info(`New access token acquired, expires in ${expiresIn} seconds`)
+    logger.info(
+      `New access token acquired, expires in ${expiresIn} seconds scope ${scope}`
+    )
     return accessToken
   } catch (error) {
-    logger.error('Error fetching access token:', error)
-    throw error
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      logger.error('Authentication failed: Invalid credentials')
+      throw new Error('AuthenticationFailed')
+    } else {
+      logger.error('Failed to fetch token:', error)
+      throw error
+    }
   }
 }
 
