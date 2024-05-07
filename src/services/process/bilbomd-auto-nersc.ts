@@ -87,12 +87,6 @@ const processBilboMDAutoJobNersc = async (MQjob: BullMQJob) => {
   await initializeJob(MQjob, foundJob)
   await MQjob.updateProgress(10)
 
-  // Use PAE to construct const.inp file
-  await MQjob.log('start pae to const')
-  await runPaeToConstInp(foundJob)
-  await MQjob.log('end pae to const')
-  await MQjob.updateProgress(15)
-
   // Run make-bilbomd.sh to prepare bilbomd.slurm
   const prepTaskID = await prepareBilboMDSlurmScript(foundJob)
   const prepResult = await monitorTaskAtNERSC(prepTaskID)
