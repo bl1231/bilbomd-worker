@@ -1,17 +1,5 @@
 #!/bin/bash -l
 #
-#
-# #############################################################################
-# We will be calling this script from the NERSC Superfacility API
-#
-# POST to /compute/jobs/perlmutter
-#
-# curl -X 'POST' \
-#   'https://api.nersc.gov/api/v1.2/compute/jobs/perlmutter' \
-#   -H 'accept: application/json' \
-#   -H 'Content-Type: application/x-www-form-urlencoded' \
-#   -d 'isPath=true&job=%2Fglobal%2Fcfs%2Fcdirs%2Fbilbomd-scripts%2Frun.sh&args=string'
-# #############################################################################
 
 # Check if an argument was provided
 if [ $# -ne 2 ]; then
@@ -19,10 +7,20 @@ if [ $# -ne 2 ]; then
     exit 1
 fi
 
-# | 'BilboMdPDB' | 'BilboMdCRD' | 'BilboMdAuto'
-
+# Get dem args
 UUID=$1
 JOB_TYPE=$2
+
+# Validate the JOB_TYPE
+case $JOB_TYPE in
+    'BilboMdPDB'|'BilboMdCRD'|'BilboMdAuto')
+        echo "Proceeding with JOB_TYPE: $JOB_TYPE"
+        ;;
+    *)
+        echo "Error: Invalid JOB_TYPE '$JOB_TYPE'. Allowed values are 'BilboMdPDB', 'BilboMdCRD', 'BilboMdAuto'."
+        exit 1
+        ;;
+esac
 
 # buy1
 # UUID="52e8f8ca-5188-4714-a29d-dfcf9e311580"
@@ -93,7 +91,6 @@ read_job_params() {
 
     # Common parameters
     saxs_data=$(jq -r '.saxs_data' $WORKDIR/params.json)
-    constinp=$(jq -r '.constinp' $WORKDIR/params.json)
     conf_sample=$(jq -r '.conf_sample' $WORKDIR/params.json)
 
     if [ "$JOB_TYPE" = "BilboMdPDB" ]; then
@@ -101,6 +98,7 @@ read_job_params() {
         pdb_file=$(jq -r '.pdb_file' $WORKDIR/params.json)
         in_psf_file="bilbomd_pdb2crd.psf"
         in_crd_file="bilbomd_pdb2crd.crd"
+        constinp=$(jq -r '.constinp' $WORKDIR/params.json)
         echo "Using static PSF and CRD files for BilboMdPDB."
 
     elif [ "$JOB_TYPE" = "BilboMdCRD" ]; then
@@ -108,6 +106,16 @@ read_job_params() {
         pdb_file=''  # Clear the pdb_file if it's not needed
         in_psf_file=$(jq -r '.psf_file' $WORKDIR/params.json)
         in_crd_file=$(jq -r '.crd_file' $WORKDIR/params.json)
+        constinp=$(jq -r '.constinp' $WORKDIR/params.json)
+        echo "Using dynamic PSF and CRD files from parameters for BilboMdCRD."
+
+    elif [ "$JOB_TYPE" = "BilboMdAuto" ]; then
+        # Job type specific for BilboMdCRD
+        pdb_file=$(jq -r '.pdb_file' $WORKDIR/params.json)
+        pae_file=$(jq -r '.pae_file' $WORKDIR/params.json)
+        in_psf_file="bilbomd_pdb2crd.psf"
+        in_crd_file="bilbomd_pdb2crd.crd"
+        constinp="" # Will be calculated by pae_ratios.py
         echo "Using dynamic PSF and CRD files from parameters for BilboMdCRD."
     else
         echo "Error: Unrecognized JOB_TYPE '$JOB_TYPE'"
@@ -303,7 +311,7 @@ generate_dcd2pdb_input_files() {
 }
 
 generate_bilbomd_slurm() {
-    cat << EOF > bilbomd.slurm
+    cat << EOF > $WORKDIR/bilbomd.slurm
 #!/bin/bash -l
 #SBATCH --qos=${queue}
 #SBATCH --nodes=${nodes}
@@ -324,6 +332,8 @@ generate_header() {
     cat << EOF > header
 #!/bin/bash -l
 
+cd /bilbomd/work
+
 EOF
 }
 
@@ -334,7 +344,7 @@ generate_pdb2crd_commands() {
 EOF
     for inp in "${g_pdb2crd_inp_files[@]}"; do
         echo "echo \"Starting $inp\" &" >> pdb2crd
-        local command="cd /bilbomd/work && charmm -o ${inp%.inp}.log -i ${inp} &"
+        local command="charmm -o ${inp%.inp}.log -i ${inp} &"
         echo $command >> pdb2crd
 
     done
@@ -344,14 +354,24 @@ EOF
     echo "" >> pdb2crd
     echo "# Meld all individual CRD files" >> pdb2crd
     echo "echo \"Melding pdb2crd_charmm_meld.inp\"" >> pdb2crd
-    local command="cd /bilbomd/work/ && charmm -o pdb2crd_charmm_meld.log -i pdb2crd_charmm_meld.inp"
+    local command="charmm -o pdb2crd_charmm_meld.log -i pdb2crd_charmm_meld.inp"
     echo $command >> pdb2crd
     echo "" >> pdb2crd
 }
 
+generate_pae2const_commands() {
+    cat << EOF > pae2const
+# ########################################
+# Create const.inp from Alphafold PAE
+EOF
+    echo "echo \"Calculate const.inp from PAE matrix...\"" >> pae2const
+    echo "python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file}" >> pae2const
+    echo "" >> pae2const
+}
+
 generate_min_heat_commands(){
-    profileSize=666
-    foxs_args=(
+    local profileSize=$(countDataPoints "$WORKDIR/$saxs_data")
+    local foxs_args=(
     '--offset'
     '--min_c1=0.99'
     '--max_c1=1.05'
@@ -365,17 +385,17 @@ generate_min_heat_commands(){
 # ########################################
 # CHARMM Minimize
 echo "Running CHARMM Minimize..."
-cd /bilbomd/work/ && mpirun -np $((NUM_CORES/2)) charmm -o minimize.log -i minimize.inp
+mpirun -np $((NUM_CORES/2)) charmm -o minimize.log -i minimize.inp
 
 # ########################################
 # FoXS Analysis of minimized PDB
 echo "Running Initial FoXS Analysis..."
-cd /bilbomd/work/ && foxs ${foxs_args[@]} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.log
+foxs ${foxs_args[@]} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.log
 
 # ########################################
 # CHARMM Heat
 echo "Running CHARMM Heat..."
-cd /bilbomd/work/ && mpirun -np $((NUM_CORES/2)) charmm -o heat.log -i heat.inp
+mpirun -np $((NUM_CORES/2)) charmm -o heat.log -i heat.inp
 
 EOF
 }
@@ -389,7 +409,7 @@ EOF
     echo "echo \"Running CHARMM Molecular Dynamics...\"" >> dynamics
     for inp in "${g_md_inp_files[@]}"; do
         echo "echo \"Starting $inp\"" >> dynamics
-        local command="cd /bilbomd/work && mpirun -np $((NUM_CORES / num_inp_files - 1 )) charmm -o ${inp%.inp}.log -i ${inp} &"
+        local command="mpirun -np $((NUM_CORES / num_inp_files - 1 )) charmm -o ${inp%.inp}.log -i ${inp} &"
         echo $command >> dynamics
     done
     echo "" >> dynamics
@@ -408,7 +428,7 @@ EOF
     echo "echo \"Running CHARMM Extract PDB from DCD Trajectories...\"" >> dcd2pdb
     for inp in "${g_dcd2pdb_inp_files[@]}"; do
         echo "echo \"Starting $inp\"" >> dcd2pdb
-        local command="cd /bilbomd/work && mpirun -np $((NUM_CORES / num_inp_files - 1 )) charmm -o ${inp%.inp}.log -i ${inp} &"
+        local command="mpirun -np $((NUM_CORES / num_inp_files - 1 )) charmm -o ${inp%.inp}.log -i ${inp} &"
         echo $command >> dcd2pdb
     done
     echo "" >> dcd2pdb
@@ -429,7 +449,7 @@ EOF
         for ((run=1; run<=conf_sample; run++)); do
             dir_path="/bilbomd/work/foxs/rg${rg}_run${run}"
             echo "echo \"Processing directory: $dir_path\"" >> foxssection
-            echo "cd /bilbomd/work && ./run_foxs_rg${rg}_run${run}.sh &" >> foxssection
+            echo "./run_foxs_rg${rg}_run${run}.sh &" >> foxssection
         done
     done
     echo "" >> foxssection
@@ -522,7 +542,7 @@ generate_multifoxs_command() {
 # Run MultiFoXS to calculate best ensemble
 EOF
     echo "echo \"Run MultiFoXS to calculate best ensemble...\"" >> multifoxssection
-    echo "cd /bilbomd/work && ./run_multifoxs.sh &" >> multifoxssection
+    echo "./run_multifoxs.sh &" >> multifoxssection
     echo "" >> multifoxssection
     echo "# Wait for MultiFoXS to finish" >> multifoxssection
     echo "wait" >> multifoxssection
@@ -548,6 +568,8 @@ assemble_run_bilbomd_script() {
         cat header pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection endsection> $WORKDIR/run-bilbomd.sh
     elif [ "$JOB_TYPE" = "BilboMdCRD" ]; then
         cat header minheat dynamics dcd2pdb foxssection multifoxssection endsection> $WORKDIR/run-bilbomd.sh
+    elif [ "$JOB_TYPE" = "BilboMdAuto" ]; then
+        cat header pdb2crd pae2const minheat dynamics dcd2pdb foxssection multifoxssection endsection> $WORKDIR/run-bilbomd.sh
     else
         echo "Error: Unrecognized JOB_TYPE '$JOB_TYPE'"
         return 1  # Exit with an error status
@@ -556,9 +578,9 @@ assemble_run_bilbomd_script() {
 }
 
 cleanup() {
-    rm header pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection endsection
+    rm header pdb2crd pae2const minheat dynamics dcd2pdb foxssection multifoxssection endsection
     # Move bilbomd.slurm to the working directory
-    mv bilbomd.slurm $WORKDIR/
+    # mv bilbomd.slurm $WORKDIR/
 }
 
 countDataPoints() {
@@ -580,8 +602,8 @@ countDataPoints() {
     count=$((count - 1))
 
     # Log the results to console (you can replace this with logging to a file if needed)
-    echo "countDataPoints original dat file has: $(($count + 1)) points"
-    echo "countDataPoints adjusting counts to: $count points"
+    # echo "countDataPoints original dat file has: $(($count + 1)) points"
+    # echo "countDataPoints adjusting counts to: $count points"
 
     # Return the adjusted count
     echo $count
@@ -593,7 +615,7 @@ echo "----------------- ${UUID} -----------------"
 #
 initialize_job
 #
-if [ "$JOB_TYPE" = "BilboMdPDB" ]; then
+if [ "$JOB_TYPE" = "BilboMdPDB" ] || [ "$JOB_TYPE" = "BilboMdAuto" ]; then
     generate_pdb2crd_input_files
 fi
 generate_md_input_files
@@ -601,6 +623,9 @@ generate_dcd2pdb_input_files
 #
 generate_header
 generate_pdb2crd_commands
+if [ "$JOB_TYPE" = "BilboMdAuto" ]; then
+    generate_pae2const_commands
+fi
 generate_min_heat_commands
 generate_dynamics_commands
 generate_dcd2pdb_commands

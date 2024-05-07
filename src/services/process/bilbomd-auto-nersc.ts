@@ -2,17 +2,13 @@ import { Job as BullMQJob } from 'bullmq'
 import { BilboMdAutoJob, IBilboMDAutoJob } from '../../models/Job'
 import { User } from '../../models/User'
 import { sendJobCompleteEmail } from '../../helpers/mailer'
+import { prepareResults, runPaeToConstInp, runAutoRg } from '../bilbomd.functions'
 import {
-  runMinimize,
-  runHeat,
-  runMolecularDynamics,
-  runFoxs,
-  runMultiFoxs,
-  prepareResults,
-  runPaeToConstInp,
-  runAutoRg
-} from '../bilbomd.functions'
-import { runSingleFoXS } from '../functions/foxs-analysis'
+  prepareBilboMDSlurmScript,
+  submitJobToNersc,
+  monitorTaskAtNERSC,
+  monitorJobAtNERSC
+} from '../../services/functions/nersc-jobs'
 import { logger } from '../../helpers/loggers'
 import { config } from '../../config/config'
 
@@ -97,44 +93,22 @@ const processBilboMDAutoJobNersc = async (MQjob: BullMQJob) => {
   await MQjob.log('end pae to const')
   await MQjob.updateProgress(15)
 
-  // Use BioXTAS to calculate Rg_min and Rg_max
-  await MQjob.log('start autorg')
-  await runAutoRg(foundJob)
-  await MQjob.log('end autorg')
-  await MQjob.updateProgress(20)
+  // Run make-bilbomd.sh to prepare bilbomd.slurm
+  const prepTaskID = await prepareBilboMDSlurmScript(foundJob)
+  const prepResult = await monitorTaskAtNERSC(prepTaskID)
+  logger.info(`prepResult: ${JSON.stringify(prepResult)}`)
 
-  // CHARMM minimization
-  await MQjob.log('start minimization')
-  await runMinimize(MQjob, foundJob)
-  await MQjob.log('end minimization')
-  await MQjob.updateProgress(25)
+  // Submit bilbomd.slurm to the queueing system
+  const taskID = await submitJobToNersc(foundJob.uuid)
+  const submitResult = await monitorTaskAtNERSC(taskID)
+  logger.info(`submitResult: ${JSON.stringify(submitResult)}`)
+  const submitResultObject = JSON.parse(submitResult.result)
+  const jobID = submitResultObject.jobid
+  logger.info(`JOBID: ${jobID}`)
 
-  // FoXS calculations on minimization_output.pdb
-  await runSingleFoXS(foundJob)
-
-  // CHARMM heating
-  await MQjob.log('start heating')
-  await runHeat(MQjob, foundJob)
-  await MQjob.log('end heating')
-  await MQjob.updateProgress(40)
-
-  // CHARMM molecular dynamics
-  await MQjob.log('start molecular dynamics')
-  await runMolecularDynamics(MQjob, foundJob)
-  await MQjob.log('end molecular dynamics')
-  await MQjob.updateProgress(60)
-
-  // Calculate FoXS profiles
-  await MQjob.log('start FoXS')
-  await runFoxs(MQjob, foundJob)
-  await MQjob.log('end FoXS')
-  await MQjob.updateProgress(80)
-
-  // MultiFoXS
-  await MQjob.log('start MultiFoXS')
-  await runMultiFoxs(MQjob, foundJob)
-  await MQjob.log('end MultiFoXS')
-  await MQjob.updateProgress(95)
+  // Watch the job
+  const jobResult = await monitorJobAtNERSC(jobID)
+  logger.info(`jobResult: ${JSON.stringify(jobResult)}`)
 
   // Prepare results
   await MQjob.log('start gather results')
