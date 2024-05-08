@@ -150,7 +150,7 @@ const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
           sacct_end: jobDetails.end
         }
       } else {
-        logger.warning('No job details found or output array is empty.')
+        logger.warn('No job details found or output array is empty.')
       }
       logger.info(`Current job status: ${jobStatus}`)
     } catch (error) {
