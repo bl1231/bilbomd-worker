@@ -2,7 +2,6 @@ import axios from 'axios'
 import jwt from 'jsonwebtoken'
 import fs from 'fs'
 import { logger } from '../../helpers/loggers'
-// import { NerscAccessToken } from '../../types/nersc'
 
 const tokenUrl = 'https://oidc.nersc.gov/c2id/token'
 const clientId = process.env.SFAPI_CLIENT_ID as string
