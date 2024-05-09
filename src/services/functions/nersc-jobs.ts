@@ -5,7 +5,6 @@ import { config } from '../../config/config'
 import { IJob } from '../../models/Job'
 import { ensureValidToken } from './nersc-sf-api-tokens'
 import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc'
-// import { BilboMDAutoJob, BilboMDCRDJob, BilboMDPDBJob } from 'types/jobtypes'
 
 const prepareBilboMDSlurmScript = async (Job: IJob): Promise<string> => {
   const UUID = Job.uuid
@@ -124,7 +123,7 @@ const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
 
   let continueMonitoring = true // Control variable for the loop
   let statusResponse: JobStatusResponse = {
-    api_status: 'pending',
+    api_status: 'PENDING',
     api_error: ''
   }
 
@@ -152,7 +151,7 @@ const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
       } else {
         logger.warn('No job details found or output array is empty.')
       }
-      logger.info(`Current job status: ${jobStatus}`)
+      logger.info(`Current job ${jobID} status: ${jobStatus}`)
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 403) {
         logger.info('Token may have expired, refreshing token...')
@@ -162,13 +161,19 @@ const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
       throw error
     }
 
+    // monitoring will continue for:
+    // PENDING
+    // RUNNING
+    // ...and presumably any other Slurm statuses of which I am unaware.
     switch (jobStatus) {
       case 'COMPLETED':
       case 'FAILED':
+      case 'DEADLINE':
       case 'TIMEOUT':
       case 'CANCELLED':
       case 'NODE_FAIL':
       case 'OUT_OF_MEMORY':
+      case 'PREEMPTED':
         continueMonitoring = false // Stop monitoring if any of these statuses are met
         break
       default:
