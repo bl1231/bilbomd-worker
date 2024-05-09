@@ -1,12 +1,24 @@
 # -----------------------------------------------------------------------------
-# Build stage 1 - Install build tools
-FROM ubuntu:22.04 AS builder
+# Build stage 1 - Install build tools & dependencies
+FROM ubuntu:24.04 AS builder
 RUN apt-get update && \
-    apt-get install -y cmake gcc gfortran g++ openmpi-bin libopenmpi-dev
+    apt-get install -y cmake gcc gfortran g++ python3 \
+    libpmix-bin libpmix-dev
+
+# -----------------------------------------------------------------------------
+# Build stage 1.2 - OpenMPI
+FROM builder AS build-openmpi
+ARG OPENMPI_VER=5.0.3
+COPY ./openmpi/openmpi-${OPENMPI_VER}.tar.gz /usr/local/src
+RUN tar -zxvf /usr/local/src/openmpi-${OPENMPI_VER}.tar.gz -C /usr/local/src && \
+    rm /usr/local/src/openmpi-${OPENMPI_VER}.tar.gz
+WORKDIR /usr/local/src/openmpi-${OPENMPI_VER}
+RUN ./configure --prefix=/usr/local --with-pmix --with-slurm
+RUN make all install
 
 # -----------------------------------------------------------------------------
 # Build stage 2 - Configure CHARMM
-FROM builder AS build_charmm
+FROM build-openmpi AS build-charmm
 ARG CHARMM_VER=c48b2
 
 # Combine the mkdir, tar extraction, and cleanup into a single RUN command
@@ -15,7 +27,7 @@ RUN mkdir -p /usr/local/src && \
     tar -zxvf /usr/local/src/${CHARMM_VER}.tar.gz -C /usr/local/src && \
     rm /usr/local/src/${CHARMM_VER}.tar.gz
 
-# Configure CHARMM in the same layer as the extraction if possible
+# Configure CHARMM
 WORKDIR /usr/local/src/charmm
 RUN ./configure
 
@@ -25,8 +37,8 @@ RUN make -j16 -C build/cmake install
 # -----------------------------------------------------------------------------
 # Build stage 3 - Copy CHARMM binary
 #   I'm not sure if this needs to be a separate step.
-FROM build_charmm AS bilbomd-worker-step1
-COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
+FROM build-charmm AS bilbomd-worker-step1
+COPY --from=build-charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 
 # -----------------------------------------------------------------------------
 # Build stage 4 - Install NodeJS v20
@@ -94,7 +106,7 @@ FROM bilbomd-worker-step4 AS bilbomd-worker-step5
 
 RUN apt-get update && \
     apt-get install -y wget && \
-    echo "deb https://integrativemodeling.org/latest/download jammy/" >> /etc/apt/sources.list && \
+    echo "deb https://integrativemodeling.org/latest/download noble/" >> /etc/apt/sources.list && \
     wget -O /etc/apt/trusted.gpg.d/salilab.asc https://salilab.org/~ben/pubkey256.asc && \
     apt-get update && \
     apt-get install -y imp
