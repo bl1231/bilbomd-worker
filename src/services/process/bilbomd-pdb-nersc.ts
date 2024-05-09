@@ -60,6 +60,19 @@ const processBilboMDPDBJobNersc = async (MQjob: BullMQJob) => {
     // Watch the job
     const jobResult = await monitorJobAtNERSC(jobID)
     logger.info(`jobResult: ${JSON.stringify(jobResult)}`)
+    // {
+    //   "api_status":"OK",
+    //   "api_error":null,
+    //   "sacct_jobid":"25407217",
+    //   "sacct_state":"TIMEOUT",
+    //   "sacct_submit":"2024-05-09T17:45:32",
+    //   "sacct_start":"2024-05-09T17:46:48",
+    //   "sacct_end":"2024-05-09T18:16:52"
+    // }
+    //
+    // NERSC Jobs can fail for any number of reasons
+    // I think the thing to do here is just mark teh job as failed
+    // and send an email to the user asking them to resubmit?
 
     // Prepare results
     await MQjob.log('start gather results')
