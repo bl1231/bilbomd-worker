@@ -7,8 +7,13 @@ import fs from 'fs-extra'
 import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
-import { User } from '../models/User'
-import { IJob, IBilboMDPDBJob, IBilboMDCRDJob, IBilboMDAutoJob } from '../models/Job'
+import { User } from '@bl1231/bilbomd-mongodb-schema'
+import {
+  IJob,
+  IBilboMDPDBJob,
+  IBilboMDCRDJob,
+  IBilboMDAutoJob
+} from '@bl1231/bilbomd-mongodb-schema'
 import { sendJobCompleteEmail } from '../helpers/mailer'
 import { exec } from 'node:child_process'
 import {

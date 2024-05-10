@@ -1,5 +1,5 @@
 import { Job as BullMQJob } from 'bullmq'
-import { BilboMdPDBJob } from '../../models/Job'
+import { BilboMdPDBJob } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../../helpers/loggers'
 import { initializeJob, prepareResults, cleanupJob } from '../bilbomd.functions'
 import {
@@ -11,10 +11,7 @@ import {
 
 const processBilboMDJobNerscTest = async (MQjob: BullMQJob) => {
   const foundJob = await BilboMdPDBJob.findOne({ _id: MQjob.data.jobid })
-    .populate({
-      path: 'user',
-      select: 'email'
-    })
+    .populate('user')
     .exec()
   if (!foundJob) {
     throw new Error(`No job found for: ${MQjob.data.jobid}`)
@@ -29,10 +26,7 @@ const processBilboMDPDBJobNersc = async (MQjob: BullMQJob) => {
     await MQjob.updateProgress(1)
 
     const foundJob = await BilboMdPDBJob.findOne({ _id: MQjob.data.jobid })
-      .populate({
-        path: 'user',
-        select: 'email'
-      })
+      .populate('user')
       .exec()
 
     if (!foundJob) {

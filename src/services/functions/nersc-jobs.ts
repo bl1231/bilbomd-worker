@@ -2,7 +2,7 @@ import axios from 'axios'
 import qs from 'qs'
 import { logger } from '../../helpers/loggers'
 import { config } from '../../config/config'
-import { IJob } from '../../models/Job'
+import { IJob } from '@bl1231/bilbomd-mongodb-schema'
 import { ensureValidToken } from './nersc-sf-api-tokens'
 import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc'
 

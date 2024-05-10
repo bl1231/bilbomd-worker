@@ -1,8 +1,9 @@
 import { Job as BullMQJob } from 'bullmq'
-import { BilboMdAutoJob, IBilboMDAutoJob } from '../../models/Job'
-import { User } from '../../models/User'
-import { sendJobCompleteEmail } from '../../helpers/mailer'
+import { BilboMdAutoJob } from '@bl1231/bilbomd-mongodb-schema'
+// import { User } from '@bl1231/bilbomd-mongodb-schema'
+// import { sendJobCompleteEmail } from '../../helpers/mailer'
 import {
+  initializeJob,
   runMinimize,
   runHeat,
   runMolecularDynamics,
@@ -10,48 +11,46 @@ import {
   runMultiFoxs,
   prepareResults,
   runPaeToConstInp,
-  runAutoRg
+  runAutoRg,
+  cleanupJob
 } from '../bilbomd.functions'
 import { runSingleFoXS } from '../functions/foxs-analysis'
-import { logger } from '../../helpers/loggers'
-import { config } from '../../config/config'
+// import { logger } from '../../helpers/loggers'
+// import { config } from '../../config/config'
 
-const bilbomdUrl: string = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
+// const bilbomdUrl: string = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
 
-const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDAutoJob) => {
-  // Make sure the user exists in MongoDB
-  const foundUser = await User.findById(DBjob.user).lean().exec()
-  if (!foundUser) {
-    throw new Error(`No user found for: ${DBjob.uuid}`)
-  }
-  // Clear the BullMQ Job logs
-  await MQJob.clearLogs()
-  // Set MongoDB status to Running
-  DBjob.status = 'Running'
-  const now = new Date()
-  DBjob.time_started = now
-  await DBjob.save()
-}
+// const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDAutoJob) => {
+//   // Make sure the user exists in MongoDB
+//   const foundUser = await User.findById(DBjob.user).lean().exec()
+//   if (!foundUser) {
+//     throw new Error(`No user found for: ${DBjob.uuid}`)
+//   }
+//   // Clear the BullMQ Job logs
+//   await MQJob.clearLogs()
+//   // Set MongoDB status to Running
+//   DBjob.status = 'Running'
+//   const now = new Date()
+//   DBjob.time_started = now
+//   await DBjob.save()
+// }
 
-const cleanupJob = async (MQjob: BullMQJob, DBJob: IBilboMDAutoJob) => {
-  DBJob.status = 'Completed'
-  DBJob.time_completed = new Date()
-  await DBJob.save()
-  if (config.sendEmailNotifications) {
-    sendJobCompleteEmail(DBJob.user.email, bilbomdUrl, DBJob.id, DBJob.title, false)
-    logger.info(`email notification sent to ${DBJob.user.email}`)
-    await MQjob.log(`email notification sent to ${DBJob.user.email}`)
-  }
-}
+// const cleanupJob = async (MQjob: BullMQJob, DBJob: IBilboMDAutoJob) => {
+//   DBJob.status = 'Completed'
+//   DBJob.time_completed = new Date()
+//   await DBJob.save()
+//   if (config.sendEmailNotifications) {
+//     sendJobCompleteEmail(DBJob.user.email, bilbomdUrl, DBJob.id, DBJob.title, false)
+//     logger.info(`email notification sent to ${DBJob.user.email}`)
+//     await MQjob.log(`email notification sent to ${DBJob.user.email}`)
+//   }
+// }
 
 const processBilboMDAutoJobTest = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(1)
 
   const foundJob = await BilboMdAutoJob.findOne({ _id: MQjob.data.jobid })
-    .populate({
-      path: 'user',
-      select: 'email'
-    })
+    .populate('user')
     .exec()
   if (!foundJob) {
     throw new Error(`No job found for: ${MQjob.data.jobid}`)
@@ -77,10 +76,7 @@ const processBilboMDAutoJob = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(1)
 
   const foundJob = await BilboMdAutoJob.findOne({ _id: MQjob.data.jobid })
-    .populate({
-      path: 'user',
-      select: 'email'
-    })
+    .populate('user')
     .exec()
   if (!foundJob) {
     throw new Error(`No job found for: ${MQjob.data.jobid}`)
