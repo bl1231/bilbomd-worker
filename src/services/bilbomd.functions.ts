@@ -7,7 +7,7 @@ import fs from 'fs-extra'
 import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
-import { User } from '@bl1231/bilbomd-mongodb-schema'
+import { User, IUser } from '@bl1231/bilbomd-mongodb-schema'
 import {
   IJob,
   IBilboMDPDBJob,
@@ -61,11 +61,12 @@ const handleError = async (
   // Send job completion email and log the notification
   logger.info(`Failed Attempts --> ${MQjob.attemptsMade}`)
 
+  const recipientEmail = (DBjob.user as IUser).email
   if (MQjob.attemptsMade >= 3) {
     if (config.sendEmailNotifications) {
-      sendJobCompleteEmail(DBjob.user.email, BILBOMD_URL, DBjob.id, DBjob.title, true)
-      logger.warn(`email notification sent to ${DBjob.user.email}`)
-      await MQjob.log(`email notification sent to ${DBjob.user.email}`)
+      sendJobCompleteEmail(recipientEmail, BILBOMD_URL, DBjob.id, DBjob.title, true)
+      logger.warn(`email notification sent to ${recipientEmail}`)
+      await MQjob.log(`email notification sent to ${recipientEmail}`)
     }
   }
   throw new Error('BilboMD failed')
