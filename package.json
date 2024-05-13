@@ -18,7 +18,7 @@
   "author": "Scott Classen",
   "license": "ISC",
   "dependencies": {
-    "@bl1231/bilbomd-mongodb-schema": "^1.0.8",
+    "@bl1231/bilbomd-mongodb-schema": "^1.0.10",
     "axios": "^1.6.8",
     "bullmq": "^5.7.5",
     "dotenv": "^16.4.5",
