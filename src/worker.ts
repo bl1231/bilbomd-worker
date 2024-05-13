@@ -13,7 +13,7 @@ import { processBilboMDPDBJobNersc } from './services/process/bilbomd-pdb-nersc'
 import { processBilboMDCRDJobNersc } from './services/process/bilbomd-crd-nersc'
 import { processBilboMDAutoJobNersc } from './services/process/bilbomd-auto-nersc'
 import { processPdb2CrdJobNersc } from './services/process/pdb-to-crd-nersc'
-// import { NerscAccessToken } from './types/nersc'
+
 dotenv.config()
 
 connectDB()
@@ -48,14 +48,6 @@ const checkNERSC = async () => {
 const workerHandler = async (job: Job<WorkerJob>) => {
   logger.info(`workerHandler: ${JSON.stringify(job.data)}`)
   try {
-    // let token: string | undefined
-
-    // // Check if the job needs to run on NERSC and get a token if necessary
-    // if (config.runOnNERSC) {
-    //   token = await ensureValidToken()
-    //   logger.info(`token: ${token}`)
-    //   logger.info(`Token obtained for job: ${job.id}`)
-    // }
     switch (job.data.type) {
       case 'pdb':
         logger.info(`Start BilboMD PDB job: ${job.name}`)
@@ -106,7 +98,21 @@ const pdb2crdWorkerOptions: WorkerOptions = {
 }
 
 const startWorkers = async () => {
-  if (await checkNERSC()) {
+  logger.info(`config.runOnNERSC ${config.runOnNERSC}`)
+  if (config.runOnNERSC) {
+    if (await checkNERSC()) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const worker = new Worker('bilbomd', workerHandler, workerOptions)
+      logger.info(`BilboMD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const pdb2crdWorker = new Worker('pdb2crd', workerHandler, pdb2crdWorkerOptions)
+      logger.info(`PDB2CRD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
+    } else {
+      logger.info('NERSC is not ready, delaying worker start')
+      setTimeout(startWorkers, 10000) // Check again in 10 seconds
+    }
+  } else {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const worker = new Worker('bilbomd', workerHandler, workerOptions)
     logger.info(`BilboMD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
@@ -114,9 +120,6 @@ const startWorkers = async () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const pdb2crdWorker = new Worker('pdb2crd', workerHandler, pdb2crdWorkerOptions)
     logger.info(`PDB2CRD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
-  } else {
-    logger.info('NERSC is not ready, delaying worker start')
-    setTimeout(startWorkers, 10000) // Check again in 10 seconds
   }
 }
 
