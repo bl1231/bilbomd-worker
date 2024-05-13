@@ -1,5 +1,5 @@
 import { Job as BullMQJob } from 'bullmq'
-import { BilboMdCRDJob } from './model/Job'
+import { BilboMdCRDJob } from '@bl1231/bilbomd-mongodb-schema'
 import {
   initializeJob,
   runMinimize,
@@ -9,15 +9,12 @@ import {
   runMultiFoxs,
   prepareResults,
   cleanupJob
-} from './bilbomd.functions'
-import { runSingleFoXS } from './foxs_analysis'
+} from '../bilbomd.functions'
+import { runSingleFoXS } from '../functions/foxs-analysis'
 
 const processBilboMDJobTest = async (MQjob: BullMQJob) => {
   const foundJob = await BilboMdCRDJob.findOne({ _id: MQjob.data.jobid })
-    .populate({
-      path: 'user',
-      select: 'email'
-    })
+    .populate('user')
     .exec()
   if (!foundJob) {
     throw new Error(`No job found for: ${MQjob.data.jobid}`)
@@ -31,10 +28,7 @@ const processBilboMDCRDJob = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(1)
 
   const foundJob = await BilboMdCRDJob.findOne({ _id: MQjob.data.jobid })
-    .populate({
-      path: 'user',
-      select: 'email'
-    })
+    .populate('user')
     .exec()
   if (!foundJob) {
     throw new Error(`No job found for: ${MQjob.data.jobid}`)

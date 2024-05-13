@@ -1,20 +1,38 @@
 import Handlebars from 'handlebars'
-import { logger } from './loggers'
-import { config } from './config/config'
+import { logger } from '../helpers/loggers'
+import { config } from '../config/config'
 import { spawn, ChildProcess } from 'node:child_process'
 import { promisify } from 'util'
 import fs from 'fs-extra'
 import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
-import { User } from './model/User'
-import { IJob, IBilboMDPDBJob, IBilboMDCRDJob, IBilboMDAutoJob } from './model/Job'
-import { sendJobCompleteEmail } from './mailer'
+import { User, IUser } from '@bl1231/bilbomd-mongodb-schema'
+import {
+  IJob,
+  IBilboMDPDBJob,
+  IBilboMDCRDJob,
+  IBilboMDAutoJob
+} from '@bl1231/bilbomd-mongodb-schema'
+import { sendJobCompleteEmail } from '../helpers/mailer'
 import { exec } from 'node:child_process'
-import { createPdb2CrdCharmmInpFiles, spawnPdb2CrdCharmm } from './process.pdb2crd'
+import {
+  createPdb2CrdCharmmInpFiles,
+  spawnPdb2CrdCharmm
+} from '../services/process/pdb-to-crd'
+import {
+  CharmmParams,
+  CharmmDCD2PDBParams,
+  MultiFoxsParams,
+  PaeParams,
+  CharmmHeatParams,
+  CharmmMDParams,
+  FoxsParams,
+  FileCopyParams
+} from '../types/index'
 
 const execPromise = promisify(exec)
-const TEMPLATES = path.resolve(__dirname, './templates/bilbomd')
+const TEMPLATES = path.resolve(__dirname, '../templates/bilbomd')
 
 const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
 const FOXS_BIN = process.env.FOXS ?? '/usr/bin/foxs'
@@ -22,64 +40,6 @@ const MULTIFOXS_BIN = process.env.MULTIFOXS ?? '/usr/bin/multi_foxs'
 const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
 const DATA_VOL = process.env.DATA_VOL ?? '/bilbomd/uploads'
 const BILBOMD_URL = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
-
-type Params = {
-  out_dir: string
-}
-
-type PaeParams = Params & {
-  in_crd: string
-  in_pae: string
-}
-
-type CharmmParams = Params & {
-  charmm_template: string
-  charmm_topo_dir: string
-  charmm_inp_file: string
-  charmm_out_file: string
-  in_psf_file: string
-  in_crd_file: string
-}
-
-type CharmmHeatParams = CharmmParams & {
-  constinp: string
-}
-
-type CharmmMDParams = CharmmParams & {
-  constinp: string
-  rg_min: number
-  rg_max: number
-  rg: number
-  timestep: number
-  conf_sample: number
-  inp_basename: string
-}
-
-type CharmmDCD2PDBParams = CharmmParams & {
-  inp_basename: string
-  foxs_rg: string
-  in_dcd: string
-  run: string
-}
-
-type FoxsParams = Params & {
-  foxs_rg: string
-  rg_min: number
-  rg_max: number
-  conf_sample: number
-}
-
-type MultiFoxsParams = Params & {
-  data_file: string
-}
-
-interface FileCopyParams {
-  source: string
-  destination: string
-  filename: string
-  MQjob: BullMQJob
-  isCritical: boolean
-}
 
 const handleError = async (
   error: Error | unknown,
@@ -101,11 +61,12 @@ const handleError = async (
   // Send job completion email and log the notification
   logger.info(`Failed Attempts --> ${MQjob.attemptsMade}`)
 
+  const recipientEmail = (DBjob.user as IUser).email
   if (MQjob.attemptsMade >= 3) {
     if (config.sendEmailNotifications) {
-      sendJobCompleteEmail(DBjob.user.email, BILBOMD_URL, DBjob.id, DBjob.title, true)
-      logger.warn(`email notification sent to ${DBjob.user.email}`)
-      await MQjob.log(`email notification sent to ${DBjob.user.email}`)
+      sendJobCompleteEmail(recipientEmail, BILBOMD_URL, DBjob.id, DBjob.title, true)
+      logger.warn(`email notification sent to ${recipientEmail}`)
+      await MQjob.log(`email notification sent to ${recipientEmail}`)
     }
   }
   throw new Error('BilboMD failed')
@@ -270,6 +231,9 @@ const extractPdbPaths = (content: string): string[] => {
       }
       return ''
     })
+  // Extracts all PDBs
+  //
+  // logger.info(`extractPdbPaths pdbPaths: ${pdbPaths}`)
   return pdbPaths
 }
 
@@ -818,8 +782,10 @@ const prepareResults = async (
       // Iterate through each ensembles_siz_*.txt file
       for (let i = 1; i <= numEnsembles; i++) {
         const ensembleFile = path.join(multiFoxsDir, `ensembles_size_${i}.txt`)
+        logger.info(`prepareResults ensembleFile: ${ensembleFile}`)
         const ensembleFileContent = await fs.readFile(ensembleFile, 'utf8')
         const pdbFilesRelative = extractPdbPaths(ensembleFileContent)
+
         const pdbFilesFullPath = pdbFilesRelative.map((item) =>
           path.join(outputDir, item)
         )

@@ -1,6 +1,6 @@
 import { Job as BullMQJob } from 'bullmq'
-import { Job } from './model/Job'
-import { logger } from './loggers'
+import { Job } from '@bl1231/bilbomd-mongodb-schema'
+import { logger } from '../../helpers/loggers'
 import fs from 'fs-extra'
 import path from 'path'
 import { spawn } from 'node:child_process'
@@ -25,16 +25,11 @@ const cleanupJob = async (MQjob: BullMQJob) => {
   await MQjob.log('Done!')
 }
 
-const processPdb2CrdJob = async (MQJob: BullMQJob) => {
+const processPdb2CrdJobNersc = async (MQJob: BullMQJob) => {
   try {
     await MQJob.updateProgress(1)
     logger.info(`UUID: ${MQJob.data.uuid}`)
-    const foundJob = await Job.findOne({ uuid: MQJob.data.uuid })
-      .populate({
-        path: 'user',
-        select: 'email'
-      })
-      .exec()
+    const foundJob = await Job.findOne({ uuid: MQJob.data.uuid }).populate('user').exec()
 
     if (!foundJob) {
       logger.warn(
@@ -217,4 +212,4 @@ const spawnPdb2CrdCharmm = (
   return Promise.all(promises)
 }
 
-export { processPdb2CrdJob, createPdb2CrdCharmmInpFiles, spawnPdb2CrdCharmm }
+export { processPdb2CrdJobNersc }

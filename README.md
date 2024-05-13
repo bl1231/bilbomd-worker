@@ -15,7 +15,13 @@ Processes BilboMD jobs and run CHARMM, FoXS, and MultiFoXS
 To build the Docker image from the command line you must specify the CHARMM version.
 
 ```bash
-docker build -t bl1231/bilbomd-worker:0.0.12-dev1 --build-arg CHARMM_VER=c47b2 .
+docker build -t bl1231/bilbomd-worker:0.0.12 --build-arg CHARMM_VER=c47b2 .
+```
+
+building on Perlmutter login node:
+
+```bash
+podman-hpc build -t bilbomd/bilbomd-worker:0.0.3 --build-arg CHARMM_VER=c48b2 --build-arg USER_ID=$UID -f NERSC.dockerfile
 ```
 
 The entire app is run within a [Docker](https://www.docker.com/) container. See the `Dockerfile` for details. It accesses BullMQ/Redis container using these env variables:

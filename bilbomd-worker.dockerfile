@@ -2,7 +2,7 @@
 # Build stage 1 - Install build tools
 FROM ubuntu:22.04 AS builder
 RUN apt-get update && \
-    apt-get install -y cmake gcc gfortran g++
+    apt-get install -y cmake gcc gfortran g++ openmpi-bin libopenmpi-dev
 
 # -----------------------------------------------------------------------------
 # Build stage 2 - Configure CHARMM
@@ -20,7 +20,7 @@ WORKDIR /usr/local/src/charmm
 RUN ./configure
 
 # Build CHARMM
-RUN make -j8 -C build/cmake install
+RUN make -j16 -C build/cmake install
 
 # -----------------------------------------------------------------------------
 # Build stage 3 - Copy CHARMM binary
@@ -89,22 +89,24 @@ RUN python setup.py build_ext --inplace && \
     pip install .
 
 # -----------------------------------------------------------------------------
-# Build stage 7 - IMP & worker app
-FROM bilbomd-worker-step4 AS bilbomd-worker
-ARG USER_ID=1001
-ARG GROUP_ID=1001
+# Build stage 7 - IMP 
+FROM bilbomd-worker-step4 AS bilbomd-worker-step5
 
 RUN apt-get update && \
     apt-get install -y wget && \
     echo "deb https://integrativemodeling.org/latest/download jammy/" >> /etc/apt/sources.list && \
     wget -O /etc/apt/trusted.gpg.d/salilab.asc https://salilab.org/~ben/pubkey256.asc && \
     apt-get update && \
-    apt-get install -y imp
+    apt-get install -y imp openmpi-bin libopenmpi-dev
 
-
+# -----------------------------------------------------------------------------
+# Build stage 8 - worker app
+FROM bilbomd-worker-step5 AS bilbomd-worker
+ARG USER_ID=1001
+ARG GROUP_ID=1001
+ARG NPM_TOKEN
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
-# VOLUME [ "/bilbomd/uploads" ]
 WORKDIR /app
 
 # Create a user and group with the provided IDs
@@ -114,14 +116,23 @@ RUN groupadd -g $GROUP_ID bilbomd && useradd -u $USER_ID -g $GROUP_ID -d /home/b
 # Change ownership of directories to the user and group
 RUN chown -R bilbo:bilbomd /app /bilbomd/uploads /home/bilbo
 
+# Update NPM
+RUN npm install -g npm@10.7.0
+
 # Switch to the non-root user
 USER bilbo:bilbomd
 
 # Copy over the package*.json files
 COPY --chown=bilbo:bilbomd package*.json .
 
+# Create .npmrc file using the build argument
+RUN echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" > /home/bilbo/.npmrc
+
 # Install dependencies
 RUN npm ci
+
+# Optionally, clean up the environment variable for security
+RUN unset NPM_TOKEN
 
 # Copy the app code
 COPY --chown=bilbo:bilbomd . .
