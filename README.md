@@ -57,6 +57,8 @@ All of these env settings (and some others) reside in a single `.env` file that 
 
 ## Version History
 
+- 1.6.1
+  - A fair number of changes for NERSC deployment
 - 1.6.0
   - Extensive changes to `pdb2crd.py` in order to preserve incoming residue numbering.
   - Refactor for the changes in `pdb2crd.py`
