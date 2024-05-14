@@ -10,36 +10,8 @@ import {
   monitorTaskAtNERSC,
   monitorJobAtNERSC
 } from '../functions/nersc-jobs'
+import { handleStepError, updateStepStatus } from '../functions/mongo-utils'
 import { logger } from '../../helpers/loggers'
-// import { config } from '../../config/config'
-
-// const bilbomdUrl: string = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
-
-// const initializeJob = async (MQJob: BullMQJob, DBjob: IBilboMDAutoJob) => {
-//   // Make sure the user exists in MongoDB
-//   const foundUser = await User.findById(DBjob.user).lean().exec()
-//   if (!foundUser) {
-//     throw new Error(`No user found for: ${DBjob.uuid}`)
-//   }
-//   // Clear the BullMQ Job logs
-//   await MQJob.clearLogs()
-//   // Set MongoDB status to Running
-//   DBjob.status = 'Running'
-//   const now = new Date()
-//   DBjob.time_started = now
-//   await DBjob.save()
-// }
-
-// const cleanupJob = async (MQjob: BullMQJob, DBJob: IBilboMDAutoJob) => {
-//   DBJob.status = 'Completed'
-//   DBJob.time_completed = new Date()
-//   await DBJob.save()
-//   if (config.sendEmailNotifications) {
-//     sendJobCompleteEmail(DBJob.user.email, bilbomdUrl, DBJob.id, DBJob.title, false)
-//     logger.info(`email notification sent to ${DBJob.user.email}`)
-//     await MQjob.log(`email notification sent to ${DBJob.user.email}`)
-//   }
-// }
 
 const processBilboMDAutoNerscJobTest = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(1)
@@ -103,13 +75,21 @@ const processBilboMDAutoJobNersc = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(90)
 
   // Prepare results
-  await MQjob.log('start gather results')
-  await prepareResults(MQjob, foundJob)
-  await MQjob.log('end gather results')
+  try {
+    await MQjob.log('start gather results')
+    await updateStepStatus(foundJob._id, 'results', 'Running')
+    await prepareResults(MQjob, foundJob)
+    await updateStepStatus(foundJob._id, 'results', 'Success')
+    await MQjob.log('end gather results')
+  } catch (error) {
+    await handleStepError(foundJob._id, 'results', error)
+  }
   await MQjob.updateProgress(99)
 
   // Cleanup & send email
+  await updateStepStatus(foundJob._id, 'email', 'Running')
   await cleanupJob(MQjob, foundJob)
+  await updateStepStatus(foundJob._id, 'email', 'Success')
   await MQjob.updateProgress(100)
 }
 

@@ -9,6 +9,7 @@ import {
   monitorTaskAtNERSC,
   monitorJobAtNERSC
 } from '../functions/nersc-jobs'
+import { handleStepError, updateStepStatus } from '../functions/mongo-utils'
 
 const processBilboMDCRDJobNerscTest = async (MQjob: BullMQJob) => {
   const foundJob = await BilboMdCRDJob.findOne({ _id: MQjob.data.jobid })
@@ -59,13 +60,21 @@ const processBilboMDCRDJobNersc = async (MQjob: BullMQJob) => {
     logger.info(`jobResult: ${JSON.stringify(jobResult)}`)
 
     // Prepare results
-    await MQjob.log('start gather results')
-    await prepareResults(MQjob, foundJob)
-    await MQjob.log('end gather results')
+    try {
+      await MQjob.log('start gather results')
+      await updateStepStatus(foundJob._id, 'results', 'Running')
+      await prepareResults(MQjob, foundJob)
+      await updateStepStatus(foundJob._id, 'results', 'Success')
+      await MQjob.log('end gather results')
+    } catch (error) {
+      await handleStepError(foundJob._id, 'results', error)
+    }
     await MQjob.updateProgress(99)
 
     // Cleanup & send email
+    await updateStepStatus(foundJob._id, 'email', 'Running')
     await cleanupJob(MQjob, foundJob)
+    await updateStepStatus(foundJob._id, 'email', 'Success')
     await MQjob.updateProgress(100)
   } catch (error) {
     logger.error(`Failed to process job: ${MQjob.data.uuid}`)
