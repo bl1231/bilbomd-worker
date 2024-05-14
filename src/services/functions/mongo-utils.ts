@@ -22,8 +22,29 @@ const updateStepStatus = async (jobId: string, stepName: string, status: string)
     }
   } catch (error) {
     logger.error(
-      `Error updating step status for job ${jobId} in step ${stepName}:`,
-      error
+      `Error updating step status for job ${jobId} in step ${stepName}: ${error}`
+    )
+  }
+}
+
+const updateStepMessage = async (jobId: string, stepName: string, message: string) => {
+  try {
+    const objectId = new mongoose.Types.ObjectId(jobId)
+    const updatedJob = await Job.findByIdAndUpdate(
+      objectId,
+      { [`steps.${stepName}.message`]: message },
+      { new: true } // Return the updated document
+    )
+    if (!updatedJob) {
+      logger.error(
+        `Failed to update step ${stepName} message for job ${jobId}. Job not found.`
+      )
+    } else {
+      logger.info(`updateStepMessage ${jobId} ${stepName} ${message}`)
+    }
+  } catch (error) {
+    logger.error(
+      `Error updating step message for job ${jobId} in step ${stepName}: ${error}`
     )
   }
 }
@@ -41,4 +62,4 @@ const handleStepError = async (jobId: string, stepName: string, error: unknown) 
   logger.error(`Error in ${stepName}: ${errorMessage}`)
 }
 
-export { updateStepStatus, handleStepError }
+export { updateStepStatus, updateStepMessage, handleStepError }
