@@ -2,19 +2,14 @@ import { Job as BullMQJob } from 'bullmq'
 import { BilboMdAutoJob } from '@bl1231/bilbomd-mongodb-schema'
 // import { User } from '@bl1231/bilbomd-mongodb-schema'
 // import { sendJobCompleteEmail } from '../../helpers/mailer'
-import {
-  initializeJob,
-  prepareResults,
-  runPaeToConstInp,
-  runAutoRg,
-  cleanupJob
-} from '../bilbomd.functions'
+import { prepareResults, runPaeToConstInp, runAutoRg } from '../bilbomd.functions'
+import { initializeJob, cleanupJob } from '../functions/job-utils'
 import {
   prepareBilboMDSlurmScript,
   submitJobToNersc,
   monitorTaskAtNERSC,
   monitorJobAtNERSC
-} from '../../services/functions/nersc-jobs'
+} from '../functions/nersc-jobs'
 import { logger } from '../../helpers/loggers'
 // import { config } from '../../config/config'
 

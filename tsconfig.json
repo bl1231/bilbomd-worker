@@ -7,13 +7,8 @@
     "moduleResolution": "Node",
     "baseUrl": "./src" /* Specify the base directory to resolve non-relative module names. */,
     "paths": {
-      "helpers/*": ["helpers/*"],
-      "models/*": ["models/*"],
-      "services/*": ["services/*"],
-      "config/*": ["config/*"],
-      "functions/*": ["functions/*"],
-      "types/*": ["types/*"]
-      // Add more paths as needed
+      "*": ["*"],
+      "services/*": ["services/*"]
     },
     "allowJs": false /* Allow JavaScript files to be a part of your program. Use the 'checkJS' option to get errors from these files. */,
     "checkJs": false /* Enable error reporting in type-checked JavaScript files. */,

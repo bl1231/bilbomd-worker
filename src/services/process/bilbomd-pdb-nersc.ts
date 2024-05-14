@@ -1,13 +1,14 @@
 import { Job as BullMQJob } from 'bullmq'
 import { BilboMdPDBJob } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../../helpers/loggers'
-import { initializeJob, prepareResults, cleanupJob } from '../bilbomd.functions'
+import { prepareResults } from '../bilbomd.functions'
+import { initializeJob, cleanupJob } from '../functions/job-utils'
 import {
   prepareBilboMDSlurmScript,
   submitJobToNersc,
   monitorTaskAtNERSC,
   monitorJobAtNERSC
-} from '../../services/functions/nersc-jobs'
+} from '../functions/nersc-jobs'
 
 const processBilboMDJobNerscTest = async (MQjob: BullMQJob) => {
   const foundJob = await BilboMdPDBJob.findOne({ _id: MQjob.data.jobid })
