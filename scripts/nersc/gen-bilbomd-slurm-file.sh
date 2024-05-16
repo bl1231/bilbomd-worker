@@ -516,7 +516,7 @@ generate_foxs_commands() {
 EOF
     echo "echo \"Run FoXS to calculate SAXS curves...\"" >> $WORKDIR/foxssection
     for rg in $g_rgs; do
-        echo "generate_foxs_commands rg: ${rg}"
+        echo "Generate FoXS Commands Rg: ${rg}"
         for ((run=1; run<=conf_sample; run++)); do
             dir_path="/bilbomd/work/foxs/rg${rg}_run${run}"
             echo "echo \"Processing directory: $dir_path\"" >> $WORKDIR/foxssection
@@ -631,7 +631,7 @@ generate_copy_commands() {
 EOF
     echo "echo \"Copying results back to CFS...\"" >> $WORKDIR/endsection
     # echo "echo \"Copying $WORKDIR/ back to CFS $UPLOAD_DIR ...\"" >> $WORKDIR/endsection
-    # echo "cp -nR /bilbomd/work/* /cfs/" >> $WORKDIR/endsection
+    echo "cp -nR $WORKDIR/* $UPLOAD_DIR" >> $WORKDIR/endsection
     echo "" >> $WORKDIR/endsection
     echo "echo \"DONE ${UUID}\"" >> $WORKDIR/endsection
 }
@@ -652,10 +652,8 @@ append_slurm_sections() {
 }
 
 cleanup() {
-    # 
-    echo "in cleanup $WORKDIR"
+    echo "Cleaning $WORKDIR"
     cd $WORKDIR
-    pwd
     rm -f slurmheader pdb2crd pae2const minheat dynamics dcd2pdb foxssection multifoxssection endsection *.tmpl
 }
 
