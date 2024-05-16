@@ -57,9 +57,10 @@ fi
 # UPLOAD_DIR=${CFS}/${project}/bilbomd-uploads/${UUID}
 # WORKDIR=${PSCRATCH}/bilbmod/${UUID}
 # TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
-UPLOAD_DIR=./bilbomd-uploads/${UUID}
-WORKDIR=./workdir/${UUID}
-TEMPLATEDIR=./bilbomd-templates
+
+UPLOAD_DIR=${PWD}/bilbomd-uploads/${UUID}
+WORKDIR=${PWD}/workdir/${UUID}
+TEMPLATEDIR=${PWD}/bilbomd-templates
 
 # WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.6
 WORKER=bl1231/bilbomd-perlmutter-worker
