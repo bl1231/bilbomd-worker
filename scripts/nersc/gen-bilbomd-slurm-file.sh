@@ -138,8 +138,6 @@ read_job_params() {
             echo "Error: Missing const_inp file"
             return 1
         fi
-        echo "Read BilboMdPDB Job Params."
-
     elif [ "$job_type" = "BilboMdCRD" ]; then
         # Job type specific for BilboMdCRD
         pdb_file=''  # Clear the pdb_file if it's not needed
@@ -158,8 +156,6 @@ read_job_params() {
             echo "Error: Missing const_inp file"
             return 1
         fi
-        echo "Read BilboMdCRD Job Params."
-
     elif [ "$job_type" = "BilboMdAuto" ]; then
         # Job type specific for BilboMdCRD
         pdb_file=$(jq -r '.pdb_file' $WORKDIR/params.json)
@@ -175,13 +171,11 @@ read_job_params() {
             echo "Error: Missing PAE file"
             return 1
         fi
-        echo "Read BilboMdAuto Job Params."
     else
         echo "Error: Unrecognized job_type '$job_type'"
         return 1  # Exit with an error status
     fi
 
-    # Echo the variables to verify they're read correctly
     echo ""
     echo "PDB file: $pdb_file"
     echo "SAXS data: $saxs_data"
