@@ -2,25 +2,25 @@
 #
 
 # Check if two arguments were provided
-if [ $# -ne 2 ]; then
-    echo "Usage: $0 <UUID> <JOB_TYPE>"
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <UUID>"
     exit 1
 fi
 
 # Assign args to global variables
 UUID=$1
-JOB_TYPE=$2
+# job_type=$2
 
-# Validate the JOB_TYPE
-case $JOB_TYPE in
-    'BilboMdPDB'|'BilboMdCRD'|'BilboMdAuto')
-        echo "Proceeding with JOB_TYPE: $JOB_TYPE"
-        ;;
-    *)
-        echo "Error: Invalid JOB_TYPE '$JOB_TYPE'. Allowed values are 'BilboMdPDB', 'BilboMdCRD', 'BilboMdAuto'."
-        exit 1
-        ;;
-esac
+# Validate the job_type
+# case $job_type in
+#     'BilboMdPDB'|'BilboMdCRD'|'BilboMdAuto')
+#         echo "Proceeding with job_type: $job_type"
+#         ;;
+#     *)
+#         echo "Error: Invalid job_type '$job_type'. Allowed values are 'BilboMdPDB', 'BilboMdCRD', 'BilboMdAuto'."
+#         exit 1
+#         ;;
+# esac
 
 # -----------------------------------------------------------------------------
 # Check if running on macOS or BSD and adjust the sed command
@@ -84,10 +84,8 @@ foxs_rg="foxs_rg.out"
 create_working_dir() {
     mkdir -p $WORKDIR
     if [ $? -eq 0 ]; then
-        echo "Perlmutter Scratch Working Directory created successfully"
-        echo "---------------"
+        echo "Perlmutter Scratch Working Directory Created Successfully"
         echo "$WORKDIR"
-        echo "---------------"
     else
         echo "Failed to create directory: $WORKDIR" >&2
         exit 1
@@ -105,25 +103,33 @@ copy_input_data() {
 }
 
 read_job_params() {
-    echo "Reading job parameters for job type: $JOB_TYPE"
+    echo "Reading job parameters"
 
     # Common parameters
+    job_type=$(jq -r '.__t' $WORKDIR/params.json)
     saxs_data=$(jq -r '.data_file' $WORKDIR/params.json)
     conf_sample=$(jq -r '.conformational_sampling' $WORKDIR/params.json)
     # Fail if essential parameters are missing
-    if [ -z "$saxs_data" ] || [ -z "$conf_sample" ]; then
-        echo "Error: Essential parameter missing (SAXS data or conf_sample)."
+    if [ -z "$saxs_data" ]; then
+        echo "Error: SAXS data missing"
+        return 1
+    fi
+    if [ -z "$conf_sample" ]; then
+        echo "Error: Conformational Sampling parameter missing"
+        return 1
+    fi
+    if [ -z "$job_type" ]; then
+        echo "Error: Job Type parameter missing"
         return 1
     fi
 
 
-    if [ "$JOB_TYPE" = "BilboMdPDB" ]; then
+    if [ "$job_type" = "BilboMdPDB" ]; then
         # Job type specific for BilboMdPDB
         pdb_file=$(jq -r '.pdb_file' $WORKDIR/params.json)
         in_psf_file="bilbomd_pdb2crd.psf"
         in_crd_file="bilbomd_pdb2crd.crd"
         constinp=$(jq -r '.const_inp_file' $WORKDIR/params.json)
-
         if [ -z "$pdb_file" ]; then
             echo "Error: Missing PDB file."
             return 1
@@ -134,7 +140,7 @@ read_job_params() {
         fi
         echo "Read BilboMdPDB Job Params."
 
-    elif [ "$JOB_TYPE" = "BilboMdCRD" ]; then
+    elif [ "$job_type" = "BilboMdCRD" ]; then
         # Job type specific for BilboMdCRD
         pdb_file=''  # Clear the pdb_file if it's not needed
         in_psf_file=$(jq -r '.psf_file' $WORKDIR/params.json)
@@ -154,7 +160,7 @@ read_job_params() {
         fi
         echo "Read BilboMdCRD Job Params."
 
-    elif [ "$JOB_TYPE" = "BilboMdAuto" ]; then
+    elif [ "$job_type" = "BilboMdAuto" ]; then
         # Job type specific for BilboMdCRD
         pdb_file=$(jq -r '.pdb_file' $WORKDIR/params.json)
         pae_file=$(jq -r '.pae_file' $WORKDIR/params.json)
@@ -171,7 +177,7 @@ read_job_params() {
         fi
         echo "Read BilboMdAuto Job Params."
     else
-        echo "Error: Unrecognized JOB_TYPE '$JOB_TYPE'"
+        echo "Error: Unrecognized job_type '$job_type'"
         return 1  # Exit with an error status
     fi
 
@@ -638,14 +644,14 @@ EOF
 
 append_slurm_sections() {
     cd $WORKDIR
-    if [ "$JOB_TYPE" = "BilboMdPDB" ]; then
+    if [ "$job_type" = "BilboMdPDB" ]; then
         cat slurmheader pdb2crd minheat dynamics dcd2pdb foxssection multifoxssection endsection > bilbomd.slurm
-    elif [ "$JOB_TYPE" = "BilboMdCRD" ]; then
+    elif [ "$job_type" = "BilboMdCRD" ]; then
         cat slurmheader minheat dynamics dcd2pdb foxssection multifoxssection endsection > bilbomd.slurm
-    elif [ "$JOB_TYPE" = "BilboMdAuto" ]; then
+    elif [ "$job_type" = "BilboMdAuto" ]; then
         cat slurmheader pdb2crd pae2const minheat dynamics dcd2pdb foxssection multifoxssection endsection > bilbomd.slurm
     else
-        echo "Error: Unrecognized JOB_TYPE '$JOB_TYPE'"
+        echo "Error: Unrecognized job_type '$job_type'"
         return 1  # Exit with an error status
     fi
     
@@ -685,7 +691,7 @@ echo "----------------- ${UUID} -----------------"
 #
 initialize_job
 #
-if [ "$JOB_TYPE" = "BilboMdPDB" ] || [ "$JOB_TYPE" = "BilboMdAuto" ]; then
+if [ "$job_type" = "BilboMdPDB" ] || [ "$job_type" = "BilboMdAuto" ]; then
     generate_pdb2crd_input_files
 fi
 generate_md_input_files
@@ -693,7 +699,7 @@ generate_dcd2pdb_input_files
 generate_bilbomd_slurm_header
 generate_pdb2crd_commands
 #
-if [ "$JOB_TYPE" = "BilboMdAuto" ]; then
+if [ "$job_type" = "BilboMdAuto" ]; then
     generate_pae2const_commands
 fi
 generate_min_heat_commands
