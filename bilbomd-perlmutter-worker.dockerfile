@@ -3,7 +3,7 @@
 FROM ubuntu:24.04 AS builder
 RUN apt-get update && \
     apt-get install -y cmake gcc gfortran g++ python3 \
-    libpmix-bin libpmix-dev
+    libpmix-bin libpmix-dev parallel
 
 # -----------------------------------------------------------------------------
 # Build stage 1.2 - OpenMPI
