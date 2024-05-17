@@ -392,10 +392,14 @@ EOF
     echo "# Wait for all PDB to CRD jobs to finish" >> $WORKDIR/pdb2crd
     echo "wait" >> $WORKDIR/pdb2crd
     echo "" >> $WORKDIR/pdb2crd
+    echo "echo \"Individual chains converted to CRD files.\"" >> $WORKDIR/pdb2crd
+    echo "" >> $WORKDIR/pdb2crd
     echo "# Meld all individual CRD files" >> $WORKDIR/pdb2crd
     echo "echo \"Melding pdb2crd_charmm_meld.inp\"" >> $WORKDIR/pdb2crd
     local command="srun --ntasks=1 --job-name meld podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o pdb2crd_charmm_meld.out -i pdb2crd_charmm_meld.inp\""
     echo $command >> $WORKDIR/pdb2crd
+    echo "" >> $WORKDIR/pdb2crd
+    echo "echo \"All Individual CRD files melded into bilbomd_pdb2crd.crd\"" >> $WORKDIR/pdb2crd
     echo "" >> $WORKDIR/pdb2crd
 }
 
@@ -438,15 +442,21 @@ generate_min_heat_commands(){
 echo "Running CHARMM Minimize..."
 srun --ntasks=1 --job-name minimize podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o minimize.out -i minimize.inp"
 
+echo "CHARMM Minimize complete"
+
 # -----------------------------------------------------------------------------
 # FoXS Analysis of minimized PDB
 echo "Running Initial FoXS Analysis..."
 srun --ntasks=1 --job-name initfoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && foxs ${foxs_args[@]} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.log"
 
+echo "Initial FoXS Analysis complete"
+
 # -----------------------------------------------------------------------------
 # CHARMM Heat
 echo "Running CHARMM Heat..."
 srun --ntasks=1 --job-name heat podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o heat.out -i heat.inp"
+
+echo "CHARMM Heating complete"
 
 EOF
 }
@@ -458,7 +468,7 @@ generate_dynamics_commands() {
 EOF
     local num_inp_files=${#g_md_inp_files[@]}
     local count=1
-    local cpus=$(($NUM_CORES/$num_inp_files))
+    cpus=$(($NUM_CORES/$num_inp_files))
     echo "echo \"Running CHARMM Molecular Dynamics...\"" >> $WORKDIR/dynamics
     for inp in "${g_md_inp_files[@]}"; do
         echo "echo \"Starting $inp\"" >> $WORKDIR/dynamics
@@ -470,6 +480,8 @@ EOF
     echo "# Wait for all Molecular Dynamics jobs to finish" >> $WORKDIR/dynamics
     echo "wait" >> $WORKDIR/dynamics
     echo "" >> $WORKDIR/dynamics
+    echo "echo \"CHARMM Molecular Dynamics complete\"" >> $WORKDIR/dynamics
+    echo "" >> $WORKDIR/dynamics
 
 }
 
@@ -478,9 +490,10 @@ generate_dcd2pdb_commands() {
     cat << EOF > $WORKDIR/dcd2pdb
 # -----------------------------------------------------------------------------
 # CHARMM Extract PDB from DCD Trajectories
-echo \"Running CHARMM Extract PDB from DCD Trajectories...\"
+echo "Running CHARMM Extract PDB from DCD Trajectories..."
 $command
 
+echo "Extract PDB from DCD Trajectories complete."
 EOF
     echo "" >> $WORKDIR/dcd2pdb
 }
@@ -500,68 +513,34 @@ generate_foxs_commands() {
 # -----------------------------------------------------------------------------
 # Run FoXS to calculate SAXS curves
 EOF
-
     echo "echo \"Run FoXS to calculate SAXS curves...\"" >> $WORKDIR/foxssection
-    for rg in $g_rgs; do
-        echo "Generate FoXS Commands Rg: ${rg}"
-        for ((run=1; run<=conf_sample; run++)); do
-            dir_path="/bilbomd/work/foxs/rg${rg}_run${run}"
-            echo "echo \"Processing directory: $dir_path\"" >> $WORKDIR/foxssection
-            # If these srun commands are run sequentially then give each one all the available cores
-            local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name foxs${rg} podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_foxs_rg${rg}_run${run}.sh\""
-            echo $command >> $WORKDIR/foxssection
-        done
-    done
+    # dir_path="/bilbomd/work/foxs/rg${rg}_run##"
+    # echo "echo \"Processing directory: $dir_path\"" >> $WORKDIR/foxssection
+    # If these srun commands are run sequentially then give each one all the available cores
+    local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name foxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/foxs && ../run_foxs.sh\""
+    echo $command >> $WORKDIR/foxssection
     echo "" >> $WORKDIR/foxssection
-    # echo "# Wait for all FoXS jobs to finish" >> $WORKDIR/foxssection
-    # echo "wait" >> $WORKDIR/foxssection
-    # echo "" >> $WORKDIR/foxssection
-    echo "echo \"All FoXS processing complete.\"" >> $WORKDIR/foxssection
+    echo "echo \"FoXS to calculate SAXS curves complete\"" >> $WORKDIR/foxssection
     echo "" >> $WORKDIR/foxssection
 }
 
 generate_foxs_scripts() {
-    # Iterate over each rg value
-    for rg in $g_rgs; do
-        # Iterate over each run within each rg value
-        for ((run=1; run<=conf_sample; run+=1)); do
-            # Define the directory path
-            dir_path="$WORKDIR/foxs/rg${rg}_run${run}"
-            # Check if the directory exists
-            if [ -d "$dir_path" ]; then
-                local foxs_script="$WORKDIR/run_foxs_rg${rg}_run${run}.sh"
-                > $foxs_script
-                inner_dir_path="/bilbomd/work/foxs/rg${rg}_run${run}"
-                rel_inner_dir_path="../foxs/rg${rg}_run${run}"
-
-                echo "#!/bin/bash" >> $foxs_script
-                echo "echo \"Processing directory: $inner_dir_path\"" >> $foxs_script
-                echo "cd $inner_dir_path" >> $foxs_script
-
-                # Define log files
-                echo "foxs_log=\"$inner_dir_path/foxs.log\"" >> $foxs_script
-                echo "foxs_error_log=\"$inner_dir_path/foxs_error.log\"" >> $foxs_script
-                # Define the dat list txt file
-                echo "foxs_dat_file_list=\"$inner_dir_path/foxs_rg${rg}_run${run}_dat_files.txt\"" >> $foxs_script
-
-                # Ensure log files are empty initially or create them if they don't exist
-                echo "> \"\$foxs_log\"" >> $foxs_script
-                echo "> \"\$foxs_error_log\"" >> $foxs_script
-                # Check directory exists
-                echo "if [ -d \"$inner_dir_path\" ]; then" >> $foxs_script
-                # Loop through each PDB file
-                echo "  parallel \"foxs -p {} >> \$foxs_log 2>> \$foxs_error_log && echo $rel_inner_dir_path/{}.dat >> \$foxs_dat_file_list\" ::: *.pdb" >> $foxs_script
-
-                echo "else" >> $foxs_script
-                echo "  echo \"Directory not found \$inner_dir_path\"" >> $foxs_script
-                echo "fi" >> $foxs_script
-                echo "" >> $foxs_script
-                chmod u+x $foxs_script
-            else
-                echo "Directory does not exist: $inner_dir_path"
-            fi
-        done
-    done
+    local root_dir=$WORKDIR/foxs
+    cat << EOF > $WORKDIR/run_foxs.sh
+#!/bin/bash
+echo "Run FoXS..."
+find . -type d -name 'rg*_run*' | while read rundir; do
+  echo "Processing directory: \$rundir"
+  if [ -d "\$rundir" ]; then
+    cd "\$rundir"
+    parallel "foxs -p {} >> foxs.log 2>> foxs_error.log && echo \$(pwd)/{}.dat | sed 's|/bilbomd/work|..|' >> foxs_dat_files.txt" ::: *.pdb
+    cd /bilbomd/work/foxs
+  else
+    echo "Directory not found: \$rundir"
+  fi
+done
+EOF
+    chmod u+x $WORKDIR/run_foxs.sh
 }
 
 generate_multifoxs_script() {
@@ -574,17 +553,17 @@ generate_multifoxs_script() {
     chmod u+x $multifoxs_script
 
     # Catenate all /bilbomd/work/foxs/rg${rg}_run${run}/ files
-    # /bilbomd/work/foxs/rg22_run1/foxs_rg22_run1_dat_files.txt
-    echo "#!/bin/bash" >> $multifoxs_script
+    echo "#!/bin/bash -l" >> $multifoxs_script
     # Iterate over each rg value
     for rg in $g_rgs; do
         # Iterate over each run within each rg value
         for ((run=1; run<=conf_sample; run+=1)); do
             dir_path="/bilbomd/work/foxs/rg${rg}_run${run}"
-            echo "cat ${dir_path}/foxs_rg${rg}_run${run}_dat_files.txt >> /bilbomd/work/multifoxs/foxs_dat_files.txt" >> $multifoxs_script
+            echo "cat ${dir_path}/foxs_dat_files.txt >> /bilbomd/work/multifoxs/foxs_dat_files.txt" >> $multifoxs_script
         done
     done
-    echo "cd /bilbomd/work/multifoxs && multi_foxs -o ../$saxs_data foxs_dat_files.txt &> multi_foxs.log" >> $multifoxs_script
+    echo "cd /bilbomd/work/multifoxs" >> $multifoxs_script
+    echo "multi_foxs -o ../$saxs_data ./foxs_dat_files.txt &> multi_foxs.log" >> $multifoxs_script
 }
 
 generate_multifoxs_command() {
@@ -594,9 +573,6 @@ generate_multifoxs_command() {
 EOF
     echo "echo \"Run MultiFoXS to calculate best ensemble...\"" >> $WORKDIR/multifoxssection
     echo "srun --ntasks=1 --job-name multifoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_multifoxs.sh\"" >> $WORKDIR/multifoxssection
-    echo "" >> $WORKDIR/multifoxssection
-    echo "# Wait for MultiFoXS to finish" >> $WORKDIR/multifoxssection
-    echo "wait" >> $WORKDIR/multifoxssection
     echo "" >> $WORKDIR/multifoxssection
     echo "echo \"MultiFoXS processing complete.\"" >> $WORKDIR/multifoxssection
     echo "" >> $WORKDIR/multifoxssection
