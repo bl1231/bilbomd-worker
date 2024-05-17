@@ -24,7 +24,8 @@ mailuser="sclassen@lbl.gov"
 # Might use core number to dynamically write our slurm script and maximize
 # the use of assigned node(s)
 if [ "$constraint" = "gpu" ]; then
-    NUM_CORES=128
+    # NUM_CORES=128
+    NUM_CORES=120
 elif [ "$constraint" = "cpu" ]; then
     NUM_CORES=256
 else
@@ -40,7 +41,7 @@ TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
 # WORKDIR=${PWD}/workdir/${UUID}
 # TEMPLATEDIR=${PWD}/bilbomd-templates
 
-WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.6
+WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.7
 # WORKER=bl1231/bilbomd-perlmutter-worker
 
 
@@ -371,19 +372,8 @@ export OMP_NUM_THREADS=$1
 export OMP_PLACES=threads
 export OMP_PROC_BIND=spread
 
-export SLURM_CPU_BIND=verbose
-
 EOF
 }
-
-# generate_header() {
-#     cat << EOF > header
-# #!/bin/bash -l
-
-# cd /bilbomd/work
-
-# EOF
-# }
 
 generate_pdb2crd_commands() {
     cat << EOF > $WORKDIR/pdb2crd
@@ -517,15 +507,15 @@ EOF
         for ((run=1; run<=conf_sample; run++)); do
             dir_path="/bilbomd/work/foxs/rg${rg}_run${run}"
             echo "echo \"Processing directory: $dir_path\"" >> $WORKDIR/foxssection
-            # echo "./run_foxs_rg${rg}_run${run}.sh &" >> $WORKDIR/foxssection
-            local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name foxs${rg} podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_foxs_rg${rg}_run${run}.sh\" &"
+            # If these srun commands are run sequentially then give each one all the available cores
+            local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name foxs${rg} podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_foxs_rg${rg}_run${run}.sh\""
             echo $command >> $WORKDIR/foxssection
         done
     done
     echo "" >> $WORKDIR/foxssection
-    echo "# Wait for all FoXS jobs to finish" >> $WORKDIR/foxssection
-    echo "wait" >> $WORKDIR/foxssection
-    echo "" >> $WORKDIR/foxssection
+    # echo "# Wait for all FoXS jobs to finish" >> $WORKDIR/foxssection
+    # echo "wait" >> $WORKDIR/foxssection
+    # echo "" >> $WORKDIR/foxssection
     echo "echo \"All FoXS processing complete.\"" >> $WORKDIR/foxssection
     echo "" >> $WORKDIR/foxssection
 }
@@ -540,38 +530,30 @@ generate_foxs_scripts() {
             # Check if the directory exists
             if [ -d "$dir_path" ]; then
                 local foxs_script="$WORKDIR/run_foxs_rg${rg}_run${run}.sh"
-                # echo "foxs_script: ${foxs_script}"
                 > $foxs_script
-                echo "#!/bin/bash" >> $foxs_script
                 inner_dir_path="/bilbomd/work/foxs/rg${rg}_run${run}"
-                # change in order to make extractPdbPaths happy
                 rel_inner_dir_path="../foxs/rg${rg}_run${run}"
-                # echo "inner_dir_path: ${inner_dir_path}"
+
+                echo "#!/bin/bash" >> $foxs_script
                 echo "echo \"Processing directory: $inner_dir_path\"" >> $foxs_script
                 echo "cd $inner_dir_path" >> $foxs_script
 
                 # Define log files
                 echo "foxs_log=\"$inner_dir_path/foxs.log\"" >> $foxs_script
                 echo "foxs_error_log=\"$inner_dir_path/foxs_error.log\"" >> $foxs_script
+                # Define the dat list txt file
+                echo "foxs_dat_file_list=\"$inner_dir_path/foxs_rg${rg}_run${run}_dat_files.txt\"" >> $foxs_script
 
                 # Ensure log files are empty initially or create them if they don't exist
                 echo "> \"\$foxs_log\"" >> $foxs_script
                 echo "> \"\$foxs_error_log\"" >> $foxs_script
-
                 # Check directory exists
                 echo "if [ -d \"$inner_dir_path\" ]; then" >> $foxs_script
-
                 # Loop through each PDB file
-                echo "  for pdbfile in *.pdb; do" >> $foxs_script
-                echo "    if [ -s \"\$pdbfile\" ]; then" >> $foxs_script
-                echo "      foxs -p \"\$pdbfile\" >> \"\$foxs_log\" 2>> \"\$foxs_error_log\" && echo \"$rel_inner_dir_path/\${pdbfile}.dat\" >> $inner_dir_path/foxs_rg${rg}_run${run}_dat_files.txt" >> $foxs_script
-                echo "    else" >> $foxs_script
-                echo "      echo \"File is empty or missing: \$pdbfile\"" >> $foxs_script
-                echo "    fi" >> $foxs_script
-                echo "  done" >> $foxs_script
-                echo "  wait" >> $foxs_script
+                echo "  parallel \"foxs -p {} >> \$foxs_log 2>> \$foxs_error_log && echo $rel_inner_dir_path/{}.dat >> \$foxs_dat_file_list\" ::: *.pdb" >> $foxs_script
+
                 echo "else" >> $foxs_script
-                echo "  echo \"Directory not found: $inner_dir_path\"" >> $foxs_script
+                echo "  echo \"Directory not found \$inner_dir_path\"" >> $foxs_script
                 echo "fi" >> $foxs_script
                 echo "" >> $foxs_script
                 chmod u+x $foxs_script
