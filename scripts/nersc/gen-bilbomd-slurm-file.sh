@@ -467,31 +467,31 @@ EOF
         ((count++))
     done
     echo "" >> $WORKDIR/dynamics
-    echo "# Wait for all dynamics jobs to finish" >> $WORKDIR/dynamics
+    echo "# Wait for all Molecular Dynamics jobs to finish" >> $WORKDIR/dynamics
     echo "wait" >> $WORKDIR/dynamics
     echo "" >> $WORKDIR/dynamics
 
 }
 
 generate_dcd2pdb_commands() {
+    local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name dcd2pdb podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_dcd2pdb.sh\""
     cat << EOF > $WORKDIR/dcd2pdb
 # -----------------------------------------------------------------------------
 # CHARMM Extract PDB from DCD Trajectories
+echo \"Running CHARMM Extract PDB from DCD Trajectories...\"
+$command
+
 EOF
-    local num_inp_files=${#g_dcd2pdb_inp_files[@]}
-    local count=1
-    cpus=$(($NUM_CORES/$num_inp_files))
-    echo "echo \"Running CHARMM Extract PDB from DCD Trajectories...\"" >> $WORKDIR/dcd2pdb
-    for inp in "${g_dcd2pdb_inp_files[@]}"; do
-        echo "echo \"Starting $inp\"" >> $WORKDIR/dcd2pdb
-        local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name dcd2pdb$count podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
-        echo $command >> $WORKDIR/dcd2pdb
-        ((count++))
-    done
     echo "" >> $WORKDIR/dcd2pdb
-    echo "# Wait for all dcd2pdb jobs to finish" >> $WORKDIR/dcd2pdb
-    echo "wait" >> $WORKDIR/dcd2pdb
-    echo "" >> $WORKDIR/dcd2pdb
+}
+
+generate_dcd2pdb_script() {
+    local dcd2pdb_script="$WORKDIR/run_dcd2pdb.sh"
+    > $dcd2pdb_script
+    echo "#!/bin/bash" >> $dcd2pdb_script
+    echo "parallel 'charmm -o {.}.out -i {}' ::: dcd2pdb_rg*.inp" >> $dcd2pdb_script
+    echo "" >> $dcd2pdb_script
+    chmod u+x $dcd2pdb_script
 }
 
 generate_foxs_commands() {
@@ -575,7 +575,7 @@ generate_multifoxs_script() {
 
     # Catenate all /bilbomd/work/foxs/rg${rg}_run${run}/ files
     # /bilbomd/work/foxs/rg22_run1/foxs_rg22_run1_dat_files.txt
-    echo "#!/bin/bash -l" >> $multifoxs_script
+    echo "#!/bin/bash" >> $multifoxs_script
     # Iterate over each rg value
     for rg in $g_rgs; do
         # Iterate over each run within each rg value
@@ -677,6 +677,7 @@ fi
 generate_min_heat_commands
 generate_dynamics_commands
 generate_dcd2pdb_commands
+generate_dcd2pdb_script
 generate_foxs_commands
 generate_foxs_scripts
 generate_multifoxs_command
