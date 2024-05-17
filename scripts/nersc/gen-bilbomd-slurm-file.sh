@@ -1,5 +1,6 @@
 #!/bin/bash -l
-#
+shopt -s expand_aliases
+alias docker='podman-hpc'
 
 # Check if two arguments were provided
 if [ $# -ne 1 ]; then
@@ -9,29 +10,6 @@ fi
 
 # Assign args to global variables
 UUID=$1
-# job_type=$2
-
-# Validate the job_type
-# case $job_type in
-#     'BilboMdPDB'|'BilboMdCRD'|'BilboMdAuto')
-#         echo "Proceeding with job_type: $job_type"
-#         ;;
-#     *)
-#         echo "Error: Invalid job_type '$job_type'. Allowed values are 'BilboMdPDB', 'BilboMdCRD', 'BilboMdAuto'."
-#         exit 1
-#         ;;
-# esac
-
-# -----------------------------------------------------------------------------
-# Check if running on macOS or BSD and adjust the sed command
-# if [[ "$(uname)" == "Darwin" ]]; then
-#     echo "Running on macOS"
-#     SED_EXT="-i ''" # macOS Darwin
-# else
-# echo "Running on Linux"
-#     SED_EXT="-i" # for GNU/Linux
-# fi
-# echo "sed_ext: $SED_EXT"
 
 # -----------------------------------------------------------------------------
 # SBATCH STUFF
@@ -54,16 +32,17 @@ else
     exit 1  # Exit the script if the constraint is not recognized
 fi
 
-# UPLOAD_DIR=${CFS}/${project}/bilbomd-uploads/${UUID}
-# WORKDIR=${PSCRATCH}/bilbmod/${UUID}
-# TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
+UPLOAD_DIR=${CFS}/${project}/bilbomd-uploads/${UUID}
+WORKDIR=${PSCRATCH}/bilbmod/${UUID}
+TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
 
-UPLOAD_DIR=${PWD}/bilbomd-uploads/${UUID}
-WORKDIR=${PWD}/workdir/${UUID}
-TEMPLATEDIR=${PWD}/bilbomd-templates
+# UPLOAD_DIR=${PWD}/bilbomd-uploads/${UUID}
+# WORKDIR=${PWD}/workdir/${UUID}
+# TEMPLATEDIR=${PWD}/bilbomd-templates
 
-# WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.6
-WORKER=bl1231/bilbomd-perlmutter-worker
+WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.6
+# WORKER=bl1231/bilbomd-perlmutter-worker
+
 
 
 # other globals
@@ -225,17 +204,17 @@ copy_template_files() {
 template_minimization_file() {
     echo "Preparing CHARMM Minimize input file"
     mv $WORKDIR/minimize.tmpl $WORKDIR/minimize.inp
-    sed -i '' "s|{{charmm_topo_dir}}|$charmm_topo_dir|g" "$WORKDIR/minimize.inp"
-    sed -i '' "s|{{in_psf_file}}|$in_psf_file|g" "$WORKDIR/minimize.inp"
-    sed -i '' "s|{{in_crd_file}}|$in_crd_file|g" "$WORKDIR/minimize.inp"
+    sed -i "s|{{charmm_topo_dir}}|$charmm_topo_dir|g" "$WORKDIR/minimize.inp"
+    sed -i "s|{{in_psf_file}}|$in_psf_file|g" "$WORKDIR/minimize.inp"
+    sed -i "s|{{in_crd_file}}|$in_crd_file|g" "$WORKDIR/minimize.inp"
 }
 
 template_heat_file() {
     echo "Preparing CHARMM Heat input file"
     mv $WORKDIR/heat.tmpl $WORKDIR/heat.inp
-    sed -i '' "s|{{charmm_topo_dir}}|$charmm_topo_dir|g" "$WORKDIR/heat.inp"
-    sed -i '' "s|{{in_psf_file}}|$in_psf_file|g" "$WORKDIR/heat.inp"
-    sed -i '' "s|{{constinp}}|$constinp|g" "$WORKDIR/heat.inp"
+    sed -i "s|{{charmm_topo_dir}}|$charmm_topo_dir|g" "$WORKDIR/heat.inp"
+    sed -i "s|{{in_psf_file}}|$in_psf_file|g" "$WORKDIR/heat.inp"
+    sed -i "s|{{constinp}}|$constinp|g" "$WORKDIR/heat.inp"
 }
 
 initialize_job() {
@@ -267,13 +246,13 @@ template_md_input_files() {
     cp "${WORKDIR}/dynamics.tmpl" "${WORKDIR}/${inp_file}"
     
     # Perform sed substitutions
-    sed -i '' "s|{{charmm_topo_dir}}|${charmm_topo_dir}|g" "${WORKDIR}/${inp_file}"
-    sed -i '' "s|{{in_psf_file}}|${in_psf_file}|g" "${WORKDIR}/${inp_file}"
-    sed -i '' "s|{{constinp}}|${constinp}|g" "${WORKDIR}/${inp_file}"
-    sed -i '' "s|{{rg}}|${rg_value}|g" "${WORKDIR}/${inp_file}"
-    sed -i '' "s|{{inp_basename}}|${inp_basename}|g" "${WORKDIR}/${inp_file}"
-    sed -i '' "s|{{conf_sample}}|${conf_sample}|g" "${WORKDIR}/${inp_file}"
-    sed -i '' "s|{{timestep}}|${timestep}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{charmm_topo_dir}}|${charmm_topo_dir}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{in_psf_file}}|${in_psf_file}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{constinp}}|${constinp}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{rg}}|${rg_value}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{inp_basename}}|${inp_basename}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{conf_sample}}|${conf_sample}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{timestep}}|${timestep}|g" "${WORKDIR}/${inp_file}"
 }
 
 generate_pdb2crd_input_files() {
@@ -347,12 +326,12 @@ template_dcd2pdb_file() {
     local foxs_run_dir="rg${rg}_run${run}"
     local in_dcd="dynamics_rg${rg}_run${run}.dcd"
     cp "${WORKDIR}/dcd2pdb.tmpl" "${WORKDIR}/${inp_file}"
-    sed -i '' "s|{{charmm_topo_dir}}|${charmm_topo_dir}|g" "${WORKDIR}/${inp_file}"
-    sed -i '' "s|{{in_psf_file}}|${in_psf_file}|g" "${WORKDIR}/${inp_file}"
-    sed -i '' "s|{{in_dcd}}|${in_dcd}|g" "${WORKDIR}/${inp_file}"
-    sed -i '' "s|{{run}}|${foxs_run_dir}|g" "${WORKDIR}/${inp_file}"
-    sed -i '' "s|{{inp_basename}}|${basename}|g" "${WORKDIR}/${inp_file}"
-    sed -i '' "s|{{foxs_rg}}|${foxs_rg}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{charmm_topo_dir}}|${charmm_topo_dir}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{in_psf_file}}|${in_psf_file}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{in_dcd}}|${in_dcd}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{run}}|${foxs_run_dir}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{inp_basename}}|${basename}|g" "${WORKDIR}/${inp_file}"
+    sed -i "s|{{foxs_rg}}|${foxs_rg}|g" "${WORKDIR}/${inp_file}"
     # make all the FoXS output directories where we will extract PDBs from the DCD
     mkdir -p $WORKDIR/foxs/$foxs_run_dir
     # Since CHARMM is always appending to this file we need to create it first.
@@ -372,6 +351,8 @@ generate_dcd2pdb_input_files() {
 }
 
 generate_bilbomd_slurm_header() {
+    local cpus=$1
+    echo "generate_bilbomd_slurm_header $1"
     cat << EOF > $WORKDIR/slurmheader
 #!/bin/bash -l
 #SBATCH --qos=${queue}
@@ -384,6 +365,13 @@ generate_bilbomd_slurm_header() {
 #SBATCH --error=${WORKDIR}/slurm-%j.err
 #SBATCH --mail-type=${mailtype}
 #SBATCH --mail-user=${mailuser}
+
+# OpenMP settings:
+export OMP_NUM_THREADS=$1
+export OMP_PLACES=threads
+export OMP_PROC_BIND=spread
+
+export SLURM_CPU_BIND=verbose
 
 EOF
 }
@@ -402,9 +390,11 @@ generate_pdb2crd_commands() {
 # -----------------------------------------------------------------------------
 # Convert PDB to CRD/PSF
 EOF
+    local num_inp_files=${#g_pdb2crd_inp_files[@]}
+    local cpus=$(($NUM_CORES/$num_inp_files))
     for inp in "${g_pdb2crd_inp_files[@]}"; do
         echo "echo \"Starting $inp\" &" >> $WORKDIR/pdb2crd
-        local command="srun -n1 --job-name pdb2crd podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
+        local command="srun --ntasks=1 --cpus-per-task=$cpus --job-name pdb2crd podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
         echo $command >> $WORKDIR/pdb2crd
 
     done
@@ -414,7 +404,7 @@ EOF
     echo "" >> $WORKDIR/pdb2crd
     echo "# Meld all individual CRD files" >> $WORKDIR/pdb2crd
     echo "echo \"Melding pdb2crd_charmm_meld.inp\"" >> $WORKDIR/pdb2crd
-    local command="srun -n1 --job-name pdb2crd podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o pdb2crd_charmm_meld.out -i pdb2crd_charmm_meld.inp\""
+    local command="srun --ntasks=1 --job-name meld podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o pdb2crd_charmm_meld.out -i pdb2crd_charmm_meld.inp\""
     echo $command >> $WORKDIR/pdb2crd
     echo "" >> $WORKDIR/pdb2crd
 }
@@ -426,7 +416,7 @@ generate_pae2const_commands() {
 EOF
     echo "echo \"Calculate const.inp from PAE matrix...\"" >> $WORKDIR/pae2const
     # echo "python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file} > pae_ratios.log 2>&1" >> $WORKDIR/pae2const
-    local command="srun -n1 --job-name pdb2crd podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file} > pae_ratios.log 2>&1\""
+    local command="srun --ntasks=1 --job-name pdb2crd podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file} > pae_ratios.log 2>&1\""
     echo $command >> $WORKDIR/pae2const
     echo "" >> $WORKDIR/pae2const
     echo "# Check if const.inp was successfully created" >> $WORKDIR/pae2const
@@ -456,17 +446,17 @@ generate_min_heat_commands(){
 # -----------------------------------------------------------------------------
 # CHARMM Minimize
 echo "Running CHARMM Minimize..."
-srun -n1 --job-name minimize podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o minimize.out -i minimize.inp"
+srun --ntasks=1 --job-name minimize podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o minimize.out -i minimize.inp"
 
 # -----------------------------------------------------------------------------
 # FoXS Analysis of minimized PDB
 echo "Running Initial FoXS Analysis..."
-srun -n1 --job-name initfoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && foxs ${foxs_args[@]} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.log"
+srun --ntasks=1 --job-name initfoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && foxs ${foxs_args[@]} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.log"
 
 # -----------------------------------------------------------------------------
 # CHARMM Heat
 echo "Running CHARMM Heat..."
-srun -n1 --job-name heat podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o heat.out -i heat.inp"
+srun --ntasks=1 --job-name heat podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o heat.out -i heat.inp"
 
 EOF
 }
@@ -477,11 +467,14 @@ generate_dynamics_commands() {
 # CHARMM Molecular Dynamics
 EOF
     local num_inp_files=${#g_md_inp_files[@]}
+    local count=1
+    local cpus=$(($NUM_CORES/$num_inp_files))
     echo "echo \"Running CHARMM Molecular Dynamics...\"" >> $WORKDIR/dynamics
     for inp in "${g_md_inp_files[@]}"; do
         echo "echo \"Starting $inp\"" >> $WORKDIR/dynamics
-        local command="srun -n1 --job-name md podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
+        local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name md$count podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
         echo $command >> $WORKDIR/dynamics
+        ((count++))
     done
     echo "" >> $WORKDIR/dynamics
     echo "# Wait for all dynamics jobs to finish" >> $WORKDIR/dynamics
@@ -496,11 +489,14 @@ generate_dcd2pdb_commands() {
 # CHARMM Extract PDB from DCD Trajectories
 EOF
     local num_inp_files=${#g_dcd2pdb_inp_files[@]}
+    local count=1
+    cpus=$(($NUM_CORES/$num_inp_files))
     echo "echo \"Running CHARMM Extract PDB from DCD Trajectories...\"" >> $WORKDIR/dcd2pdb
     for inp in "${g_dcd2pdb_inp_files[@]}"; do
         echo "echo \"Starting $inp\"" >> $WORKDIR/dcd2pdb
-        local command="srun -n1 --job-name dcd2pdb podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
+        local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name dcd2pdb$count podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
         echo $command >> $WORKDIR/dcd2pdb
+        ((count++))
     done
     echo "" >> $WORKDIR/dcd2pdb
     echo "# Wait for all dcd2pdb jobs to finish" >> $WORKDIR/dcd2pdb
@@ -514,6 +510,7 @@ generate_foxs_commands() {
 # -----------------------------------------------------------------------------
 # Run FoXS to calculate SAXS curves
 EOF
+
     echo "echo \"Run FoXS to calculate SAXS curves...\"" >> $WORKDIR/foxssection
     for rg in $g_rgs; do
         echo "Generate FoXS Commands Rg: ${rg}"
@@ -521,7 +518,7 @@ EOF
             dir_path="/bilbomd/work/foxs/rg${rg}_run${run}"
             echo "echo \"Processing directory: $dir_path\"" >> $WORKDIR/foxssection
             # echo "./run_foxs_rg${rg}_run${run}.sh &" >> $WORKDIR/foxssection
-            local command="srun -n1 --job-name foxs${rg} podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_foxs_rg${rg}_run${run}.sh\" &"
+            local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name foxs${rg} podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_foxs_rg${rg}_run${run}.sh\" &"
             echo $command >> $WORKDIR/foxssection
         done
     done
@@ -567,7 +564,7 @@ generate_foxs_scripts() {
                 # Loop through each PDB file
                 echo "  for pdbfile in *.pdb; do" >> $foxs_script
                 echo "    if [ -s \"\$pdbfile\" ]; then" >> $foxs_script
-                echo "      (foxs -p \"\$pdbfile\" >> \"\$foxs_log\" 2>> \"\$foxs_error_log\" && echo \"$rel_inner_dir_path/\${pdbfile}.dat\" >> $inner_dir_path/foxs_rg${rg}_run${run}_dat_files.txt) &" >> $foxs_script
+                echo "      foxs -p \"\$pdbfile\" >> \"\$foxs_log\" 2>> \"\$foxs_error_log\" && echo \"$rel_inner_dir_path/\${pdbfile}.dat\" >> $inner_dir_path/foxs_rg${rg}_run${run}_dat_files.txt" >> $foxs_script
                 echo "    else" >> $foxs_script
                 echo "      echo \"File is empty or missing: \$pdbfile\"" >> $foxs_script
                 echo "    fi" >> $foxs_script
@@ -605,8 +602,7 @@ generate_multifoxs_script() {
             echo "cat ${dir_path}/foxs_rg${rg}_run${run}_dat_files.txt >> /bilbomd/work/multifoxs/foxs_dat_files.txt" >> $multifoxs_script
         done
     done
-    echo "cd /bilbomd/work/multifoxs && mpirun -np 8 multi_foxs -o ../$saxs_data foxs_dat_files.txt &> multi_foxs.log" >> $multifoxs_script
-    # echo "cd /bilbomd/work/multifoxs && multi_foxs -o ../$saxs_data foxs_dat_files.txt &> multi_foxs.log" >> $multifoxs_script
+    echo "cd /bilbomd/work/multifoxs && multi_foxs -o ../$saxs_data foxs_dat_files.txt &> multi_foxs.log" >> $multifoxs_script
 }
 
 generate_multifoxs_command() {
@@ -615,7 +611,7 @@ generate_multifoxs_command() {
 # Run MultiFoXS to calculate best ensemble
 EOF
     echo "echo \"Run MultiFoXS to calculate best ensemble...\"" >> $WORKDIR/multifoxssection
-    echo "srun -n1 --job-name multifoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_multifoxs.sh\"" >> $WORKDIR/multifoxssection
+    echo "srun --ntasks=1 --job-name multifoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_multifoxs.sh\"" >> $WORKDIR/multifoxssection
     echo "" >> $WORKDIR/multifoxssection
     echo "# Wait for MultiFoXS to finish" >> $WORKDIR/multifoxssection
     echo "wait" >> $WORKDIR/multifoxssection
@@ -630,8 +626,7 @@ generate_copy_commands() {
 # Copy results back to CFS
 EOF
     echo "echo \"Copying results back to CFS...\"" >> $WORKDIR/endsection
-    # echo "echo \"Copying $WORKDIR/ back to CFS $UPLOAD_DIR ...\"" >> $WORKDIR/endsection
-    echo "cp -nR $WORKDIR/* $UPLOAD_DIR" >> $WORKDIR/endsection
+    # echo "cp -nR $WORKDIR/* $UPLOAD_DIR" >> $WORKDIR/endsection
     echo "" >> $WORKDIR/endsection
     echo "echo \"DONE ${UUID}\"" >> $WORKDIR/endsection
 }
@@ -690,7 +685,8 @@ if [ "$job_type" = "BilboMdPDB" ] || [ "$job_type" = "BilboMdAuto" ]; then
 fi
 generate_md_input_files
 generate_dcd2pdb_input_files
-generate_bilbomd_slurm_header
+# echo "CPUS: $cpus"
+# generate_bilbomd_slurm_header
 generate_pdb2crd_commands
 #
 if [ "$job_type" = "BilboMdAuto" ]; then
@@ -705,6 +701,8 @@ generate_multifoxs_command
 generate_multifoxs_script
 generate_copy_commands
 #
+echo "CPUS: $cpus"
+generate_bilbomd_slurm_header $cpus
 append_slurm_sections
 #
 cleanup
