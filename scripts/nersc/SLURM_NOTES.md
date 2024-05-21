@@ -539,3 +539,394 @@ So things to test next include:
 - BilboMdAuto
 
 end of Friday 5/17/2024
+
+## Testing Monday May 20, 2024
+
+### Try a `BilboMdAuto` job with `conformational_sampling: 1`
+
+```shell
+JobID           JobName      State    Elapsed ExitCode               Start                 End
+------------ ---------- ---------- ---------- -------- ------------------- -------------------
+25833702     bilbomd.s+  COMPLETED   00:11:15      0:0 2024-05-20T14:32:01 2024-05-20T14:43:16
+25833702.ba+      batch  COMPLETED   00:11:15      0:0 2024-05-20T14:32:01 2024-05-20T14:43:16
+25833702.ex+     extern  COMPLETED   00:11:15      0:0 2024-05-20T14:32:01 2024-05-20T14:43:16
+25833702.0      pdb2crd  COMPLETED   00:00:08      0:0 2024-05-20T14:32:05 2024-05-20T14:32:13
+25833702.1         meld  COMPLETED   00:00:05      0:0 2024-05-20T14:32:14 2024-05-20T14:32:19
+25833702.2    pae2const  COMPLETED   00:00:08      0:0 2024-05-20T14:32:20 2024-05-20T14:32:28
+25833702.3     minimize  COMPLETED   00:00:56      0:0 2024-05-20T14:32:28 2024-05-20T14:33:24
+25833702.4     initfoxs  COMPLETED   00:00:07      0:0 2024-05-20T14:33:24 2024-05-20T14:33:31
+25833702.5         heat  COMPLETED   00:01:06      0:0 2024-05-20T14:33:31 2024-05-20T14:34:37
+25833702.6          md5  COMPLETED   00:06:33      0:0 2024-05-20T14:34:37 2024-05-20T14:41:10
+25833702.7          md4  COMPLETED   00:06:36      0:0 2024-05-20T14:34:37 2024-05-20T14:41:13
+25833702.8          md3  COMPLETED   00:06:36      0:0 2024-05-20T14:34:37 2024-05-20T14:41:13
+25833702.9          md2  COMPLETED   00:06:28      0:0 2024-05-20T14:34:37 2024-05-20T14:41:05
+25833702.10         md1  COMPLETED   00:06:53      0:0 2024-05-20T14:34:37 2024-05-20T14:41:30
+25833702.11     dcd2pdb  COMPLETED   00:00:15      0:0 2024-05-20T14:41:30 2024-05-20T14:41:45
+25833702.12        foxs  COMPLETED   00:00:37      0:0 2024-05-20T14:41:46 2024-05-20T14:42:23
+25833702.13   multifoxs  COMPLETED   00:00:52      0:0 2024-05-20T14:42:24 2024-05-20T14:43:16
+```
+
+### Tried a `BilboMdAuto` job with `conformational_sampling: 2`
+
+```shell
+JobID           JobName      State    Elapsed ExitCode               Start                 End
+------------ ---------- ---------- ---------- -------- ------------------- -------------------
+25834685     bilbomd.s+  COMPLETED   00:18:37      0:0 2024-05-20T14:48:21 2024-05-20T15:06:58
+25834685.ba+      batch  COMPLETED   00:18:37      0:0 2024-05-20T14:48:21 2024-05-20T15:06:58
+25834685.ex+     extern  COMPLETED   00:18:37      0:0 2024-05-20T14:48:21 2024-05-20T15:06:58
+25834685.0      pdb2crd  COMPLETED   00:00:08      0:0 2024-05-20T14:48:26 2024-05-20T14:48:34
+25834685.1         meld  COMPLETED   00:00:06      0:0 2024-05-20T14:48:34 2024-05-20T14:48:40
+25834685.2    pae2const  COMPLETED   00:00:08      0:0 2024-05-20T14:48:40 2024-05-20T14:48:48
+25834685.3     minimize  COMPLETED   00:00:56      0:0 2024-05-20T14:48:49 2024-05-20T14:49:45
+25834685.4     initfoxs  COMPLETED   00:00:06      0:0 2024-05-20T14:49:46 2024-05-20T14:49:52
+25834685.5         heat  COMPLETED   00:01:01      0:0 2024-05-20T14:49:53 2024-05-20T14:50:54
+25834685.6          md1  COMPLETED   00:13:49      0:0 2024-05-20T14:50:55 2024-05-20T15:04:44
+25834685.7          md4  COMPLETED   00:13:38      0:0 2024-05-20T14:50:55 2024-05-20T15:04:33
+25834685.8          md5  COMPLETED   00:12:43      0:0 2024-05-20T14:50:55 2024-05-20T15:03:38
+25834685.9          md3  COMPLETED   00:12:45      0:0 2024-05-20T14:50:55 2024-05-20T15:03:40
+25834685.10         md2  COMPLETED   00:12:57      0:0 2024-05-20T14:50:55 2024-05-20T15:03:52
+25834685.11     dcd2pdb  COMPLETED   00:00:16      0:0 2024-05-20T15:04:44 2024-05-20T15:05:00
+25834685.12        foxs  COMPLETED   00:01:12      0:0 2024-05-20T15:05:00 2024-05-20T15:06:12
+25834685.13   multifoxs  COMPLETED   00:00:46      0:0 2024-05-20T15:06:12 2024-05-20T15:06:58
+```
+
+### Try a `BilboMdAuto` job with `conformational_sampling: 3`
+
+```shell
+JobID           JobName      State    Elapsed ExitCode               Start                 End
+------------ ---------- ---------- ---------- -------- ------------------- -------------------
+25837527     bilbomd.s+  COMPLETED   00:25:25      0:0 2024-05-20T15:44:21 2024-05-20T16:09:46
+25837527.ba+      batch  COMPLETED   00:25:25      0:0 2024-05-20T15:44:21 2024-05-20T16:09:46
+25837527.ex+     extern  COMPLETED   00:25:25      0:0 2024-05-20T15:44:21 2024-05-20T16:09:46
+25837527.0      pdb2crd  COMPLETED   00:00:06      0:0 2024-05-20T15:44:26 2024-05-20T15:44:32
+25837527.1         meld  COMPLETED   00:00:05      0:0 2024-05-20T15:44:33 2024-05-20T15:44:38
+25837527.2    pae2const  COMPLETED   00:00:07      0:0 2024-05-20T15:44:39 2024-05-20T15:44:46
+25837527.3     minimize  COMPLETED   00:00:54      0:0 2024-05-20T15:44:46 2024-05-20T15:45:40
+25837527.4     initfoxs  COMPLETED   00:00:06      0:0 2024-05-20T15:45:40 2024-05-20T15:45:46
+25837527.5         heat  COMPLETED   00:01:02      0:0 2024-05-20T15:45:46 2024-05-20T15:46:48
+25837527.6          md3  COMPLETED   00:19:04      0:0 2024-05-20T15:46:52 2024-05-20T16:05:56
+25837527.7          md5  COMPLETED   00:19:44      0:0 2024-05-20T15:46:53 2024-05-20T16:06:37
+25837527.8          md2  COMPLETED   00:19:20      0:0 2024-05-20T15:46:55 2024-05-20T16:06:15
+25837527.9          md4  COMPLETED   00:19:08      0:0 2024-05-20T15:46:56 2024-05-20T16:06:04
+25837527.10         md1  COMPLETED   00:19:36      0:0 2024-05-20T15:46:56 2024-05-20T16:06:32
+25837527.11     dcd2pdb  COMPLETED   00:00:14      0:0 2024-05-20T16:06:37 2024-05-20T16:06:51
+25837527.12        foxs  COMPLETED   00:01:43      0:0 2024-05-20T16:06:52 2024-05-20T16:08:35
+25837527.13   multifoxs  COMPLETED   00:01:11      0:0 2024-05-20T16:08:35 2024-05-20T16:09:46
+```
+
+### Try a `BilboMdCRD` job with `conformational_sampling: 1`
+
+```shell
+JobID           JobName      State    Elapsed ExitCode               Start                 End
+------------ ---------- ---------- ---------- -------- ------------------- -------------------
+25839136     bilbomd.s+  COMPLETED   00:07:59      0:0 2024-05-20T16:23:04 2024-05-20T16:31:03
+25839136.ba+      batch  COMPLETED   00:07:59      0:0 2024-05-20T16:23:04 2024-05-20T16:31:03
+25839136.ex+     extern  COMPLETED   00:07:59      0:0 2024-05-20T16:23:04 2024-05-20T16:31:03
+25839136.0     minimize  COMPLETED   00:00:31      0:0 2024-05-20T16:23:07 2024-05-20T16:23:38
+25839136.1     initfoxs  COMPLETED   00:00:05      0:0 2024-05-20T16:23:38 2024-05-20T16:23:43
+25839136.2         heat  COMPLETED   00:01:00      0:0 2024-05-20T16:23:43 2024-05-20T16:24:43
+25839136.3          md5  COMPLETED   00:04:43      0:0 2024-05-20T16:24:44 2024-05-20T16:29:27
+25839136.4          md2  COMPLETED   00:04:46      0:0 2024-05-20T16:24:44 2024-05-20T16:29:30
+25839136.5          md4  COMPLETED   00:04:35      0:0 2024-05-20T16:24:44 2024-05-20T16:29:19
+25839136.6          md3  COMPLETED   00:04:35      0:0 2024-05-20T16:24:44 2024-05-20T16:29:19
+25839136.7          md1  COMPLETED   00:05:01      0:0 2024-05-20T16:24:44 2024-05-20T16:29:45
+25839136.8      dcd2pdb  COMPLETED   00:00:11      0:0 2024-05-20T16:29:46 2024-05-20T16:29:57
+25839136.9         foxs  COMPLETED   00:00:29      0:0 2024-05-20T16:29:58 2024-05-20T16:30:27
+25839136.10   multifoxs  COMPLETED   00:00:36      0:0 2024-05-20T16:30:27 2024-05-20T16:31:03
+```
+
+### Try a `BilboMdCRD` job with `conformational_sampling: 3`
+
+```shell
+JobID           JobName      State    Elapsed ExitCode               Start                 End
+------------ ---------- ---------- ---------- -------- ------------------- -------------------
+25839618     bilbomd.s+  COMPLETED   00:19:00      0:0 2024-05-20T16:38:19 2024-05-20T16:57:19
+25839618.ba+      batch  COMPLETED   00:19:00      0:0 2024-05-20T16:38:19 2024-05-20T16:57:19
+25839618.ex+     extern  COMPLETED   00:19:00      0:0 2024-05-20T16:38:19 2024-05-20T16:57:19
+25839618.0     minimize  COMPLETED   00:00:35      0:0 2024-05-20T16:38:30 2024-05-20T16:39:05
+25839618.1     initfoxs  COMPLETED   00:00:08      0:0 2024-05-20T16:39:05 2024-05-20T16:39:13
+25839618.2         heat  COMPLETED   00:01:12      0:0 2024-05-20T16:39:17 2024-05-20T16:40:29
+25839618.3          md4  COMPLETED   00:13:54      0:0 2024-05-20T16:40:31 2024-05-20T16:54:25
+25839618.4          md5  COMPLETED   00:13:11      0:0 2024-05-20T16:40:32 2024-05-20T16:53:43
+25839618.5          md3  COMPLETED   00:13:38      0:0 2024-05-20T16:40:36 2024-05-20T16:54:14
+25839618.6          md2  COMPLETED   00:14:00      0:0 2024-05-20T16:40:39 2024-05-20T16:54:39
+25839618.7          md1     FAILED   00:10:36     11:0 2024-05-20T16:40:41 2024-05-20T16:51:17
+25839618.8      dcd2pdb     FAILED   00:00:16      1:0 2024-05-20T16:54:40 2024-05-20T16:54:56
+25839618.9         foxs  COMPLETED   00:01:20      0:0 2024-05-20T16:54:56 2024-05-20T16:56:16
+25839618.10   multifoxs  COMPLETED   00:00:57      0:0 2024-05-20T16:56:22 2024-05-20T16:57:19
+```
+
+Errored out:
+
+```shell
+srun: Job 25839618 step creation temporarily disabled, retrying (Requested nodes are busy)
+srun: Step created for StepId=25839618.1
+srun: Job 25839618 step creation temporarily disabled, retrying (Requested nodes are busy)
+srun: Job 25839618 step creation temporarily disabled, retrying (Requested nodes are busy)
+srun: Job 25839618 step creation temporarily disabled, retrying (Requested nodes are busy)
+srun: Step created for StepId=25839618.4
+srun: Step created for StepId=25839618.6
+srun: Step created for StepId=25839618.7
+
+Program received signal SIGSEGV: Segmentation fault - invalid memory reference.
+
+Backtrace for this error:
+#0  0x7f164bd3ac5d in ???
+#1  0x7f164bd39d85 in ???
+#2  0x7f164b8e231f in ???
+#3  0x55c745315dd9 in ???
+#4  0x55c745319014 in ???
+#5  0x55c74532e480 in ???
+#6  0x55c745348aa5 in ???
+#7  0x55c74534cab9 in ???
+#8  0x55c7448cf847 in ???
+#9  0x55c7447e36fe in ???
+#10  0x55c7447cb966 in ???
+#11  0x55c7447e00e4 in ???
+#12  0x55c744782122 in ???
+#13  0x55c744780d6e in ???
+#14  0x7f164b8c71c9 in ???
+#15  0x7f164b8c728a in ???
+#16  0x55c744780d94 in ???
+#17  0xffffffffffffffff in ???
+srun: error: nid001157: task 0: Exited with exit code 139
+srun: Terminating StepId=25839618.7
+srun: Job 25839618 step creation temporarily disabled, retrying (Requested nodes are busy)
+srun: Step created for StepId=25839618.8
+srun: error: nid001157: task 0: Exited with exit code 1
+srun: Terminating StepId=25839618.8
+
+```
+
+Need to test `sleep` between md srun commands
+
+## Testing Tuesday May 21, 2024
+
+### Try a `BilboMdCRD` job with `conformational_sampling: 3` and `sleep 2` beween md sruns
+
+```shell
+JobID           JobName      State    Elapsed ExitCode               Start                 End
+------------ ---------- ---------- ---------- -------- ------------------- -------------------
+25871596     bilbomd.s+  COMPLETED   00:24:04      0:0 2024-05-21T10:00:05 2024-05-21T10:24:09
+25871596.ba+      batch  COMPLETED   00:24:04      0:0 2024-05-21T10:00:05 2024-05-21T10:24:09
+25871596.ex+     extern  COMPLETED   00:24:40      0:0 2024-05-21T10:00:05 2024-05-21T10:24:45
+25871596.0     minimize  COMPLETED   00:00:54      0:0 2024-05-21T10:00:08 2024-05-21T10:01:02
+25871596.1     initfoxs  COMPLETED   00:00:44      0:0 2024-05-21T10:01:04 2024-05-21T10:01:48
+25871596.2         heat  COMPLETED   00:01:55      0:0 2024-05-21T10:01:48 2024-05-21T10:03:43
+25871596.3          md1  COMPLETED   00:16:20      0:0 2024-05-21T10:03:43 2024-05-21T10:20:03
+25871596.4          md2  COMPLETED   00:13:56      0:0 2024-05-21T10:03:45 2024-05-21T10:17:41
+25871596.5          md3  COMPLETED   00:13:44      0:0 2024-05-21T10:04:05 2024-05-21T10:17:49
+25871596.6          md4  COMPLETED   00:13:43      0:0 2024-05-21T10:04:05 2024-05-21T10:17:48
+25871596.7          md5  COMPLETED   00:15:09      0:0 2024-05-21T10:05:02 2024-05-21T10:20:11
+25871596.8      dcd2pdb  COMPLETED   00:00:21      0:0 2024-05-21T10:20:11 2024-05-21T10:20:32
+25871596.9         foxs  COMPLETED   00:01:52      0:0 2024-05-21T10:20:40 2024-05-21T10:22:32
+25871596.10   multifoxs  COMPLETED   00:01:59      0:0 2024-05-21T10:22:44 2024-05-21T10:24:43
+```
+
+Seems odd that md3 and md4 started at the same time...
+
+### Try a `BilboMdCRD` job with `conformational_sampling: 3` and `sleep 2` beween md sruns
+
+```shell
+JobID           JobName      State    Elapsed ExitCode               Start                 End
+------------ ---------- ---------- ---------- -------- ------------------- -------------------
+25873844     bilbomd.s+  COMPLETED   00:24:34      0:0 2024-05-21T10:28:27 2024-05-21T10:53:01
+25873844.ba+      batch  COMPLETED   00:24:34      0:0 2024-05-21T10:28:27 2024-05-21T10:53:01
+25873844.ex+     extern  COMPLETED   00:24:34      0:0 2024-05-21T10:28:27 2024-05-21T10:53:01
+25873844.0     minimize  COMPLETED   00:00:57      0:0 2024-05-21T10:28:36 2024-05-21T10:29:33
+25873844.1     initfoxs  COMPLETED   00:01:11      0:0 2024-05-21T10:29:41 2024-05-21T10:30:52
+25873844.2         heat  COMPLETED   00:01:45      0:0 2024-05-21T10:30:52 2024-05-21T10:32:37
+25873844.3          md5  COMPLETED   00:14:22      0:0 2024-05-21T10:32:37 2024-05-21T10:46:59
+25873844.4          md3  COMPLETED   00:14:22      0:0 2024-05-21T10:32:37 2024-05-21T10:46:59
+25873844.5          md1  COMPLETED   00:15:09      0:0 2024-05-21T10:32:37 2024-05-21T10:47:46
+25873844.6          md4  COMPLETED   00:14:22      0:0 2024-05-21T10:32:37 2024-05-21T10:46:59
+25873844.7          md2  COMPLETED   00:14:04      0:0 2024-05-21T10:32:37 2024-05-21T10:46:41
+25873844.8      dcd2pdb  COMPLETED   00:00:43      0:0 2024-05-21T10:48:03 2024-05-21T10:48:46
+25873844.9         foxs  COMPLETED   00:02:49      0:0 2024-05-21T10:49:00 2024-05-21T10:51:49
+25873844.10   multifoxs  COMPLETED   00:01:02      0:0 2024-05-21T10:51:59 2024-05-21T10:53:01
+```
+
+### Try a `BilboMdAuto` job with `conformational_sampling: 3` and `sleep 2` beween md sruns
+
+```shell
+25874199     bilbomd.s+    TIMEOUT   00:30:07      0:0 2024-05-21T10:32:56 2024-05-21T11:03:03
+25874199.ba+      batch  CANCELLED   00:30:09     0:15 2024-05-21T10:32:56 2024-05-21T11:03:05
+25874199.ex+     extern    TIMEOUT   00:30:07      0:0 2024-05-21T10:32:56 2024-05-21T11:03:03
+25874199.0      pdb2crd  COMPLETED   00:00:37      0:0 2024-05-21T10:33:16 2024-05-21T10:33:53
+25874199.1         meld  COMPLETED   00:01:04      0:0 2024-05-21T10:33:56 2024-05-21T10:35:00
+25874199.2    pae2const  COMPLETED   00:00:11      0:0 2024-05-21T10:35:00 2024-05-21T10:35:11
+25874199.3     minimize  COMPLETED   00:01:40      0:0 2024-05-21T10:35:18 2024-05-21T10:36:58
+25874199.4     initfoxs  COMPLETED   00:01:21      0:0 2024-05-21T10:36:58 2024-05-21T10:38:19
+25874199.5         heat  COMPLETED   00:02:23      0:0 2024-05-21T10:38:19 2024-05-21T10:40:42
+25874199.6          md2  COMPLETED   00:19:40      0:0 2024-05-21T10:40:42 2024-05-21T11:00:22
+25874199.7          md3  COMPLETED   00:19:34      0:0 2024-05-21T10:40:42 2024-05-21T11:00:16
+25874199.8          md1  COMPLETED   00:20:08      0:0 2024-05-21T10:40:42 2024-05-21T11:00:50
+25874199.9          md4  COMPLETED   00:19:40      0:0 2024-05-21T10:40:42 2024-05-21T11:00:22
+25874199.10         md5  COMPLETED   00:20:08      0:0 2024-05-21T10:40:42 2024-05-21T11:00:50
+25874199.11     dcd2pdb  COMPLETED   00:00:32      0:0 2024-05-21T11:00:50 2024-05-21T11:01:22
+25874199.12        foxs  COMPLETED   00:02:23      0:0 2024-05-21T11:01:30 2024-05-21T11:03:53
+```
+
+Not sure what's going on...
+
+### Try a `BilboMdPDB` job with `conformational_sampling: 4` and `sleep 10` beween md sruns
+
+```shell
+25875147     bilbomd.s+  COMPLETED   00:09:15      0:0 2024-05-21T10:53:01 2024-05-21T11:02:16
+25875147.ba+      batch  COMPLETED   00:09:15      0:0 2024-05-21T10:53:01 2024-05-21T11:02:16
+25875147.ex+     extern  COMPLETED   00:09:15      0:0 2024-05-21T10:53:01 2024-05-21T11:02:16
+25875147.0      pdb2crd  COMPLETED   00:00:24      0:0 2024-05-21T10:53:15 2024-05-21T10:53:39
+25875147.1      pdb2crd     FAILED   00:00:21    126:0 2024-05-21T10:53:18 2024-05-21T10:53:39
+25875147.2         meld     FAILED   00:00:35      2:0 2024-05-21T10:53:39 2024-05-21T10:54:14
+25875147.3     minimize     FAILED   00:01:49      2:0 2024-05-21T10:54:43 2024-05-21T10:56:32
+25875147.4     initfoxs  COMPLETED   00:00:08      0:0 2024-05-21T10:56:32 2024-05-21T10:56:40
+25875147.5         heat     FAILED   00:00:14      2:0 2024-05-21T10:56:46 2024-05-21T10:57:00
+25875147.6          md2     FAILED   00:01:33      2:0 2024-05-21T10:57:13 2024-05-21T10:58:46
+25875147.7          md1     FAILED   00:01:29      2:0 2024-05-21T10:57:17 2024-05-21T10:58:46
+25875147.8          md3     FAILED   00:02:15      2:0 2024-05-21T10:57:17 2024-05-21T10:59:32
+25875147.9          md4     FAILED   00:01:18      2:0 2024-05-21T10:57:28 2024-05-21T10:58:46
+25875147.10         md5     FAILED   00:01:30      2:0 2024-05-21T10:57:43 2024-05-21T10:59:13
+25875147.11     dcd2pdb     FAILED   00:01:18     20:0 2024-05-21T10:59:32 2024-05-21T11:00:50
+25875147.12        foxs  COMPLETED   00:01:12      0:0 2024-05-21T11:00:50 2024-05-21T11:02:02
+25875147.13   multifoxs     FAILED   00:00:14      6:0 2024-05-21T11:02:06 2024-05-21T11:02:20
+```
+
+I think we may also need sleep between the `pdb2crd` runs...Let's try that again
+
+### Try a `BilboMdPDB` job with `conformational_sampling: 4` and `sleep 10` beween pdb2crd and md sruns
+
+jobid: 25876444 regualar QOS for 00:40:00
+
+It really is a bit annoying that the regular QOS has such long wait times. I think 99% of BilboMD jobs could be run on teh debug queue if teh limit was 1 hour instead of 30 min.
+
+```shell
+JobID           JobName      State    Elapsed ExitCode               Start                 End
+------------ ---------- ---------- ---------- -------- ------------------- -------------------
+25876444     bilbomd.s+  COMPLETED   00:22:28      0:0 2024-05-21T11:20:15 2024-05-21T11:42:43
+25876444.ba+      batch  COMPLETED   00:22:28      0:0 2024-05-21T11:20:15 2024-05-21T11:42:43
+25876444.ex+     extern  COMPLETED   00:22:28      0:0 2024-05-21T11:20:15 2024-05-21T11:42:43
+25876444.0      pdb2crd  COMPLETED   00:00:56      0:0 2024-05-21T11:20:22 2024-05-21T11:21:18
+25876444.1      pdb2crd  COMPLETED   00:00:09      0:0 2024-05-21T11:20:35 2024-05-21T11:20:44
+25876444.2         meld  COMPLETED   00:00:07      0:0 2024-05-21T11:21:19 2024-05-21T11:21:26
+25876444.3     minimize  COMPLETED   00:02:08      0:0 2024-05-21T11:21:42 2024-05-21T11:23:50
+25876444.4     initfoxs  COMPLETED   00:02:08      0:0 2024-05-21T11:23:50 2024-05-21T11:25:58
+25876444.5         heat  COMPLETED   00:00:52      0:0 2024-05-21T11:26:29 2024-05-21T11:27:21
+25876444.6          md3  COMPLETED   00:09:19      0:0 2024-05-21T11:27:21 2024-05-21T11:36:40
+25876444.7          md2  COMPLETED   00:09:19      0:0 2024-05-21T11:27:21 2024-05-21T11:36:40
+25876444.8          md1  COMPLETED   00:11:06      0:0 2024-05-21T11:27:21 2024-05-21T11:38:27
+25876444.9          md4  COMPLETED   00:09:07      0:0 2024-05-21T11:27:33 2024-05-21T11:36:40
+25876444.10         md5  COMPLETED   00:09:08      0:0 2024-05-21T11:28:11 2024-05-21T11:37:19
+25876444.11     dcd2pdb  COMPLETED   00:00:53      0:0 2024-05-21T11:38:27 2024-05-21T11:39:20
+25876444.12        foxs  COMPLETED   00:01:52      0:0 2024-05-21T11:39:20 2024-05-21T11:41:12
+25876444.13   multifoxs  COMPLETED   00:01:07      0:0 2024-05-21T11:41:36 2024-05-21T11:42:43
+```
+
+### Try a `BilboMdAuto` job with `conformational_sampling: 4` and `sleep 10`
+
+jobid: 25878041 regualar QOS for 00:40:00
+
+```shell
+JobID           JobName      State    Elapsed ExitCode               Start                 End
+------------ ---------- ---------- ---------- -------- ------------------- -------------------
+25878041     bilbomd.s+     FAILED   00:38:38    127:0 2024-05-21T11:45:15 2024-05-21T12:23:53
+25878041.ba+      batch     FAILED   00:38:38    127:0 2024-05-21T11:45:15 2024-05-21T12:23:53
+25878041.ex+     extern  COMPLETED   00:39:18      0:0 2024-05-21T11:45:15 2024-05-21T12:24:33
+25878041.0      pdb2crd  COMPLETED   00:00:34      0:0 2024-05-21T11:46:06 2024-05-21T11:46:40
+25878041.1         meld  COMPLETED   00:00:08      0:0 2024-05-21T11:46:49 2024-05-21T11:46:57
+25878041.2    pae2const  COMPLETED   00:00:32      0:0 2024-05-21T11:47:06 2024-05-21T11:47:38
+25878041.3     minimize  COMPLETED   00:01:10      0:0 2024-05-21T11:47:47 2024-05-21T11:48:57
+25878041.4     initfoxs  COMPLETED   00:00:10      0:0 2024-05-21T11:48:58 2024-05-21T11:49:08
+25878041.5         heat  COMPLETED   00:02:05      0:0 2024-05-21T11:50:16 2024-05-21T11:52:21
+25878041.6          md5  COMPLETED   00:26:55      0:0 2024-05-21T11:52:21 2024-05-21T12:19:16
+25878041.7          md2  COMPLETED   00:26:53      0:0 2024-05-21T11:52:23 2024-05-21T12:19:16
+25878041.8          md4  COMPLETED   00:26:35      0:0 2024-05-21T11:52:41 2024-05-21T12:19:16
+25878041.9          md1  COMPLETED   00:26:35      0:0 2024-05-21T11:52:41 2024-05-21T12:19:16
+25878041.10         md3  COMPLETED   00:26:19      0:0 2024-05-21T11:52:42 2024-05-21T12:19:01
+25878041.11     dcd2pdb  COMPLETED   00:00:35      0:0 2024-05-21T12:19:16 2024-05-21T12:19:51
+25878041.12        foxs  COMPLETED   00:02:30      0:0 2024-05-21T12:19:51 2024-05-21T12:22:21
+25878041.13   multifoxs  COMPLETED   00:02:12      0:0 2024-05-21T12:22:21 2024-05-21T12:24:33
+```
+
+This worked except for my `msacct` alias caused an error. probably need to add shopt command to honor aliases. Despite teh `sleep 10` commands being added after every parallel `srun` command the Start times are still sometimes concurrent. Maybe an issue with how slurm is keeping track of jobs and giving them timestamps?
+
+### Try a `BilboMdCRD` job with `conformational_sampling: 4` and `sleep 10`
+
+jobid: 25880631 regualar QOS for 00:40:00
+
+```shell
+JobID           JobName    Account  AllocCPUS      State    Elapsed ExitCode               Start                 End
+------------ ---------- ---------- ---------- ---------- ---------- -------- ------------------- -------------------
+25880631     bilbomd.s+    m4659_g        128     FAILED   00:28:56      1:0 2024-05-21T12:34:19 2024-05-21T13:03:15
+25880631.ba+      batch    m4659_g        128     FAILED   00:28:56      1:0 2024-05-21T12:34:19 2024-05-21T13:03:15
+25880631.ex+     extern    m4659_g        128  COMPLETED   00:30:28      0:0 2024-05-21T12:34:19 2024-05-21T13:04:47
+25880631.0     minimize    m4659_g        120  COMPLETED   00:00:41      0:0 2024-05-21T12:34:36 2024-05-21T12:35:17
+25880631.1     initfoxs    m4659_g        120  COMPLETED   00:00:32      0:0 2024-05-21T12:35:20 2024-05-21T12:35:52
+25880631.2         heat    m4659_g        120  COMPLETED   00:01:29      0:0 2024-05-21T12:35:52 2024-05-21T12:37:21
+25880631.3          md1    m4659_g         24  COMPLETED   00:20:26      0:0 2024-05-21T12:37:21 2024-05-21T12:57:47
+25880631.4          md2    m4659_g         24  COMPLETED   00:18:46      0:0 2024-05-21T12:37:21 2024-05-21T12:56:07
+25880631.5          md3    m4659_g         24  COMPLETED   00:19:55      0:0 2024-05-21T12:37:21 2024-05-21T12:57:16
+25880631.6          md4    m4659_g         24  COMPLETED   00:18:15      0:0 2024-05-21T12:37:51 2024-05-21T12:56:06
+25880631.7          md5    m4659_g         24  COMPLETED   00:18:43      0:0 2024-05-21T12:38:15 2024-05-21T12:56:58
+25880631.8      dcd2pdb    m4659_g        120  COMPLETED   00:00:15      0:0 2024-05-21T12:57:47 2024-05-21T12:58:02
+25880631.9         foxs    m4659_g        120  COMPLETED   00:02:53      0:0 2024-05-21T12:58:37 2024-05-21T13:01:30
+25880631.10   multifoxs    m4659_g        120  COMPLETED   00:02:24      0:0 2024-05-21T13:01:42 2024-05-21T13:04:06
+```
+
+Failed because %j is not how you are supposed to get the job ID within the Slurm batch file. Lets try `$SLURM_JOB_ID`
+
+### Lets also try another Auto job with some different inputs
+
+This is the gln4 test files from Michal
+
+jobid: 25882816 regualar QOS for 00:40:00
+
+```shell
+JobID           JobName    Account  AllocCPUS      State    Elapsed ExitCode               Start                 End
+------------ ---------- ---------- ---------- ---------- ---------- -------- ------------------- -------------------
+25882816     bilbomd.s+    m4659_g        128    RUNNING   00:08:40      0:0 2024-05-21T13:25:19             Unknown
+25882816.ba+      batch    m4659_g        128    RUNNING   00:08:40      0:0 2024-05-21T13:25:19             Unknown
+25882816.ex+     extern    m4659_g        128    RUNNING   00:08:40      0:0 2024-05-21T13:25:19             Unknown
+25882816.0      pdb2crd    m4659_g        120  COMPLETED   00:00:19      0:0 2024-05-21T13:25:28 2024-05-21T13:25:47
+25882816.1         meld    m4659_g        120  COMPLETED   00:00:31      0:0 2024-05-21T13:26:02 2024-05-21T13:26:33
+25882816.2    pae2const    m4659_g        120  COMPLETED   00:01:04      0:0 2024-05-21T13:26:33 2024-05-21T13:27:37
+25882816.3     minimize    m4659_g        120  COMPLETED   00:02:47      0:0 2024-05-21T13:28:03 2024-05-21T13:30:50
+25882816.4     initfoxs    m4659_g        120  COMPLETED   00:00:20      0:0 2024-05-21T13:30:56 2024-05-21T13:31:16
+25882816.5         heat    m4659_g        120  COMPLETED   00:01:25      0:0 2024-05-21T13:31:16 2024-05-21T13:32:41
+25882816.6          md1    m4659_g         24    RUNNING   00:01:18      0:0 2024-05-21T13:32:41             Unknown
+25882816.7          md2    m4659_g         24    RUNNING   00:01:18      0:0 2024-05-21T13:32:41             Unknown
+25882816.8          md3    m4659_g         24    RUNNING   00:01:02      0:0 2024-05-21T13:32:57             Unknown
+25882816.9          md4    m4659_g         24    RUNNING   00:00:48      0:0 2024-05-21T13:33:11             Unknown
+25882816.10         md5    m4659_g         24    RUNNING   00:00:13      0:0 2024-05-21T13:33:46             Unknown
+```
+
+weird start times....
+
+```shell
+JobID           JobName    Account  AllocCPUS      State    Elapsed ExitCode               Start                 End
+------------ ---------- ---------- ---------- ---------- ---------- -------- ------------------- -------------------
+25882816     bilbomd.s+    m4659_g        128  COMPLETED   00:32:54      0:0 2024-05-21T13:25:19 2024-05-21T13:58:13
+25882816.ba+      batch    m4659_g        128  COMPLETED   00:32:54      0:0 2024-05-21T13:25:19 2024-05-21T13:58:13
+25882816.ex+     extern    m4659_g        128  COMPLETED   00:33:03      0:0 2024-05-21T13:25:19 2024-05-21T13:58:22
+25882816.0      pdb2crd    m4659_g        120  COMPLETED   00:00:19      0:0 2024-05-21T13:25:28 2024-05-21T13:25:47
+25882816.1         meld    m4659_g        120  COMPLETED   00:00:31      0:0 2024-05-21T13:26:02 2024-05-21T13:26:33
+25882816.2    pae2const    m4659_g        120  COMPLETED   00:01:04      0:0 2024-05-21T13:26:33 2024-05-21T13:27:37
+25882816.3     minimize    m4659_g        120  COMPLETED   00:02:47      0:0 2024-05-21T13:28:03 2024-05-21T13:30:50
+25882816.4     initfoxs    m4659_g        120  COMPLETED   00:00:20      0:0 2024-05-21T13:30:56 2024-05-21T13:31:16
+25882816.5         heat    m4659_g        120  COMPLETED   00:01:25      0:0 2024-05-21T13:31:16 2024-05-21T13:32:41
+25882816.6          md1    m4659_g         24  COMPLETED   00:20:50      0:0 2024-05-21T13:32:41 2024-05-21T13:53:31
+25882816.7          md2    m4659_g         24  COMPLETED   00:20:50      0:0 2024-05-21T13:32:41 2024-05-21T13:53:31
+25882816.8          md3    m4659_g         24  COMPLETED   00:20:34      0:0 2024-05-21T13:32:57 2024-05-21T13:53:31
+25882816.9          md4    m4659_g         24  COMPLETED   00:20:22      0:0 2024-05-21T13:33:11 2024-05-21T13:53:33
+25882816.10         md5    m4659_g         24  COMPLETED   00:20:37      0:0 2024-05-21T13:33:46 2024-05-21T13:54:23
+25882816.11     dcd2pdb    m4659_g        120  COMPLETED   00:00:37      0:0 2024-05-21T13:54:23 2024-05-21T13:55:00
+25882816.12        foxs    m4659_g        120  COMPLETED   00:02:30      0:0 2024-05-21T13:55:00 2024-05-21T13:57:30
+25882816.13   multifoxs    m4659_g        120  COMPLETED   00:01:00      0:0 2024-05-21T13:57:30 2024-05-21T13:58:30
+```
+
+### `BilboMDAuto` gln4 test conf=4
+
+jobid: 25884937 regular QOS 00:40:00
+
+```shell
+
+```
