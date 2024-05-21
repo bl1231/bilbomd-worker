@@ -14,10 +14,10 @@ UUID=$1
 # -----------------------------------------------------------------------------
 # SBATCH STUFF
 project="m4659"
-queue="debug"
+queue="regular"
 constraint="gpu"
 nodes="1"
-time="00:30:00"
+time="00:60:00"
 mailtype="end,fail"
 mailuser="sclassen@lbl.gov"
 
@@ -27,7 +27,7 @@ if [ "$constraint" = "gpu" ]; then
     # NUM_CORES=128
     NUM_CORES=120
 elif [ "$constraint" = "cpu" ]; then
-    NUM_CORES=256
+    NUM_CORES=240
 else
     echo "Unknown constraint: $constraint"
     exit 1  # Exit the script if the constraint is not recognized
@@ -384,8 +384,9 @@ EOF
     local cpus=$(($NUM_CORES/$num_inp_files))
     for inp in "${g_pdb2crd_inp_files[@]}"; do
         echo "echo \"Starting $inp\" &" >> $WORKDIR/pdb2crd
-        local command="srun --ntasks=1 --cpus-per-task=$cpus --job-name pdb2crd podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
+        local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name pdb2crd podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
         echo $command >> $WORKDIR/pdb2crd
+        echo sleep 10 >> $WORKDIR/pdb2crd
 
     done
     echo "" >> $WORKDIR/pdb2crd
@@ -396,7 +397,7 @@ EOF
     echo "" >> $WORKDIR/pdb2crd
     echo "# Meld all individual CRD files" >> $WORKDIR/pdb2crd
     echo "echo \"Melding pdb2crd_charmm_meld.inp\"" >> $WORKDIR/pdb2crd
-    local command="srun --ntasks=1 --job-name meld podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o pdb2crd_charmm_meld.out -i pdb2crd_charmm_meld.inp\""
+    local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name meld podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o pdb2crd_charmm_meld.out -i pdb2crd_charmm_meld.inp\""
     echo $command >> $WORKDIR/pdb2crd
     echo "" >> $WORKDIR/pdb2crd
     echo "echo \"All Individual CRD files melded into bilbomd_pdb2crd.crd\"" >> $WORKDIR/pdb2crd
@@ -409,19 +410,11 @@ generate_pae2const_commands() {
 # Create const.inp from Alphafold PAE Matrix
 EOF
     echo "echo \"Calculate const.inp from PAE matrix...\"" >> $WORKDIR/pae2const
-    # echo "python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file} > pae_ratios.log 2>&1" >> $WORKDIR/pae2const
-    local command="srun --ntasks=1 --job-name pdb2crd podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file} > pae_ratios.log 2>&1\""
+    local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name pae2const podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file} > pae_ratios.log 2>&1\""
     echo $command >> $WORKDIR/pae2const
     echo "" >> $WORKDIR/pae2const
-    echo "# Check if const.inp was successfully created" >> $WORKDIR/pae2const
-    echo "if [ -f \"const.inp\" ]; then" >> $WORKDIR/pae2const
-    echo "    echo \"const.inp successfully created.\"" >> $WORKDIR/pae2const
-    echo "else" >> $WORKDIR/pae2const
-    echo "    echo \"Error: const.inp not found. Check pae_ratios.log for errors.\"" >> $WORKDIR/pae2const
-    echo "    exit 1" >> $WORKDIR/pae2const
-    echo "fi" >> $WORKDIR/pae2const
+    echo "echo \"const.inp generated from PAE matrix\"" >> $WORKDIR/pae2const
     echo "" >> $WORKDIR/pae2const
-
 }
 
 generate_min_heat_commands(){
@@ -440,21 +433,21 @@ generate_min_heat_commands(){
 # -----------------------------------------------------------------------------
 # CHARMM Minimize
 echo "Running CHARMM Minimize..."
-srun --ntasks=1 --job-name minimize podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o minimize.out -i minimize.inp"
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name minimize podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o minimize.out -i minimize.inp"
 
 echo "CHARMM Minimize complete"
 
 # -----------------------------------------------------------------------------
 # FoXS Analysis of minimized PDB
 echo "Running Initial FoXS Analysis..."
-srun --ntasks=1 --job-name initfoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && foxs ${foxs_args[@]} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.log"
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name initfoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && foxs ${foxs_args[@]} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.log"
 
 echo "Initial FoXS Analysis complete"
 
 # -----------------------------------------------------------------------------
 # CHARMM Heat
 echo "Running CHARMM Heat..."
-srun --ntasks=1 --job-name heat podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o heat.out -i heat.inp"
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name heat podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o heat.out -i heat.inp"
 
 echo "CHARMM Heating complete"
 
@@ -474,6 +467,7 @@ EOF
         echo "echo \"Starting $inp\"" >> $WORKDIR/dynamics
         local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name md$count podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
         echo $command >> $WORKDIR/dynamics
+        echo sleep 10 >> $WORKDIR/dynamics
         ((count++))
     done
     echo "" >> $WORKDIR/dynamics
@@ -572,7 +566,7 @@ generate_multifoxs_command() {
 # Run MultiFoXS to calculate best ensemble
 EOF
     echo "echo \"Run MultiFoXS to calculate best ensemble...\"" >> $WORKDIR/multifoxssection
-    echo "srun --ntasks=1 --job-name multifoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_multifoxs.sh\"" >> $WORKDIR/multifoxssection
+    echo "srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name multifoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_multifoxs.sh\"" >> $WORKDIR/multifoxssection
     echo "" >> $WORKDIR/multifoxssection
     echo "echo \"MultiFoXS processing complete.\"" >> $WORKDIR/multifoxssection
     echo "" >> $WORKDIR/multifoxssection
@@ -584,9 +578,12 @@ generate_copy_commands() {
 # Copy results back to CFS
 EOF
     echo "echo \"Copying results back to CFS...\"" >> $WORKDIR/endsection
-    # echo "cp -nR $WORKDIR/* $UPLOAD_DIR" >> $WORKDIR/endsection
+    echo "cp -nR $WORKDIR/* $UPLOAD_DIR" >> $WORKDIR/endsection
     echo "" >> $WORKDIR/endsection
     echo "echo \"DONE ${UUID}\"" >> $WORKDIR/endsection
+    echo "" >> $WORKDIR/endsection
+    echo "sleep 30" >> $WORKDIR/endsection
+    echo "sacct --format=JobID,JobName,Account,AllocCPUS,State,Elapsed,ExitCode,Start,End -j \$SLURM_JOB_ID" >> $WORKDIR/endsection
 }
 
 append_slurm_sections() {
@@ -640,12 +637,12 @@ initialize_job
 #
 if [ "$job_type" = "BilboMdPDB" ] || [ "$job_type" = "BilboMdAuto" ]; then
     generate_pdb2crd_input_files
+    generate_pdb2crd_commands
 fi
+
 generate_md_input_files
 generate_dcd2pdb_input_files
-# echo "CPUS: $cpus"
-# generate_bilbomd_slurm_header
-generate_pdb2crd_commands
+
 #
 if [ "$job_type" = "BilboMdAuto" ]; then
     generate_pae2const_commands
