@@ -1,13 +1,15 @@
 import { Job as BullMQJob } from 'bullmq'
 import { BilboMdPDBJob } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../../helpers/loggers'
-import { initializeJob, prepareResults, cleanupJob } from '../bilbomd.functions'
+import { prepareResults } from '../bilbomd.functions'
+import { initializeJob, cleanupJob } from '../functions/job-utils'
 import {
   prepareBilboMDSlurmScript,
   submitJobToNersc,
   monitorTaskAtNERSC,
   monitorJobAtNERSC
-} from '../../services/functions/nersc-jobs'
+} from '../functions/nersc-jobs'
+import { handleStepError, updateStepStatus } from '../functions/mongo-utils'
 
 const processBilboMDJobNerscTest = async (MQjob: BullMQJob) => {
   const foundJob = await BilboMdPDBJob.findOne({ _id: MQjob.data.jobid })
@@ -39,21 +41,47 @@ const processBilboMDPDBJobNersc = async (MQjob: BullMQJob) => {
     await MQjob.updateProgress(10)
 
     // Run make-bilbomd.sh to prepare bilbomd.slurm
-    const prepTaskID = await prepareBilboMDSlurmScript(foundJob)
-    const prepResult = await monitorTaskAtNERSC(prepTaskID)
-    logger.info(`prepResult: ${JSON.stringify(prepResult)}`)
+    try {
+      await MQjob.log('start nersc prepare slurm batch')
+      await updateStepStatus(foundJob._id, 'nersc_prepare_slurm_batch', 'Running')
+      const prepTaskID = await prepareBilboMDSlurmScript(foundJob)
+      const prepResult = await monitorTaskAtNERSC(prepTaskID)
+      logger.info(`prepResult: ${JSON.stringify(prepResult)}`)
+      await updateStepStatus(foundJob._id, 'nersc_prepare_slurm_batch', 'Success')
+      await MQjob.log('end nersc prepare slurm batch')
+    } catch (error) {
+      await handleStepError(foundJob._id, 'nersc_prepare_slurm_batch', error)
+    }
 
     // Submit bilbomd.slurm to the queueing system
-    const submitTaskID = await submitJobToNersc(foundJob)
-    const submitResult = await monitorTaskAtNERSC(submitTaskID)
-    logger.info(`submitResult: ${JSON.stringify(submitResult)}`)
-    const submitResultObject = JSON.parse(submitResult.result)
-    const jobID = submitResultObject.jobid
-    logger.info(`JOBID: ${jobID}`)
+    let jobID
+    try {
+      await MQjob.log('start nersc submit slurm batch')
+      await updateStepStatus(foundJob._id, 'nersc_submit_slurm_batch', 'Running')
+      const submitTaskID = await submitJobToNersc(foundJob)
+      const submitResult = await monitorTaskAtNERSC(submitTaskID)
+      logger.info(`submitResult: ${JSON.stringify(submitResult)}`)
+      const submitResultObject = JSON.parse(submitResult.result)
+      jobID = submitResultObject.jobid
+      logger.info(`JOBID: ${jobID}`)
+      await updateStepStatus(foundJob._id, 'nersc_submit_slurm_batch', 'Success')
+      await MQjob.log('end nersc submit slurm batch')
+    } catch (error) {
+      await handleStepError(foundJob._id, 'nersc_submit_slurm_batch', error)
+    }
 
     // Watch the job
-    const jobResult = await monitorJobAtNERSC(jobID)
-    logger.info(`jobResult: ${JSON.stringify(jobResult)}`)
+    try {
+      await MQjob.log('start nersc watch job')
+      await updateStepStatus(foundJob._id, 'nersc_job_status', 'Running')
+      const jobResult = await monitorJobAtNERSC(jobID)
+      logger.info(`jobResult: ${JSON.stringify(jobResult)}`)
+      await updateStepStatus(foundJob._id, 'nersc_job_status', 'Success')
+      await MQjob.log('end nersc watch job')
+    } catch (error) {
+      await handleStepError(foundJob._id, 'nersc_job_status', error)
+    }
+
     // {
     //   "api_status":"OK",
     //   "api_error":null,
@@ -69,13 +97,21 @@ const processBilboMDPDBJobNersc = async (MQjob: BullMQJob) => {
     // and send an email to the user asking them to resubmit?
 
     // Prepare results
-    await MQjob.log('start gather results')
-    await prepareResults(MQjob, foundJob)
-    await MQjob.log('end gather results')
+    try {
+      await MQjob.log('start gather results')
+      await updateStepStatus(foundJob._id, 'results', 'Running')
+      await prepareResults(MQjob, foundJob)
+      await updateStepStatus(foundJob._id, 'results', 'Success')
+      await MQjob.log('end gather results')
+    } catch (error) {
+      await handleStepError(foundJob._id, 'results', error)
+    }
     await MQjob.updateProgress(99)
 
     // Cleanup & send email
+    await updateStepStatus(foundJob._id, 'email', 'Running')
     await cleanupJob(MQjob, foundJob)
+    await updateStepStatus(foundJob._id, 'email', 'Success')
     await MQjob.updateProgress(100)
   } catch (error) {
     logger.error(`Failed to process job: ${MQjob.data.uuid}`)

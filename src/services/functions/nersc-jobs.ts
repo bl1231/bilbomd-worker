@@ -8,7 +8,7 @@ import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc'
 
 const prepareBilboMDSlurmScript = async (Job: IJob): Promise<string> => {
   const UUID = Job.uuid
-  const jobType = Job.__t
+  // const jobType = Job.__t
   const token = await ensureValidToken()
   const url = `${config.nerscBaseAPI}/utilities/command/perlmutter`
   // logger.info(`url: ${url}`)
@@ -17,7 +17,7 @@ const prepareBilboMDSlurmScript = async (Job: IJob): Promise<string> => {
     'Content-Type': 'application/x-www-form-urlencoded',
     Authorization: `Bearer ${token}`
   }
-  const cmd = `cd ${config.nerscScriptDir} && ./make-bilbomd.sh ${UUID} ${jobType}`
+  const cmd = `cd ${config.nerscScriptDir} && ./gen-bilbomd-slurm-file.sh ${UUID}`
   logger.info(`cmd: ${cmd}`)
   const data = qs.stringify({
     executable: `bash -c "${cmd}"`

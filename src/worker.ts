@@ -1,4 +1,5 @@
 import * as dotenv from 'dotenv'
+import 'module-alias/register'
 import { connectDB } from './helpers/db'
 import { Job, Worker, WorkerOptions } from 'bullmq'
 import { WorkerJob } from 'types/jobtypes'

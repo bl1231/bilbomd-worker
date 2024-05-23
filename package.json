@@ -18,13 +18,14 @@
   "author": "Scott Classen",
   "license": "ISC",
   "dependencies": {
-    "@bl1231/bilbomd-mongodb-schema": "^1.0.12",
+    "@bl1231/bilbomd-mongodb-schema": "^1.0.16",
     "axios": "^1.6.8",
     "bullmq": "^5.7.8",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "handlebars": "^4.7.8",
     "jsonwebtoken": "^9.0.2",
+    "module-alias": "^2.2.3",
     "moment-timezone": "^0.5.45",
     "mongoose": "^8.3.4",
     "nodemailer": "^6.9.13",
@@ -37,7 +38,7 @@
     "@types/fs-extra": "^11.0.4",
     "@types/jest": "^29.5.12",
     "@types/jsonwebtoken": "^9.0.6",
-    "@types/node": "^20.12.11",
+    "@types/node": "^20.12.12",
     "@types/nodemailer": "^6.4.15",
     "@types/nodemailer-express-handlebars": "^4.0.5",
     "@types/shelljs": "^0.8.15",
@@ -50,6 +51,12 @@
     "rimraf": "^5.0.7",
     "shelljs": "^0.8.5",
     "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.4.5"
+  },
+  "_moduleAliases": {
+    "@services": "build/services",
+    "@models": "build/models",
+    "@helpers": "build/helpers"
   }
 }

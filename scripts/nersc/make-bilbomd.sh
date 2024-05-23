@@ -1,13 +1,13 @@
 #!/bin/bash -l
 #
 
-# Check if an argument was provided
+# Check if two arguments were provided
 if [ $# -ne 2 ]; then
     echo "Usage: $0 <UUID> <JOB_TYPE>"
     exit 1
 fi
 
-# Get dem args
+# Assign args to global variables
 UUID=$1
 JOB_TYPE=$2
 
@@ -22,11 +22,7 @@ case $JOB_TYPE in
         ;;
 esac
 
-# buy1
-# UUID="52e8f8ca-5188-4714-a29d-dfcf9e311580"
-# pro_dna
-# UUID="c590f775-e276-4a19-a5a5-7dc2f7d40026"
-
+# -----------------------------------------------------------------------------
 # SBATCH STUFF
 project="m4659"
 queue="debug"
@@ -36,6 +32,8 @@ time="00:30:00"
 mailtype="end,fail"
 mailuser="sclassen@lbl.gov"
 
+# Might use core number to dynamically write our slurm script and maximize
+# the use of assigned node(s)
 if [ "$constraint" = "gpu" ]; then
     NUM_CORES=128
 elif [ "$constraint" = "cpu" ]; then
@@ -45,10 +43,10 @@ else
     exit 1  # Exit the script if the constraint is not recognized
 fi
 
-CFSDIR=${CFS}/${project}/bilbomd-uploads/${UUID}
+UPLOAD_DIR=${CFS}/${project}/bilbomd-uploads/${UUID}
 WORKDIR=${PSCRATCH}/bilbmod/${UUID}
 TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
-WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.2
+WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.5
 
 
 # other globals
@@ -63,12 +61,15 @@ in_crd_file="bilbomd_pdb2crd.crd"
 foxs_rg="foxs_rg.out"
 
 
+# -----------------------------------------------------------------------------
+# FUNCTIONS
+
 copy_input_data() {
-    cp $CFSDIR/* $WORKDIR
+    cp $UPLOAD_DIR/* $WORKDIR
     if [ $? -eq 0 ]; then
         echo "Files copied successfully from CFS to PSCRATCH"
     else
-        echo "Failed to copy files from $CFSDIR to $WORKDIR" >&2
+        echo "Failed to copy files from $UPLOAD_DIR to $WORKDIR" >&2
         exit 1
     fi
 }
@@ -92,6 +93,12 @@ read_job_params() {
     # Common parameters
     saxs_data=$(jq -r '.saxs_data' $WORKDIR/params.json)
     conf_sample=$(jq -r '.conf_sample' $WORKDIR/params.json)
+    # Fail if essential parameters are missing
+    if [ -z "$saxs_data" ] || [ -z "$conf_sample" ]; then
+        echo "Error: Essential parameter missing (SAXS data or conf_sample)."
+        return 1
+    fi
+
 
     if [ "$JOB_TYPE" = "BilboMdPDB" ]; then
         # Job type specific for BilboMdPDB
@@ -99,7 +106,16 @@ read_job_params() {
         in_psf_file="bilbomd_pdb2crd.psf"
         in_crd_file="bilbomd_pdb2crd.crd"
         constinp=$(jq -r '.constinp' $WORKDIR/params.json)
-        echo "Using static PSF and CRD files for BilboMdPDB."
+
+        if [ -z "$pdb_file" ]; then
+            echo "Error: Missing PDB file."
+            return 1
+        fi
+        if [ -z "$constinp" ]; then
+            echo "Error: Missing const_inp file"
+            return 1
+        fi
+        echo "Read BilboMdPDB Job Params."
 
     elif [ "$JOB_TYPE" = "BilboMdCRD" ]; then
         # Job type specific for BilboMdCRD
@@ -107,7 +123,19 @@ read_job_params() {
         in_psf_file=$(jq -r '.psf_file' $WORKDIR/params.json)
         in_crd_file=$(jq -r '.crd_file' $WORKDIR/params.json)
         constinp=$(jq -r '.constinp' $WORKDIR/params.json)
-        echo "Using dynamic PSF and CRD files from parameters for BilboMdCRD."
+        if [ -z "$in_psf_file" ]; then
+            echo "Error: Missing PSF file."
+            return 1
+        fi
+        if [ -z "$in_crd_file" ]; then
+            echo "Error: Missing CRD file"
+            return 1
+        fi
+        if [ -z "$constinp" ]; then
+            echo "Error: Missing const_inp file"
+            return 1
+        fi
+        echo "Read BilboMdCRD Job Params."
 
     elif [ "$JOB_TYPE" = "BilboMdAuto" ]; then
         # Job type specific for BilboMdCRD
@@ -115,8 +143,16 @@ read_job_params() {
         pae_file=$(jq -r '.pae_file' $WORKDIR/params.json)
         in_psf_file="bilbomd_pdb2crd.psf"
         in_crd_file="bilbomd_pdb2crd.crd"
-        constinp="" # Will be calculated by pae_ratios.py
-        echo "Using dynamic PSF and CRD files from parameters for BilboMdCRD."
+        constinp="const.inp" # Will be calculated by pae_ratios.py
+        if [ -z "$pdb_file" ]; then
+            echo "Error: Missing PDB file."
+            return 1
+        fi
+        if [ -z "$pae_file" ]; then
+            echo "Error: Missing PAE file"
+            return 1
+        fi
+        echo "Read BilboMdAuto Job Params."
     else
         echo "Error: Unrecognized JOB_TYPE '$JOB_TYPE'"
         return 1  # Exit with an error status
@@ -126,9 +162,11 @@ read_job_params() {
     echo "PDB file: $pdb_file"
     echo "SAXS data: $saxs_data"
     echo "Constraint input: $constinp"
-    echo "Confidence sample: $conf_sample"
+    echo "Conformational Sampling: $conf_sample"
     echo "PSF file: $in_psf_file"
     echo "CRD file: $in_crd_file"
+    echo "PDB file: $pdb_file"
+    echo "PAE file: $pae_file"
 }
 
 
@@ -256,9 +294,7 @@ generate_md_input_files() {
     local rg_values=$(run_autorg)
     local rg_min=$(echo $rg_values | cut -d' ' -f1)
     local rg_max=$(echo $rg_values | cut -d' ' -f2)
-    # local rg_min=22
-    # local rg_max=41
-    
+
     echo "Rg range: $rg_min to $rg_max"
     # Calculate the step size
     local step=$(($((rg_max - rg_min)) / 4))
@@ -324,7 +360,7 @@ generate_bilbomd_slurm() {
 #SBATCH --mail-type=${mailtype}
 #SBATCH --mail-user=${mailuser}
 
-srun --job-name bilbomd podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${CFSDIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && ./run-bilbomd.sh"
+srun --job-name bilbomd --mpi=pmix podman-hpc run --rm --userns=keep-id --openmpi-pmix -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && ./run-bilbomd.sh"
 EOF
 }
 
@@ -344,7 +380,7 @@ generate_pdb2crd_commands() {
 EOF
     for inp in "${g_pdb2crd_inp_files[@]}"; do
         echo "echo \"Starting $inp\" &" >> pdb2crd
-        local command="charmm -o ${inp%.inp}.log -i ${inp} &"
+        local command="charmm -o ${inp%.inp}.out -i ${inp} &"
         echo $command >> pdb2crd
 
     done
@@ -354,7 +390,7 @@ EOF
     echo "" >> pdb2crd
     echo "# Meld all individual CRD files" >> pdb2crd
     echo "echo \"Melding pdb2crd_charmm_meld.inp\"" >> pdb2crd
-    local command="charmm -o pdb2crd_charmm_meld.log -i pdb2crd_charmm_meld.inp"
+    local command="charmm -o pdb2crd_charmm_meld.out -i pdb2crd_charmm_meld.inp"
     echo $command >> pdb2crd
     echo "" >> pdb2crd
 }
@@ -365,8 +401,17 @@ generate_pae2const_commands() {
 # Create const.inp from Alphafold PAE
 EOF
     echo "echo \"Calculate const.inp from PAE matrix...\"" >> pae2const
-    echo "python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file}" >> pae2const
+    echo "python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file} > pae_ratios.log 2>&1" >> pae2const
     echo "" >> pae2const
+    echo "# Check if const.inp was successfully created" >> pae2const
+    echo "if [ -f \"const.inp\" ]; then" >> pae2const
+    echo "    echo \"const.inp successfully created.\"" >> pae2const
+    echo "else" >> pae2const
+    echo "    echo \"Error: const.inp not found. Check pae_ratios.log for errors.\"" >> pae2const
+    echo "    exit 1" >> pae2const
+    echo "fi" >> pae2const
+    echo "" >> pae2const
+
 }
 
 generate_min_heat_commands(){
@@ -385,7 +430,8 @@ generate_min_heat_commands(){
 # ########################################
 # CHARMM Minimize
 echo "Running CHARMM Minimize..."
-mpirun -np $((NUM_CORES/2)) charmm -o minimize.log -i minimize.inp
+mpirun -np $((NUM_CORES/2)) charmm -o minimize.out -i minimize.inp
+# charmm -o minimize.out -i minimize.inp
 
 # ########################################
 # FoXS Analysis of minimized PDB
@@ -395,7 +441,8 @@ foxs ${foxs_args[@]} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.
 # ########################################
 # CHARMM Heat
 echo "Running CHARMM Heat..."
-mpirun -np $((NUM_CORES/2)) charmm -o heat.log -i heat.inp
+mpirun -np $((NUM_CORES/2)) charmm -o heat.out -i heat.inp
+# charmm -o heat.out -i heat.inp
 
 EOF
 }
@@ -409,7 +456,8 @@ EOF
     echo "echo \"Running CHARMM Molecular Dynamics...\"" >> dynamics
     for inp in "${g_md_inp_files[@]}"; do
         echo "echo \"Starting $inp\"" >> dynamics
-        local command="mpirun -np $((NUM_CORES / num_inp_files - 1 )) charmm -o ${inp%.inp}.log -i ${inp} &"
+        local command="mpirun -np $((NUM_CORES / num_inp_files - 1 )) charmm -o ${inp%.inp}.out -i ${inp} &"
+        # local command="charmm -o ${inp%.inp}.out -i ${inp} &"
         echo $command >> dynamics
     done
     echo "" >> dynamics
@@ -428,7 +476,8 @@ EOF
     echo "echo \"Running CHARMM Extract PDB from DCD Trajectories...\"" >> dcd2pdb
     for inp in "${g_dcd2pdb_inp_files[@]}"; do
         echo "echo \"Starting $inp\"" >> dcd2pdb
-        local command="mpirun -np $((NUM_CORES / num_inp_files - 1 )) charmm -o ${inp%.inp}.log -i ${inp} &"
+        local command="mpirun -np $((NUM_CORES / num_inp_files - 1 )) charmm -o ${inp%.inp}.out -i ${inp} &"
+        # local command="charmm -o ${inp%.inp}.out -i ${inp} &"
         echo $command >> dcd2pdb
     done
     echo "" >> dcd2pdb
@@ -524,7 +573,7 @@ generate_multifoxs_script() {
 
     # Catenate all /bilbomd/work/foxs/rg${rg}_run${run}/ files
     # /bilbomd/work/foxs/rg22_run1/foxs_rg22_run1_dat_files.txt
-    echo "#!/bin/bash" >> $multifoxs_script
+    echo "#!/bin/bash -l" >> $multifoxs_script
     # Iterate over each rg value
     for rg in $g_rgs; do
         # Iterate over each run within each rg value
@@ -534,6 +583,7 @@ generate_multifoxs_script() {
         done
     done
     echo "cd /bilbomd/work/multifoxs && mpirun -np 8 multi_foxs -o ../$saxs_data foxs_dat_files.txt &> multi_foxs.log" >> $multifoxs_script
+    # echo "cd /bilbomd/work/multifoxs && multi_foxs -o ../$saxs_data foxs_dat_files.txt &> multi_foxs.log" >> $multifoxs_script
 }
 
 generate_multifoxs_command() {
@@ -557,8 +607,8 @@ generate_copy_commands() {
 # Copy results back to CFS
 EOF
     echo "echo \"Copying results back to CFS...\"" >> endsection
-    # echo "echo \"Copying $WORKDIR/ back to CFS $CFSDIR ...\"" >> endsection
-    echo "cp -nR /bilbomd/work/* /cfs/" >> endsection
+    # echo "echo \"Copying $WORKDIR/ back to CFS $UPLOAD_DIR ...\"" >> endsection
+    # echo "cp -nR /bilbomd/work/* /cfs/" >> endsection
     echo "" >> endsection
     echo "echo \"DONE ${UUID}\"" >> endsection
 }
@@ -600,10 +650,6 @@ countDataPoints() {
 
     # Adjust count by subtracting 1
     count=$((count - 1))
-
-    # Log the results to console (you can replace this with logging to a file if needed)
-    # echo "countDataPoints original dat file has: $(($count + 1)) points"
-    # echo "countDataPoints adjusting counts to: $count points"
 
     # Return the adjusted count
     echo $count
