@@ -12,43 +12,26 @@ Processes BilboMD jobs and run CHARMM, FoXS, and MultiFoXS
 
 ## Deployment
 
-To build the Docker image from the command line you must specify the CHARMM version.
+To build the Docker image from the command line.
 
 ```bash
-docker build -t bl1231/bilbomd-worker:0.0.12 --build-arg CHARMM_VER=c47b2 .
+docker build --build-arg USER_ID=$UID -t bl1231/bilbomd-worker .
 ```
 
-building on Perlmutter login node:
+At the moment there are 2 versions of the `bilbomd-worker` needed for deploying at NERSC. One version for doing the work on a perlmutter compute node and a second version that does no real work, but is deployed to SPIN where it monitors for jobs and uses teh Superfacility API to prepare and launch jobs via slurm batch scripts.
+
+For running on Perlmutter compute nodes:
 
 ```bash
-podman-hpc build -t bilbomd/bilbomd-worker:0.0.3 --build-arg CHARMM_VER=c48b2 --build-arg USER_ID=$UID -f NERSC.dockerfile
+podman-hpc build --build-arg USER_ID=$UID -t bilbomd/bilbomd-perlmutter-worker -f bilbomd-perlmutter-worker.dockerfile .
 ```
 
-The entire app is run within a [Docker](https://www.docker.com/) container. See the `Dockerfile` for details. It accesses BullMQ/Redis container using these env variables:
+For running on SPIN Kubernetes cluster. The `$NPM_TOKEN` comes from GitHub... ask me if you need to knwo about this.
 
 ```bash
-REDIS_URL=bilbomd-redis:6379
-REDIS_HOST=bilbomd-redis
-REDIS_PORT=6379
-REDIS_PASSWORD=XXXXXXXXXXXXXXXXXXXXX
+podman-hpc build --build-arg NPM_TOKEN=$NPM_TOKEN -t bilbomd/bilbomd-spin-worker -f bilbomd-spin-worker.dockerfile .
 ```
 
-and the MongoDB container with these:
-
-```bash
-MONGO_PASSWORD=XXXXXXXXXXXXXXXXXXXXX
-MONGO_HOSTNAME=hyperion.bl1231.als.lbl.gov
-MONGO_PORT=27017
-MONGO_DB=bilbomd
-MONGO_AUTH_SRC=admin
-```
-
-All of these env settings (and some others) reside in a single `.env` file that is used by Docker Compose to build the suite of 4 services. This will be documented elsewhere. But for posterity they are:
-
-- bilbomd-worker (this project)
-- [bilbomd-backend](https://github.com/bl1231/bilbomd-backend)
-- [bilbomd-mongodb](https://hub.docker.com/_/mongo) (official docker image from [Docker Hub](https://hub.docker.com/))
-- [bilbomd-redis](https://hub.docker.com/_/redis)(official docker image [Docker Hub](https://hub.docker.com/))
 
 ## Authors
 
