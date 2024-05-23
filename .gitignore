@@ -114,5 +114,4 @@ build
 test/
 test-data/
 *.slurm
-openmpi/
 scripts/nersc/workdir

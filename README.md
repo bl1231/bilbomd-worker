@@ -12,10 +12,12 @@ Processes BilboMD jobs and run CHARMM, FoXS, and MultiFoXS
 
 ## Deployment
 
+In order to build the docker images you will need to obtain the source code fro CHARMM, BioXTAS, and OpenMPI and place them in teh appropriate folders prior to running any `build` commands.
+
 To build the Docker image from the command line.
 
 ```bash
-docker build --build-arg USER_ID=$UID -t bl1231/bilbomd-worker .
+docker build --build-arg USER_ID=$UID -t bl1231/bilbomd-worker -f bilbomd-worker.dockerfile .
 ```
 
 At the moment there are 2 versions of the `bilbomd-worker` needed for deploying at NERSC. One version for doing the work on a perlmutter compute node and a second version that does no real work, but is deployed to SPIN where it monitors for jobs and uses teh Superfacility API to prepare and launch jobs via slurm batch scripts.
