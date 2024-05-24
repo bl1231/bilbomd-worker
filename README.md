@@ -12,7 +12,7 @@ Processes BilboMD jobs and run CHARMM, FoXS, and MultiFoXS
 
 ## Deployment
 
-In order to build the docker images you will need to obtain the source code fro CHARMM, BioXTAS, and OpenMPI and place them in teh appropriate folders prior to running any `build` commands.
+In order to build the docker images you will need to obtain the source codes for CHARMM, BioXTAS, and OpenMPI and place them in the appropriate folders prior to running any `docker build` commands.
 
 To build the Docker image from the command line.
 
@@ -20,15 +20,16 @@ To build the Docker image from the command line.
 docker build --build-arg USER_ID=$UID -t bl1231/bilbomd-worker -f bilbomd-worker.dockerfile .
 ```
 
-At the moment there are 2 versions of the `bilbomd-worker` needed for deploying at NERSC. One version for doing the work on a perlmutter compute node and a second version that does no real work, but is deployed to SPIN where it monitors for jobs and uses teh Superfacility API to prepare and launch jobs via slurm batch scripts.
+At the moment there are 2 versions of the `bilbomd-worker` needed for deploying **BilboMD** at NERSC. One version for doing the work on a perlmutter compute node and a second version that does no real "work", but is deployed to SPIN where it monitors for jobs and uses the Superfacility API to prepare and launch jobs via slurm batch scripts.
 
-For running on Perlmutter compute nodes:
+To build `bilbomd-perlmutter-worker` which is the podman-hpc runtime for performing the Molecular Dynamics steps on Perlmutter compute nodes:
 
 ```bash
+cd bilbomd-worker
 podman-hpc build --build-arg USER_ID=$UID -t bilbomd/bilbomd-perlmutter-worker -f bilbomd-perlmutter-worker.dockerfile .
 ```
 
-For running on SPIN Kubernetes cluster. The `$NPM_TOKEN` comes from GitHub... ask me if you need to knwo about this.
+To build `bilbomd-spin-worker` for running on the SPIN Kubernetes cluster. The `$NPM_TOKEN` comes from GitHub... ask me if you need to know about this.
 
 ```bash
 podman-hpc build --build-arg NPM_TOKEN=$NPM_TOKEN -t bilbomd/bilbomd-spin-worker -f bilbomd-spin-worker.dockerfile .
