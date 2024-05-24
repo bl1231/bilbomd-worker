@@ -17,6 +17,8 @@ In order to build the docker images you will need to obtain the source codes for
 To build the Docker image from the command line.
 
 ```bash
+git clone git@github.com:bl1231/bilbomd-worker.git
+cd bilbomd-worker
 docker build --build-arg USER_ID=$UID -t bl1231/bilbomd-worker -f bilbomd-worker.dockerfile .
 ```
 
@@ -32,9 +34,9 @@ podman-hpc build --build-arg USER_ID=$UID -t bilbomd/bilbomd-perlmutter-worker -
 To build `bilbomd-spin-worker` for running on the SPIN Kubernetes cluster. The `$NPM_TOKEN` comes from GitHub... ask me if you need to know about this.
 
 ```bash
+cd bilbomd-worker
 podman-hpc build --build-arg NPM_TOKEN=$NPM_TOKEN -t bilbomd/bilbomd-spin-worker -f bilbomd-spin-worker.dockerfile .
 ```
-
 
 ## Authors
 
@@ -79,7 +81,7 @@ podman-hpc build --build-arg NPM_TOKEN=$NPM_TOKEN -t bilbomd/bilbomd-spin-worker
 - 1.2.6
   - Synchronize `mongoose` schema files with other BilboMD codes
 - 1.2.5
-- Change all CHARMM bomlev values to `-2``
+  - Change all CHARMM bomlev values to `-2``
 - 1.2.4
   - Upgrade mongoose from 7.6.3 to 8.0.2
 - 1.2.3
