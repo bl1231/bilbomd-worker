@@ -41,7 +41,7 @@ TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
 # WORKDIR=${PWD}/workdir/${UUID}
 # TEMPLATEDIR=${PWD}/bilbomd-templates
 
-WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.7
+WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.8
 # WORKER=bl1231/bilbomd-perlmutter-worker
 
 
