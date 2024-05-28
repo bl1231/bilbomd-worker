@@ -116,7 +116,10 @@ const monitorTaskAtNERSC = async (taskID: string): Promise<TaskStatusResponse> =
   return statusResponse
 }
 
-const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
+const monitorJobAtNERSC = async (
+  Job: IJob,
+  jobID: string
+): Promise<JobStatusResponse> => {
   let jobStatus = 'pending'
   const url = `${config.nerscBaseAPI}/compute/jobs/perlmutter/${jobID}?sacct=true`
   logger.info(`monitorJobAtNERSC url: ${url}`)
@@ -152,6 +155,10 @@ const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
         logger.warn('No job details found or output array is empty.')
       }
       logger.info(`Current job ${jobID} status: ${jobStatus}`)
+      // if jobStatus is RUNNING then download slurm-######.out and update status
+      if (jobStatus === 'RUNNING') {
+        updateStatus(Job, jobID)
+      }
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 403) {
         logger.info('Token may have expired, refreshing token...')
@@ -185,9 +192,42 @@ const monitorJobAtNERSC = async (jobID: string): Promise<JobStatusResponse> => {
   return statusResponse
 }
 
+const getSlurmOutFile = async (UUID: string, jobID: string): Promise<string> => {
+  const token = await ensureValidToken()
+  // /pscratch/sd/s/sclassen/bilbmod/1b97dc5b-a139-4f21-8eb4-dba02bcbf186/slurm-25894425.out
+  const path = `/pscratch/sd/s/sclassen/bilbmod/${UUID}/slurm-${jobID}.out`
+  const url = `${config.nerscBaseAPI}/utilities/download/perlmutter/${encodeURIComponent(
+    path
+  )}`
+
+  const headers = {
+    accept: 'application/json',
+    Authorization: `Bearer ${token}`
+  }
+  const params = {
+    binary: 'false'
+  }
+  try {
+    const response = await axios.get(url, { headers, params })
+    // response should be the requested file
+    return response.data
+  } catch (error) {
+    logger.error(`Failed to download file: ${error}`)
+    throw error
+  }
+}
+
+const updateStatus = (Job: IJob, jobID: string) => {
+  logger.info('updating status')
+  const UUID = Job.uuid
+  const contents = getSlurmOutFile(UUID, jobID)
+  logger.info(contents)
+}
+
 export {
   prepareBilboMDSlurmScript,
   submitJobToNersc,
   monitorTaskAtNERSC,
-  monitorJobAtNERSC
+  monitorJobAtNERSC,
+  getSlurmOutFile
 }

@@ -70,7 +70,7 @@ const processBilboMDAutoJobNersc = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(30)
 
   // Watch the job
-  const jobResult = await monitorJobAtNERSC(jobID)
+  const jobResult = await monitorJobAtNERSC(foundJob, jobID)
   logger.info(`jobResult: ${JSON.stringify(jobResult)}`)
   await MQjob.updateProgress(90)
 
