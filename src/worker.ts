@@ -5,15 +5,16 @@ import { Job, Worker, WorkerOptions } from 'bullmq'
 import { WorkerJob } from 'types/jobtypes'
 import { logger } from './helpers/loggers'
 import { config } from './config/config'
-import { ensureValidToken } from './services/functions/nersc-sf-api-tokens'
+import { ensureValidToken } from './services/functions/nersc-api-token-functions'
 import { processBilboMDCRDJob } from './services/process/bilbomd-crd'
 import { processBilboMDPDBJob } from './services/process/bilbomd-pdb'
 import { processBilboMDAutoJob } from './services/process/bilbomd-auto'
 import { processPdb2CrdJob } from './services/process/pdb-to-crd'
-import { processBilboMDPDBJobNersc } from './services/process/bilbomd-pdb-nersc'
-import { processBilboMDCRDJobNersc } from './services/process/bilbomd-crd-nersc'
-import { processBilboMDAutoJobNersc } from './services/process/bilbomd-auto-nersc'
+// import { processBilboMDPDBJobNersc } from 'services/process/processBilboMDPDBJobNersc'
+// import { processBilboMDCRDJobNersc } from './services/process/bilbomd-crd-nersc'
+// import { processBilboMDAutoJobNersc } from './services/process/bilbomd-auto-nersc'
 import { processPdb2CrdJobNersc } from './services/process/pdb-to-crd-nersc'
+import { processBilboMDJobNersc } from './services/process/bilbomd-nersc'
 
 dotenv.config()
 
@@ -53,21 +54,21 @@ const workerHandler = async (job: Job<WorkerJob>) => {
       case 'pdb':
         logger.info(`Start BilboMD PDB job: ${job.name}`)
         await (config.runOnNERSC
-          ? processBilboMDPDBJobNersc(job)
+          ? processBilboMDJobNersc(job)
           : processBilboMDPDBJob(job))
         logger.info(`Finish job: ${job.name}`)
         break
       case 'crd_psf':
         logger.info(`Start BilboMD CRD job: ${job.name}`)
         await (config.runOnNERSC
-          ? processBilboMDCRDJobNersc(job)
+          ? processBilboMDJobNersc(job)
           : processBilboMDCRDJob(job))
         logger.info(`Finish job: ${job.name}`)
         break
       case 'auto':
         logger.info(`Start BilboMD Auto job: ${job.name}`)
         await (config.runOnNERSC
-          ? processBilboMDAutoJobNersc(job)
+          ? processBilboMDJobNersc(job)
           : processBilboMDAutoJob(job))
         logger.info(`Finished job: ${job.name}`)
         break

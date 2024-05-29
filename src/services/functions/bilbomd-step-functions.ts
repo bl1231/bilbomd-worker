@@ -1,25 +1,22 @@
 import Handlebars from 'handlebars'
-import { logger } from '../helpers/loggers'
-import { config } from '../config/config'
+import { logger } from '../../helpers/loggers'
+import { config } from '../../config/config'
 import { spawn, ChildProcess } from 'node:child_process'
 import { promisify } from 'util'
 import fs from 'fs-extra'
 import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
-import { IUser } from '@bl1231/bilbomd-mongodb-schema'
+import { IBilboMDSteps, IStepStatus, IUser } from '@bl1231/bilbomd-mongodb-schema'
 import {
   IJob,
   IBilboMDPDBJob,
   IBilboMDCRDJob,
   IBilboMDAutoJob
 } from '@bl1231/bilbomd-mongodb-schema'
-import { sendJobCompleteEmail } from '../helpers/mailer'
+import { sendJobCompleteEmail } from '../../helpers/mailer'
 import { exec } from 'node:child_process'
-import {
-  createPdb2CrdCharmmInpFiles,
-  spawnPdb2CrdCharmm
-} from '../services/process/pdb-to-crd'
+import { createPdb2CrdCharmmInpFiles, spawnPdb2CrdCharmm } from '../process/pdb-to-crd'
 import {
   CharmmParams,
   CharmmDCD2PDBParams,
@@ -29,7 +26,8 @@ import {
   CharmmMDParams,
   FoxsParams,
   FileCopyParams
-} from '../types/index'
+} from '../../types/index'
+import { updateStepStatus } from './mongo-utils'
 
 const execPromise = promisify(exec)
 const TEMPLATES = path.resolve(__dirname, '../templates/bilbomd')
@@ -45,12 +43,22 @@ const handleError = async (
   error: Error | unknown,
   MQjob: BullMQJob,
   DBjob: IJob,
-  errorMessage?: string
+  step?: keyof IBilboMDSteps
 ) => {
-  const errorMsg =
-    errorMessage || (error instanceof Error ? error.message : String(error))
+  const errorMsg = step || (error instanceof Error ? error.message : String(error))
 
+  // Updates primay status in MongoDB
   updateJobStatus(DBjob, 'Error')
+  // Update the specific step status
+  if (step) {
+    const status: IStepStatus = {
+      status: 'Error',
+      message: `Error in step ${step}: ${errorMsg}`
+    }
+    await updateStepStatus(DBjob, step, status)
+  } else {
+    logger.error(`Step not provided or invalid when handling error: ${errorMsg}`)
+  }
 
   MQjob.log(`error ${errorMsg}`)
 
@@ -369,7 +377,12 @@ const spawnPaeToConst = async (params: PaeParams): Promise<string> => {
 
 const runPdb2Crd = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void> => {
   try {
-    // await createCharmmInpFiles(DBjob)
+    let status: IStepStatus = {
+      status: 'Running',
+      message: 'PDB2CRD has started.'
+    }
+    await updateStepStatus(DBjob, 'pdb2crd', status)
+
     let charmmInpFiles: string[] = []
 
     charmmInpFiles = await createPdb2CrdCharmmInpFiles({
@@ -385,6 +398,11 @@ const runPdb2Crd = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void
     // Update MongoDB
     DBjob.psf_file = 'bilbomd_pdb2crd.psf'
     DBjob.crd_file = 'bilbomd_pdb2crd.crd'
+    status = {
+      status: 'Success',
+      message: 'PDB2CRD has completed.'
+    }
+    await updateStepStatus(DBjob, 'pdb2crd', status)
   } catch (error) {
     await handleError(error, MQjob, DBjob, 'pdb2crd')
   }
@@ -474,7 +492,7 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<voi
     await generateInputFile(params)
     await spawnCharmm(params)
   } catch (error: unknown) {
-    await handleError(error, MQjob, DBjob, 'minimization')
+    await handleError(error, MQjob, DBjob, 'minimize')
   }
 }
 
@@ -494,7 +512,7 @@ const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
     await generateInputFile(params)
     await spawnCharmm(params)
   } catch (error) {
-    await handleError(error, MQjob, DBjob, 'heating')
+    await handleError(error, MQjob, DBjob, 'heat')
   }
 }
 
@@ -533,7 +551,7 @@ const runMolecularDynamics = async (
     }
     await Promise.all(molecularDynamicsTasks)
   } catch (error) {
-    await handleError(error, MQjob, DBjob, 'molecular dynamics')
+    await handleError(error, MQjob, DBjob, 'md')
   }
 }
 
@@ -593,7 +611,7 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
       }
     }
   } catch (error) {
-    await handleError(error, MQjob, DBjob, 'FoXS')
+    await handleError(error, MQjob, DBjob, 'foxs')
   }
 }
 
@@ -609,7 +627,7 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<vo
     await makeFoxsDatFileList(multiFoxsDir)
     await spawnMultiFoxs(multifoxsParams)
   } catch (error) {
-    await handleError(error, MQjob, DBjob, 'MultiFoXS')
+    await handleError(error, MQjob, DBjob, 'multifoxs')
   }
 }
 
@@ -772,7 +790,7 @@ const prepareResults = async (
       throw error // Critical error, rethrow or handle specifically if necessary
     }
   } catch (error) {
-    await handleError(error, MQjob, DBjob, 'prepareResults')
+    await handleError(error, MQjob, DBjob, 'results')
   }
 }
 

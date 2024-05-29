@@ -3,7 +3,7 @@ import qs from 'qs'
 import { logger } from '../../helpers/loggers'
 import { config } from '../../config/config'
 import { IJob } from '@bl1231/bilbomd-mongodb-schema'
-import { ensureValidToken } from './nersc-sf-api-tokens'
+import { ensureValidToken } from './nersc-api-token-functions'
 import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc'
 
 const prepareBilboMDSlurmScript = async (Job: IJob): Promise<string> => {
@@ -209,19 +209,94 @@ const getSlurmOutFile = async (UUID: string, jobID: string): Promise<string> => 
   }
   try {
     const response = await axios.get(url, { headers, params })
-    // response should be the requested file
-    return response.data
+    // {
+    //   "status": "OK",
+    //   "file": "string",
+    //   "is_binary": false,
+    //   "error": "string"
+    // }
+    if (response.data.status !== 'OK') {
+      logger.error(`Error retrieving file: ${response.data.error}`)
+      throw new Error(`Error retrieving file: ${response.data.error}`)
+    }
+    logger.info(`File retrieved successfully.`)
+    return response.data.file // Return the content of the file as a string
   } catch (error) {
     logger.error(`Failed to download file: ${error}`)
     throw error
   }
 }
 
-const updateStatus = (Job: IJob, jobID: string) => {
+const updateStatus = async (Job: IJob, jobID: string) => {
   logger.info('updating status')
   const UUID = Job.uuid
-  const contents = getSlurmOutFile(UUID, jobID)
-  logger.info(contents)
+  const contents: string = await getSlurmOutFile(UUID, jobID)
+
+  const lines = contents.split('\n')
+
+  lines.forEach((line) => {
+    if (line.includes('All Individual CRD files melded')) {
+      Job.steps.pdb2crd = {
+        status: 'Success',
+        message: 'PDB to CRD/PSF conversion completed successfully.'
+      }
+    }
+    if (line.includes('CHARMM Minimize complete')) {
+      Job.steps.minimize = {
+        status: 'Success',
+        message: 'CHARMM minimization completed successfully.'
+      }
+    }
+    if (line.includes('CHARMM Heating complete')) {
+      Job.steps.heat = {
+        status: 'Success',
+        message: 'CHARMM heating completed successfully.'
+      }
+    }
+    if (line.includes('CHARMM Molecular Dynamics complete')) {
+      Job.steps.md = {
+        status: 'Success',
+        message: 'CHARMM molecular dynamics completed successfully.'
+      }
+    }
+    if (line.includes('Initial FoXS Analysis complete')) {
+      Job.steps.foxs = {
+        status: 'Success',
+        message: 'Initial FoXS analysis completed successfully.'
+      }
+    }
+    if (line.includes('MultiFoXS analysis complete')) {
+      Job.steps.multifoxs = {
+        status: 'Success',
+        message: 'MultiFoXS analysis completed successfully.'
+      }
+    }
+    if (line.includes('Results preparation complete')) {
+      Job.steps.results = {
+        status: 'Success',
+        message: 'Results preparation completed successfully.'
+      }
+    }
+    if (line.includes('Email notification sent')) {
+      Job.steps.email = {
+        status: 'Success',
+        message: 'Email notification sent successfully.'
+      }
+    }
+  })
+
+  // Save the updated Job document
+  try {
+    await Job.save()
+    logger.info(
+      `Job ${Job._id} status updated successfully with details: ${JSON.stringify(
+        Job.steps
+      )}`
+    )
+  } catch (error) {
+    logger.error(`Unable to save job status for ${Job._id}: ${error}`)
+    throw error
+  }
 }
 
 export {
