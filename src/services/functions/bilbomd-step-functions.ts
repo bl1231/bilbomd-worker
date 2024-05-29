@@ -30,7 +30,7 @@ import {
 import { updateStepStatus } from './mongo-utils'
 
 const execPromise = promisify(exec)
-const TEMPLATES = path.resolve(__dirname, '../templates/bilbomd')
+const TEMPLATES = path.resolve(__dirname, '../../templates/bilbomd')
 
 const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
 const FOXS_BIN = process.env.FOXS ?? '/usr/bin/foxs'
@@ -48,7 +48,7 @@ const handleError = async (
   const errorMsg = step || (error instanceof Error ? error.message : String(error))
 
   // Updates primay status in MongoDB
-  updateJobStatus(DBjob, 'Error')
+  await updateJobStatus(DBjob, 'Error')
   // Update the specific step status
   if (step) {
     const status: IStepStatus = {
