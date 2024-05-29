@@ -408,7 +408,10 @@ const runPdb2Crd = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void
   }
 }
 
-const runPaeToConstInp = async (DBjob: IBilboMDAutoJob): Promise<void> => {
+const runPaeToConstInp = async (
+  MQjob: BullMQJob,
+  DBjob: IBilboMDAutoJob
+): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
   // I'm struggling with Typescript here. Since a BilboMDAutoJob will not
   // have a CRD file when it is first created. I know it's not considered
@@ -418,55 +421,94 @@ const runPaeToConstInp = async (DBjob: IBilboMDAutoJob): Promise<void> => {
     in_pae: DBjob.pae_file,
     out_dir: outputDir
   }
-  await spawnPaeToConst(params)
-  DBjob.const_inp_file = 'const.inp'
-  await DBjob.save()
+  try {
+    let status: IStepStatus = {
+      status: 'Running',
+      message: 'Generate const.inp from PAE matrix has started.'
+    }
+    await updateStepStatus(DBjob, 'pae', status)
+    await spawnPaeToConst(params)
+    DBjob.const_inp_file = 'const.inp'
+    await DBjob.save()
+    status = {
+      status: 'Success',
+      message: 'Generate const.inp from PAE matrix has completed.'
+    }
+    await updateStepStatus(DBjob, 'pae', status)
+  } catch (error) {
+    await handleError(error, MQjob, DBjob, 'pae')
+  }
 }
 
 const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
   const logFile = path.join(outputDir, 'autoRg.log')
   const errorFile = path.join(outputDir, 'autoRg_error.log')
-  const logStream = fs.createWriteStream(logFile)
-  const errorStream = fs.createWriteStream(errorFile)
   const autoRg_script = '/app/scripts/autorg.py'
   const args = [autoRg_script, DBjob.data_file]
 
+  const logStream = fs.createWriteStream(logFile)
+  const errorStream = fs.createWriteStream(errorFile)
+
+  let status: IStepStatus = {
+    status: 'Running',
+    message: 'Calculate Rg has started.'
+  }
+  await updateStepStatus(DBjob, 'autorg', status)
+
   return new Promise<void>((resolve, reject) => {
-    const autoRg: ChildProcess = spawn('python', args, { cwd: outputDir })
+    const autoRg = spawn('python', args, { cwd: outputDir })
     let autoRg_json = ''
+
     autoRg.stdout?.on('data', (data) => {
       logStream.write(data.toString())
       autoRg_json += data.toString()
     })
+
     autoRg.stderr?.on('data', (data) => {
       errorStream.write(data.toString())
     })
+
     autoRg.on('error', (error) => {
       logger.error(`spawnMultiFoxs error: ${error}`)
+      errorStream.end() // Ensure error stream is closed on process error
+      logStream.end() // Ensure log stream is closed on process error
       reject(error)
     })
-    autoRg.on('exit', (code: number) => {
-      const closeStreamsPromises = [
+
+    autoRg.on('exit', (code) => {
+      Promise.all([
         new Promise((resolveStream) => logStream.end(resolveStream)),
         new Promise((resolveStream) => errorStream.end(resolveStream))
-      ]
-      Promise.all(closeStreamsPromises)
+      ])
         .then(() => {
           if (code === 0) {
             try {
               const analysisResults = JSON.parse(autoRg_json)
-              // Update rg_min and rg_max in DBjob
               DBjob.rg_min = analysisResults.rg_min
               DBjob.rg_max = analysisResults.rg_max
-              DBjob.save().then(() => {
-                resolve()
-              })
+              DBjob.save()
+                .then(() => {
+                  status = {
+                    status: 'Success',
+                    message: 'Calculate Rg completed successfully.'
+                  }
+                  updateStepStatus(DBjob, 'autorg', status)
+                    .then(() => resolve())
+                    .catch(reject)
+                })
+                .catch(reject)
             } catch (parseError) {
               reject(parseError)
             }
           } else {
-            reject('spawnAutoRgCalculator on close reject')
+            status = {
+              status: 'Error',
+              message: `AutoRg process exited with code ${code}.`
+            }
+            updateStepStatus(DBjob, 'autorg', status)
+              .then(() => reject(new Error(status.message)))
+              .catch(reject)
           }
         })
         .catch((streamError) => {
@@ -489,8 +531,18 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<voi
     in_crd_file: DBjob.crd_file
   }
   try {
+    let status: IStepStatus = {
+      status: 'Running',
+      message: 'CHARMM Minimization has started.'
+    }
+    await updateStepStatus(DBjob, 'minimize', status)
     await generateInputFile(params)
     await spawnCharmm(params)
+    status = {
+      status: 'Success',
+      message: 'CHARMM Minimization has completed.'
+    }
+    await updateStepStatus(DBjob, 'minimize', status)
   } catch (error: unknown) {
     await handleError(error, MQjob, DBjob, 'minimize')
   }
@@ -509,8 +561,18 @@ const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
     constinp: DBjob.const_inp_file
   }
   try {
+    let status: IStepStatus = {
+      status: 'Running',
+      message: 'CHARMM Heating has started.'
+    }
+    await updateStepStatus(DBjob, 'heat', status)
     await generateInputFile(params)
     await spawnCharmm(params)
+    status = {
+      status: 'Success',
+      message: 'CHARMM Heating has completed.'
+    }
+    await updateStepStatus(DBjob, 'heat', status)
   } catch (error) {
     await handleError(error, MQjob, DBjob, 'heat')
   }
@@ -539,6 +601,11 @@ const runMolecularDynamics = async (
   }
 
   try {
+    let status: IStepStatus = {
+      status: 'Running',
+      message: 'CHARMM Molecular Dynamics has started.'
+    }
+    await updateStepStatus(DBjob, 'md', status)
     const molecularDynamicsTasks = []
     const step = Math.max(Math.round((params.rg_max - params.rg_min) / 5), 1)
     for (let rg = params.rg_min; rg <= params.rg_max; rg += step) {
@@ -550,6 +617,11 @@ const runMolecularDynamics = async (
       molecularDynamicsTasks.push(spawnCharmm(params))
     }
     await Promise.all(molecularDynamicsTasks)
+    status = {
+      status: 'Success',
+      message: 'CHARMM Molecular Dynamics has completed.'
+    }
+    await updateStepStatus(DBjob, 'md', status)
   } catch (error) {
     await handleError(error, MQjob, DBjob, 'md')
   }
@@ -581,6 +653,11 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
   }
 
   try {
+    let status: IStepStatus = {
+      status: 'Running',
+      message: 'FoXS Calculations have started.'
+    }
+    await updateStepStatus(DBjob, 'foxs', status)
     const foxsDir = path.join(foxsParams.out_dir, 'foxs')
     await makeDir(foxsDir)
     const foxsRgFile = path.join(foxsParams.out_dir, foxsParams.foxs_rg)
@@ -610,6 +687,11 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
         await Promise.all(runAllFoxs)
       }
     }
+    status = {
+      status: 'Success',
+      message: 'FoXS Calculations have completed.'
+    }
+    await updateStepStatus(DBjob, 'foxs', status)
   } catch (error) {
     await handleError(error, MQjob, DBjob, 'foxs')
   }
@@ -622,10 +704,20 @@ const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<vo
     data_file: DBjob.data_file
   }
   try {
+    let status: IStepStatus = {
+      status: 'Running',
+      message: 'MultiFoXS Calculations have started.'
+    }
+    await updateStepStatus(DBjob, 'multifoxs', status)
     const multiFoxsDir = path.join(multifoxsParams.out_dir, 'multifoxs')
     await makeDir(multiFoxsDir)
     await makeFoxsDatFileList(multiFoxsDir)
     await spawnMultiFoxs(multifoxsParams)
+    status = {
+      status: 'Success',
+      message: 'MultiFoXS Calculations have completed.'
+    }
+    await updateStepStatus(DBjob, 'multifoxs', status)
   } catch (error) {
     await handleError(error, MQjob, DBjob, 'multifoxs')
   }

@@ -6,10 +6,10 @@ import {
   runMolecularDynamics,
   runFoxs,
   runMultiFoxs,
-  prepareResults,
   runPaeToConstInp,
   runAutoRg
 } from '../functions/bilbomd-step-functions'
+import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc'
 import { initializeJob, cleanupJob } from '../functions/job-utils'
 import { runSingleFoXS } from '../functions/foxs-analysis'
 
@@ -28,7 +28,7 @@ const processBilboMDAutoJobTest = async (MQjob: BullMQJob) => {
   await initializeJob(MQjob, foundJob)
 
   // Use PAE to construct const.inp file
-  await runPaeToConstInp(foundJob)
+  await runPaeToConstInp(MQjob, foundJob)
 
   // Use BioXTAS to calculate Rg_min and Rg_max
   await runAutoRg(foundJob)
@@ -56,7 +56,7 @@ const processBilboMDAutoJob = async (MQjob: BullMQJob) => {
 
   // Use PAE to construct const.inp file
   await MQjob.log('start pae')
-  await runPaeToConstInp(foundJob)
+  await runPaeToConstInp(MQjob, foundJob)
   await MQjob.log('end pae')
   await MQjob.updateProgress(15)
 
@@ -104,7 +104,7 @@ const processBilboMDAutoJob = async (MQjob: BullMQJob) => {
 
   // Prepare results
   await MQjob.log('start results')
-  await prepareResults(MQjob, foundJob)
+  await prepareBilboMDResults(MQjob, foundJob)
   await MQjob.log('end results')
   await MQjob.updateProgress(99)
 

@@ -116,7 +116,7 @@ const monitorBilboMDJob = async (MQjob: BullMQJob, DBjob: IJob, Pjob: string) =>
 
 const prepareBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
   try {
-    await MQjob.log('start gather results')
+    await MQjob.log('start results')
     let status: IStepStatus = {
       status: 'Running',
       message: 'Gathering BilboMD job results has started.'
@@ -130,7 +130,7 @@ const prepareBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
         message: 'BilboMD job results gathered successfully.'
       }
       await updateStepStatus(DBjob, 'results', status)
-      await MQjob.log('end gather results')
+      await MQjob.log('end results')
     } else {
       throw new Error('Invalid job type')
     }

@@ -5,9 +5,9 @@ import {
   runHeat,
   runMolecularDynamics,
   runFoxs,
-  runMultiFoxs,
-  prepareResults
+  runMultiFoxs
 } from '../functions/bilbomd-step-functions'
+import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc'
 import { initializeJob, cleanupJob } from '../functions/job-utils'
 import { runSingleFoXS } from '../functions/foxs-analysis'
 
@@ -76,7 +76,7 @@ const processBilboMDCRDJob = async (MQjob: BullMQJob) => {
 
   // Prepare results
   await MQjob.log('start results')
-  await prepareResults(MQjob, foundJob)
+  await prepareBilboMDResults(MQjob, foundJob)
   await MQjob.log('end results')
   await MQjob.updateProgress(99)
 
