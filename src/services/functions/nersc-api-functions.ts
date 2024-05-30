@@ -2,9 +2,11 @@ import axios from 'axios'
 import qs from 'qs'
 import { logger } from '../../helpers/loggers'
 import { config } from '../../config/config'
-import { IJob } from '@bl1231/bilbomd-mongodb-schema'
+import { IBilboMDSteps, IJob } from '@bl1231/bilbomd-mongodb-schema'
 import { ensureValidToken } from './nersc-api-token-functions'
 import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc'
+
+type StepKey = keyof IBilboMDSteps
 
 const prepareBilboMDSlurmScript = async (Job: IJob): Promise<string> => {
   const UUID = Job.uuid
@@ -157,7 +159,7 @@ const monitorJobAtNERSC = async (
       logger.info(`Current job ${jobID} status: ${jobStatus}`)
       // if jobStatus is RUNNING then download slurm-######.out and update status
       if (jobStatus === 'RUNNING') {
-        updateStatus(Job, jobID)
+        updateStatus(Job)
       }
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 403) {
@@ -227,60 +229,54 @@ const getSlurmOutFile = async (UUID: string, jobID: string): Promise<string> => 
   }
 }
 
-const updateStatus = async (Job: IJob, jobID: string) => {
-  logger.info('updating status')
+const getSlurmStatusFile = async (UUID: string): Promise<string> => {
+  const token = await ensureValidToken()
+  const path = `/pscratch/sd/s/sclassen/bilbmod/${UUID}/status.txt`
+  const url = `${config.nerscBaseAPI}/utilities/download/perlmutter/${encodeURIComponent(
+    path
+  )}`
+
+  const headers = {
+    accept: 'application/json',
+    Authorization: `Bearer ${token}`
+  }
+  const params = {
+    binary: 'false'
+  }
+  try {
+    const response = await axios.get(url, { headers, params })
+    // {
+    //   "status": "OK",
+    //   "file": "string",
+    //   "is_binary": false,
+    //   "error": "string"
+    // }
+    if (response.data.status !== 'OK') {
+      logger.error(`Error retrieving file: ${response.data.error}`)
+      throw new Error(`Error retrieving file: ${response.data.error}`)
+    }
+    logger.info(`File retrieved successfully.`)
+    return response.data.file // Return the content of the file as a string
+  } catch (error) {
+    logger.error(`Failed to download file: ${error}`)
+    throw error
+  }
+}
+
+const updateStatus = async (Job: IJob) => {
+  logger.info(`updating status ${Job.title}`)
   const UUID = Job.uuid
-  const contents: string = await getSlurmOutFile(UUID, jobID)
+  const contents: string = await getSlurmStatusFile(UUID)
 
   const lines = contents.split('\n')
 
   lines.forEach((line) => {
-    if (line.includes('All Individual CRD files melded')) {
-      Job.steps.pdb2crd = {
-        status: 'Success',
-        message: 'PDB to CRD/PSF conversion completed successfully.'
-      }
-    }
-    if (line.includes('CHARMM Minimize complete')) {
-      Job.steps.minimize = {
-        status: 'Success',
-        message: 'CHARMM minimization completed successfully.'
-      }
-    }
-    if (line.includes('CHARMM Heating complete')) {
-      Job.steps.heat = {
-        status: 'Success',
-        message: 'CHARMM heating completed successfully.'
-      }
-    }
-    if (line.includes('CHARMM Molecular Dynamics complete')) {
-      Job.steps.md = {
-        status: 'Success',
-        message: 'CHARMM molecular dynamics completed successfully.'
-      }
-    }
-    if (line.includes('Initial FoXS Analysis complete')) {
-      Job.steps.foxs = {
-        status: 'Success',
-        message: 'Initial FoXS analysis completed successfully.'
-      }
-    }
-    if (line.includes('MultiFoXS analysis complete')) {
-      Job.steps.multifoxs = {
-        status: 'Success',
-        message: 'MultiFoXS analysis completed successfully.'
-      }
-    }
-    if (line.includes('Results preparation complete')) {
-      Job.steps.results = {
-        status: 'Success',
-        message: 'Results preparation completed successfully.'
-      }
-    }
-    if (line.includes('Email notification sent')) {
-      Job.steps.email = {
-        status: 'Success',
-        message: 'Email notification sent successfully.'
+    const [step, status] = line.split(':').map((part) => part.trim())
+    if (step in Job.steps) {
+      const key = step as StepKey // Assert that step is a valid key of IBilboMDSteps
+      Job.steps[key] = {
+        status: status,
+        message: `${step} completed with status: ${status}`
       }
     }
   })

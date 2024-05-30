@@ -39,6 +39,9 @@ const processBilboMDJobNersc = async (MQjob: BullMQJob) => {
     await monitorBilboMDJob(MQjob, foundJob, jobID)
     await MQjob.updateProgress(90)
 
+    // Copy files from PSCRATCH to CFS
+    // Better to do this here? because it can take quite some time.
+
     // Prepare results
     await prepareBilboMDResults(MQjob, foundJob)
     await MQjob.updateProgress(99)
