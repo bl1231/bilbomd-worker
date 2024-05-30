@@ -73,7 +73,7 @@ const ensureValidToken = async (forceRefresh: boolean = false): Promise<string> 
     const clientAssertion = generateClientAssertion()
     return getAccessToken(clientAssertion)
   } else {
-    const secondsUntilExpiry = tokenExpiry - Math.floor(Date.now() / 1000)
+    // const secondsUntilExpiry = tokenExpiry - Math.floor(Date.now() / 1000)
     // logger.info(`Using cached token, expires in ${secondsUntilExpiry} seconds`)
     return cachedToken
   }
