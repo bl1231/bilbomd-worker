@@ -66,7 +66,7 @@ const submitJobToNersc = async (Job: IJob): Promise<string> => {
 const monitorTaskAtNERSC = async (taskID: string): Promise<TaskStatusResponse> => {
   let token = await ensureValidToken()
   const url = `${config.nerscBaseAPI}/tasks/${taskID}`
-  logger.info(`monitorTaskAtNERSC url: ${url}`)
+  // logger.info(`monitorTaskAtNERSC url: ${url}`)
 
   let status = 'pending'
   let statusResponse: TaskStatusResponse | undefined
@@ -79,14 +79,15 @@ const monitorTaskAtNERSC = async (taskID: string): Promise<TaskStatusResponse> =
 
     try {
       const response = await axios.get(url, { headers })
-      logger.info(`monitorTask: ${JSON.stringify(response.data)}`)
+      // logger.info(`monitorTask: ${JSON.stringify(response.data)}`)
       statusResponse = {
         id: response.data.id,
         status: response.data.status,
         result: response.data.result
       }
       status = statusResponse.status
-      logger.info(`monitorTaskAtNERSC status: ${status}`)
+      const taskid = statusResponse.id
+      logger.info(`monitorTaskAtNERSC taskid: ${taskid} status: ${status}`)
     } catch (error) {
       if (axios.isAxiosError(error)) {
         // Now we can assume error is an AxiosError and access specific properties like error.response
@@ -231,7 +232,7 @@ const getSlurmOutFile = async (UUID: string, jobID: string): Promise<string> => 
 
 const getSlurmStatusFile = async (UUID: string): Promise<string> => {
   const token = await ensureValidToken()
-  const path = `/pscratch/sd/s/sclassen/bilbmod/${UUID}/status.txt`
+  const path = `pscratch/sd/s/sclassen/bilbmod/${UUID}/status.txt`
   const url = `${config.nerscBaseAPI}/utilities/download/perlmutter/${encodeURIComponent(
     path
   )}`
