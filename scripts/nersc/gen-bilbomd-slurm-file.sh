@@ -677,9 +677,9 @@ generate_copy_commands() {
 # Copy results back to CFS
 echo "Copying results back to CFS..."
 update_status copy2cfs Running
-# cp -nR $WORKDIR/* $UPLOAD_DIR
-# CP_EXIT=\$?
-# check_exit_code \$CP_EXIT copy2cfs
+cp -nR $WORKDIR/* $UPLOAD_DIR
+CP_EXIT=\$?
+check_exit_code \$CP_EXIT copy2cfs
 update_status copy2cfs Success
 
 echo "DONE ${UUID}"
