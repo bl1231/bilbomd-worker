@@ -1,4 +1,5 @@
 import axios from 'axios'
+import axiosRetry from 'axios-retry'
 import qs from 'qs'
 import { logger } from '../../helpers/loggers'
 import { config } from '../../config/config'
@@ -7,6 +8,9 @@ import { ensureValidToken } from './nersc-api-token-functions'
 import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc'
 
 type StepKey = keyof IBilboMDSteps
+
+// Configure axios to retry on failure
+axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay })
 
 const prepareBilboMDSlurmScript = async (Job: IJob): Promise<string> => {
   const UUID = Job.uuid
@@ -160,7 +164,7 @@ const monitorJobAtNERSC = async (
       logger.info(`Current job ${jobID} status: ${jobStatus}`)
       // if jobStatus is RUNNING then download slurm-######.out and update status
       if (jobStatus === 'RUNNING') {
-        updateStatus(Job)
+        await updateStatus(Job)
       }
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 403) {
@@ -260,7 +264,7 @@ const getSlurmStatusFile = async (UUID: string): Promise<string> => {
     return response.data.file // Return the content of the file as a string
   } catch (error) {
     logger.error(`Failed to download file: ${error}`)
-    throw error
+    throw new Error(`Failed to download file after 3 retries: ${error}`)
   }
 }
 
@@ -277,7 +281,7 @@ const updateStatus = async (Job: IJob) => {
       const key = step as StepKey // Assert that step is a valid key of IBilboMDSteps
       Job.steps[key] = {
         status: status,
-        message: `${step} completed with status: ${status}`
+        message: `${step} : ${status}`
       }
     }
   })
