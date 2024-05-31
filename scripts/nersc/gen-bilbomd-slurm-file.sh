@@ -218,6 +218,17 @@ template_heat_file() {
     sed -i "s|{{constinp}}|$constinp|g" "$WORKDIR/heat.inp"
 }
 
+create_status_txt_file() {
+    echo "Create initial status.txt file"
+
+    status_file="${WORKDIR}/status.txt"
+
+    steps=(pdb2crd pae autorg minimize initfoxs heat md dcd2pdb foxs multifoxs copy2cfs)
+    for step in "${steps[@]}"; do
+        echo "$step: Waiting" >> "$status_file"
+    done
+}
+
 initialize_job() {
     echo "Initialize Job"
     echo ""
@@ -233,6 +244,7 @@ initialize_job() {
     copy_template_files
     template_minimization_file
     template_heat_file
+    create_status_txt_file
 }
 
 template_md_input_files() {
@@ -376,14 +388,6 @@ export OMP_PROC_BIND=spread
 # Status Stuff
 status_file="${WORKDIR}/status.txt"
 
-# Initialize status
-echo "Initializing status..."
-steps=(pdb2crd pae autorg minimize initfoxs heat md dcd2pdb foxs multifoxs copy2cfs)
-for step in "\${steps[@]}"; do
-    echo "\$step: Waiting" >> "\$status_file"
-done
-
-# Function to update status
 update_status() {
     local step=\$1
     local status=\$2
@@ -391,12 +395,10 @@ update_status() {
     sed -i "s/^\$step: .*/\$step: \$status/" "\$status_file"
 }
 
-# Function to set error trap
 set_error_trap() {
     local step=\$1
     trap "update_status \$step Error" ERR
 }
-
 
 EOF
 }
