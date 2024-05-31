@@ -64,7 +64,7 @@ const submitBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
       status: 'Running',
       message: 'Submitting Slurm batch file has started.'
     }
-    await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+    await updateStepStatus(DBjob, 'nersc_submit_slurm_batch', status)
     const submitTaskID = await submitJobToNersc(DBjob)
     const submitResult = await monitorTaskAtNERSC(submitTaskID)
     logger.info(`submitResult: ${JSON.stringify(submitResult)}`)
@@ -73,9 +73,9 @@ const submitBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
     logger.info(`JOBID: ${jobID}`)
     status = {
       status: 'Success',
-      message: 'Slurm batch file submitted successfully.'
+      message: jobID
     }
-    await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+    await updateStepStatus(DBjob, 'nersc_submit_slurm_batch', status)
     await MQjob.log('end nersc submit slurm batch')
     return jobID
   } catch (error) {
@@ -83,7 +83,7 @@ const submitBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
       status: 'Error',
       message: `Failed to prepare Slurm batch file: ${error}`
     }
-    await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+    await updateStepStatus(DBjob, 'nersc_submit_slurm_batch', status)
     logger.error(`Error during preparation of Slurm batch: ${error}`)
   }
 }
