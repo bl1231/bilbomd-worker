@@ -456,8 +456,8 @@ EOF
     # echo "set_error_trap pdb2crd" >> $WORKDIR/pdb2crd
     local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name meld podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o pdb2crd_charmm_meld.out -i pdb2crd_charmm_meld.inp\""
     echo $command >> $WORKDIR/pdb2crd
-    echo "MELDEXIT=\$?" >> $WORKDIR/pdb2crd
-    echo "check_exit_code \$MELDEXIT pdb2crd" >> $WORKDIR/pdb2crd
+    echo "MELD_EXIT=\$?" >> $WORKDIR/pdb2crd
+    echo "check_exit_code \$MELD_EXIT pdb2crd" >> $WORKDIR/pdb2crd
     echo "" >> $WORKDIR/pdb2crd
     echo "echo \"All Individual CRD files melded into bilbomd_pdb2crd.crd\"" >> $WORKDIR/pdb2crd
     echo "update_status pdb2crd Success" >> $WORKDIR/pdb2crd
@@ -474,6 +474,8 @@ EOF
     echo "echo \"Calculate const.inp from PAE matrix...\"" >> $WORKDIR/pae2const
     local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name pae2const podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file} > pae_ratios.log 2>&1\""
     echo $command >> $WORKDIR/pae2const
+    echo "PAE_EXIT=\$?" >> $WORKDIR/pae2const
+    echo "check_exit_code \$PAE_EXIT pae" >> $WORKDIR/pae2const
     echo "" >> $WORKDIR/pae2const
     echo "echo \"const.inp generated from PAE matrix\"" >> $WORKDIR/pae2const
     echo "update_status pae Success" >> $WORKDIR/pae2const
@@ -539,13 +541,11 @@ EOF
     cpus=$(($NUM_CORES/$num_inp_files))
     echo "echo \"Running CHARMM Molecular Dynamics...\"" >> $WORKDIR/dynamics
     echo "update_status md Running" >> $WORKDIR/dynamics
-    # echo "set_error_trap_child md" >> $WORKDIR/dynamics
     for inp in "${g_md_inp_files[@]}"; do
-        # echo "echo \"Starting $inp\" &" >> $WORKDIR/dynamics
         local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name md$count podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
         echo $command >> $WORKDIR/dynamics
         echo "MD_PID$count=\$!" >> $WORKDIR/dynamics
-        # echo sleep 5>> $WORKDIR/dynamics
+        echo "sleep 5" >> $WORKDIR/dynamics
         ((count++))
     done
     echo "" >> $WORKDIR/dynamics
@@ -684,7 +684,7 @@ update_status copy2cfs Success
 
 echo "DONE ${UUID}"
 
-sleep 30
+# sleep 30
 
 sacct --format=JobID,JobName,Account,AllocCPUS,State,Elapsed,ExitCode,DerivedExitCode,Start,End -j \$SLURM_JOB_ID
 EOF
