@@ -1,3 +1,4 @@
+import { config } from 'config/config'
 import { Job as BullMQJob } from 'bullmq'
 import {
   IJob,
@@ -9,7 +10,7 @@ import {
 import { logger } from '../../helpers/loggers'
 import { updateStepStatus } from './mongo-utils'
 import {
-  prepareBilboMDSlurmScript,
+  executeNerscScript,
   submitJobToNersc,
   monitorTaskAtNERSC,
   monitorJobAtNERSC
@@ -38,7 +39,10 @@ const makeBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
       message: 'Preparation of Slurm batch file has started.'
     }
     await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
-    const prepTaskID = await prepareBilboMDSlurmScript(DBjob)
+    const prepTaskID = await executeNerscScript(
+      config.scripts.prepareSlurmScript,
+      DBjob.uuid
+    )
     const prepResult = await monitorTaskAtNERSC(prepTaskID)
     logger.info(`prepResult: ${JSON.stringify(prepResult)}`)
     status = {
@@ -144,6 +148,25 @@ const prepareBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
   }
 }
 
+const copyBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
+  try {
+    await MQjob.log('start copy from pscratch to cfs')
+    const copyID = await executeNerscScript(
+      config.scripts.copyFromScratchToCFSScript,
+      DBjob.uuid
+    )
+    const copyResult = await monitorTaskAtNERSC(copyID)
+    logger.info(`copyResult: ${JSON.stringify(copyResult)}`)
+    // status = {
+    //   status: 'Success',
+    //   message: 'BilboMD Results copied back to CFS successfully.'
+    // }
+    await MQjob.log('end copy from pscratch to cfs')
+  } catch (error) {
+    logger.error(`Error during monitoring of BilboMD job: ${error}`)
+  }
+}
+
 const sendBilboMDEmail = async (MQjob: BullMQJob, DBjob: IJob) => {
   try {
     let status: IStepStatus = {
@@ -171,6 +194,7 @@ export {
   makeBilboMDSlurm,
   submitBilboMDSlurm,
   monitorBilboMDJob,
+  copyBilboMDResults,
   prepareBilboMDResults,
   sendBilboMDEmail
 }

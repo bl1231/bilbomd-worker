@@ -7,7 +7,8 @@ import {
   submitBilboMDSlurm,
   monitorBilboMDJob,
   prepareBilboMDResults,
-  sendBilboMDEmail
+  sendBilboMDEmail,
+  copyBilboMDResults
 } from '../functions/bilbomd-step-functions-nersc'
 
 const processBilboMDJobNersc = async (MQjob: BullMQJob) => {
@@ -39,6 +40,9 @@ const processBilboMDJobNersc = async (MQjob: BullMQJob) => {
 
     // Copy files from PSCRATCH to CFS
     // Better to do this here? because it can take quite some time.
+    // PSCRATCH is not available from SPIN so will need to run a script.
+    await copyBilboMDResults(MQjob, foundJob)
+    await MQjob.updateProgress(95)
 
     // Prepare results
     await prepareBilboMDResults(MQjob, foundJob)

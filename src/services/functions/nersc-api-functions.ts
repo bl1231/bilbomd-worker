@@ -12,31 +12,29 @@ type StepKey = keyof IBilboMDSteps
 // Configure axios to retry on failure
 axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay })
 
-const prepareBilboMDSlurmScript = async (Job: IJob): Promise<string> => {
-  const UUID = Job.uuid
-  // const jobType = Job.__t
+const executeNerscScript = async (
+  scriptName: string,
+  scriptArgs: string
+): Promise<string> => {
   const token = await ensureValidToken()
   const url = `${config.nerscBaseAPI}/utilities/command/perlmutter`
-  // logger.info(`url: ${url}`)
   const headers = {
     accept: 'application/json',
     'Content-Type': 'application/x-www-form-urlencoded',
     Authorization: `Bearer ${token}`
   }
-  const cmd = `cd ${config.nerscScriptDir} && ./gen-bilbomd-slurm-file.sh ${UUID}`
-  logger.info(`cmd: ${cmd}`)
+  const cmd = `${config.nerscScriptDir}/${scriptName} ${scriptArgs}`
+  logger.info(`Executing command: ${cmd}`)
   const data = qs.stringify({
     executable: `bash -c "${cmd}"`
   })
-  // logger.info(`data: ${data}`)
+
   try {
     const response = await axios.post(url, data, { headers })
-    logger.info(
-      `Prepared BilboMD Slurm batch file successfully: ${JSON.stringify(response.data)}`
-    )
+    logger.info(`Script executed successfully: ${JSON.stringify(response.data)}`)
     return response.data.task_id
   } catch (error) {
-    logger.error(`Prepared BilboMD Slurm batch file: ${error}`)
+    logger.error(`Error executing script on NERSC: ${error}`)
     throw error
   }
 }
@@ -189,6 +187,7 @@ const monitorJobAtNERSC = async (
       case 'OUT_OF_MEMORY':
       case 'PREEMPTED':
         continueMonitoring = false // Stop monitoring if any of these statuses are met
+        // one final update of the status.txt file?
         break
       default:
         await new Promise((resolve) => setTimeout(resolve, 3000)) // Continue polling otherwise
@@ -301,7 +300,7 @@ const updateStatus = async (Job: IJob) => {
 }
 
 export {
-  prepareBilboMDSlurmScript,
+  executeNerscScript,
   submitJobToNersc,
   monitorTaskAtNERSC,
   monitorJobAtNERSC,

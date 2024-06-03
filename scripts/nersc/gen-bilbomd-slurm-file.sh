@@ -14,10 +14,10 @@ UUID=$1
 # -----------------------------------------------------------------------------
 # SBATCH STUFF
 project="m4659"
-queue="debug"
+queue="regular"
 constraint="gpu"
 nodes="1"
-time="00:30:00"
+time="00:60:00"
 mailtype="end,fail"
 mailuser="sclassen@lbl.gov"
 
@@ -672,7 +672,7 @@ EOF
 }
 
 generate_copy_commands() {
-    cat << EOF > $WORKDIR/endsection
+    cat << EOF > $WORKDIR/copysection
 # -----------------------------------------------------------------------------
 # Copy results back to CFS
 echo "Copying results back to CFS..."
@@ -682,9 +682,14 @@ CP_EXIT=\$?
 check_exit_code \$CP_EXIT copy2cfs
 update_status copy2cfs Success
 
-echo "DONE ${UUID}"
+EOF
+}
 
-# sleep 30
+generate_end_matters() {
+    cat << EOF > $WORKDIR/endsection
+# -----------------------------------------------------------------------------
+# Finish up
+echo "DONE ${UUID}"
 
 sacct --format=JobID,JobName,Account,AllocCPUS,State,Elapsed,ExitCode,DerivedExitCode,Start,End -j \$SLURM_JOB_ID
 EOF
@@ -759,7 +764,8 @@ generate_foxs_commands
 generate_foxs_scripts
 generate_multifoxs_command
 generate_multifoxs_script
-generate_copy_commands
+# generate_copy_commands
+generate_end_matters
 #
 echo "CPUS: $cpus"
 generate_bilbomd_slurm_header $cpus
