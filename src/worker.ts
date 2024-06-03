@@ -17,9 +17,12 @@ dotenv.config()
 
 connectDB()
 
+let bilboMdWorker: Worker
+let pdb2CrdWorker: Worker
+
 const checkNERSC = async () => {
   try {
-    // could have various checks here
+    // Eventually could have various checks here
 
     // Perlmutter status
     // const response = await someAPI.healthCheck()
@@ -35,7 +38,7 @@ const checkNERSC = async () => {
       logger.info(`Successfully obtained NERSC token: ${token.slice(0, 10)}...`)
       return true
     } else {
-      logger.info(`Successfully obtained NERSC token: ${token}`)
+      logger.info(`Did not successfully obtained NERSC token: ${token}`)
       return false
     }
   } catch (error) {
@@ -44,8 +47,37 @@ const checkNERSC = async () => {
   }
 }
 
+const pauseProcessing = async () => {
+  if (bilboMdWorker) {
+    await bilboMdWorker.pause() // Ensures worker exists before pausing
+    logger.info('BilboMD Worker paused due to invalid NERSC tokens')
+  }
+  if (pdb2CrdWorker) {
+    await pdb2CrdWorker.pause() // Ensures worker exists before pausing
+    logger.info('PDB2CRD Worker paused due to invalid NERSC tokens')
+  }
+}
+
+const resumeProcessing = async () => {
+  if (bilboMdWorker) {
+    await bilboMdWorker.resume() // Resumes the worker fetching new jobs
+    logger.info('BilboMD Worker resumed')
+  }
+  if (pdb2CrdWorker) {
+    await pdb2CrdWorker.resume() // Resumes the worker fetching new jobs
+    logger.info('PDB2CRD Worker resumed')
+  }
+}
+
 const workerHandler = async (job: Job<WorkerJob>) => {
   logger.info(`workerHandler: ${JSON.stringify(job.data)}`)
+  // NERSC check
+  if (config.runOnNERSC && !(await checkNERSC())) {
+    logger.error('NERSC token invalid. Pausing job processing.')
+    await pauseProcessing()
+    setTimeout(startWorkers, 10000) // Attempt to restart workers after a delay
+    return
+  }
   try {
     switch (job.data.type) {
       case 'pdb':
@@ -97,29 +129,35 @@ const pdb2crdWorkerOptions: WorkerOptions = {
 }
 
 const startWorkers = async () => {
-  logger.info(`config.runOnNERSC ${config.runOnNERSC}`)
-  if (config.runOnNERSC) {
+  const systemName = config.runOnNERSC ? 'NERSC' : 'Hyperion' // Set system name based on the config
+  logger.info(`Attempting to start workers on ${systemName}...`)
+  // Setup periodic NERSC token validation
+  setInterval(async () => {
     if (await checkNERSC()) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const worker = new Worker('bilbomd', workerHandler, workerOptions)
-      logger.info(`BilboMD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
-
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const pdb2crdWorker = new Worker('pdb2crd', workerHandler, pdb2crdWorkerOptions)
-      logger.info(`PDB2CRD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
-    } else {
+      if (
+        (bilboMdWorker && bilboMdWorker.isPaused()) ||
+        (pdb2CrdWorker && pdb2CrdWorker.isPaused())
+      ) {
+        await resumeProcessing()
+      }
+    }
+  }, 300000) // Check every 5 minutes
+  // If running on NERSC, check credentials before starting workers
+  if (config.runOnNERSC) {
+    logger.info('Checking NERSC credentials...')
+    if (!(await checkNERSC())) {
       logger.info('NERSC is not ready, delaying worker start')
       setTimeout(startWorkers, 10000) // Check again in 10 seconds
+      return // Exit if credentials are not valid
     }
-  } else {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const worker = new Worker('bilbomd', workerHandler, workerOptions)
-    logger.info(`BilboMD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const pdb2crdWorker = new Worker('pdb2crd', workerHandler, pdb2crdWorkerOptions)
-    logger.info(`PDB2CRD Worker started on ${config.runOnNERSC ? 'NERSC' : 'Hyperion'}`)
   }
+
+  // Create workers for both scenarios as the actual creation code is the same
+  bilboMdWorker = new Worker('bilbomd', workerHandler, workerOptions)
+  logger.info(`BilboMD Worker started on ${systemName}`)
+
+  pdb2CrdWorker = new Worker('pdb2crd', workerHandler, pdb2crdWorkerOptions)
+  logger.info(`PDB2CRD Worker started on ${systemName}`)
 }
 
 startWorkers()
