@@ -1,4 +1,4 @@
-import { config } from 'config/config'
+import { config } from '../../config/config'
 import { Job as BullMQJob } from 'bullmq'
 import {
   IJob,
