@@ -268,7 +268,7 @@ const getSlurmStatusFile = async (UUID: string): Promise<string> => {
 }
 
 const updateStatus = async (Job: IJob) => {
-  logger.info(`updating status ${Job.title}`)
+  // logger.info(`updating status ${Job.title}`)
   const UUID = Job.uuid
   const contents: string = await getSlurmStatusFile(UUID)
 
@@ -288,11 +288,11 @@ const updateStatus = async (Job: IJob) => {
   // Save the updated Job document
   try {
     await Job.save()
-    logger.info(
-      `Job ${Job._id} status updated successfully with details: ${JSON.stringify(
-        Job.steps
-      )}`
-    )
+    // logger.info(
+    //   `Job ${Job._id} status updated successfully with details: ${JSON.stringify(
+    //     Job.steps
+    //   )}`
+    // )
   } catch (error) {
     logger.error(`Unable to save job status for ${Job._id}: ${error}`)
     throw error

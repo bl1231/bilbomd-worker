@@ -34,11 +34,11 @@ const getAccessToken = async (clientAssertion: string): Promise<string> => {
   params.append('client_assertion', clientAssertion)
 
   try {
-    logger.info('getAccessToken about to request accessToken')
+    // logger.info('getAccessToken about to request accessToken')
     const response = await axios.post(tokenUrl, params, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     })
-    logger.info(`Response from NERSC API: ${JSON.stringify(response.data, null, 2)}`)
+    // logger.info(`Response from NERSC API: ${JSON.stringify(response.data, null, 2)}`)
     const accessToken = response.data.access_token
     const expiresIn = response.data.expires_in
     const scope = response.data.scope
