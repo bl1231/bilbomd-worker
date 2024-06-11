@@ -148,10 +148,10 @@ const monitorJobAtNERSC = async (
       if (response.data.output && response.data.output.length > 0) {
         const jobDetails = response.data.output[0]
         jobStatus = jobDetails.state
-        // can we call updateStepStatus here?
+        // Update the step status in MongoDB
         const status: IStepStatus = {
           status: 'Running',
-          message: `Watching BilboMD Job: ${jobStatus}`
+          message: `Slurm Status: ${jobStatus}`
         }
         await updateStepStatus(Job, 'nersc_job_status', status)
         statusResponse = {
@@ -198,7 +198,7 @@ const monitorJobAtNERSC = async (
         await updateStatus(Job)
         break
       default:
-        await new Promise((resolve) => setTimeout(resolve, 3000)) // Continue polling otherwise
+        await new Promise((resolve) => setTimeout(resolve, 5000)) // Continue polling otherwise
         break
     }
   }
