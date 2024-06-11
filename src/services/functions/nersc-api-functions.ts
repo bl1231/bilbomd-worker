@@ -188,6 +188,7 @@ const monitorJobAtNERSC = async (
       case 'PREEMPTED':
         continueMonitoring = false // Stop monitoring if any of these statuses are met
         // one final update of the status.txt file?
+        await updateStatus(Job)
         break
       default:
         await new Promise((resolve) => setTimeout(resolve, 3000)) // Continue polling otherwise
