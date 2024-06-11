@@ -66,7 +66,7 @@ const submitBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
     await MQjob.log('start nersc submit slurm batch')
     let status: IStepStatus = {
       status: 'Running',
-      message: 'Submitting Slurm batch file has started.'
+      message: 'Submitting Slurm batch file'
     }
     await updateStepStatus(DBjob, 'nersc_submit_slurm_batch', status)
     const submitTaskID = await submitJobToNersc(DBjob)
@@ -77,7 +77,7 @@ const submitBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
     logger.info(`JOBID: ${jobID}`)
     status = {
       status: 'Success',
-      message: jobID
+      message: `NERSC JobID ${jobID}`
     }
     await updateStepStatus(DBjob, 'nersc_submit_slurm_batch', status)
     await MQjob.log('end nersc submit slurm batch')

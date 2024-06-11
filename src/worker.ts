@@ -60,11 +60,11 @@ const pauseProcessing = async () => {
 
 const resumeProcessing = async () => {
   if (bilboMdWorker) {
-    await bilboMdWorker.resume() // Resumes the worker fetching new jobs
+    bilboMdWorker.resume() // Resumes the worker fetching new jobs
     logger.info('BilboMD Worker resumed')
   }
   if (pdb2CrdWorker) {
-    await pdb2CrdWorker.resume() // Resumes the worker fetching new jobs
+    pdb2CrdWorker.resume() // Resumes the worker fetching new jobs
     logger.info('PDB2CRD Worker resumed')
   }
 }
