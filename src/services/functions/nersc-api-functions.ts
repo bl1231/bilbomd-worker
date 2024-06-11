@@ -3,9 +3,10 @@ import axiosRetry from 'axios-retry'
 import qs from 'qs'
 import { logger } from '../../helpers/loggers'
 import { config } from '../../config/config'
-import { IBilboMDSteps, IJob } from '@bl1231/bilbomd-mongodb-schema'
+import { IBilboMDSteps, IJob, IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
 import { ensureValidToken } from './nersc-api-token-functions'
 import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc'
+import { updateStepStatus } from './mongo-utils'
 
 type StepKey = keyof IBilboMDSteps
 
@@ -147,6 +148,12 @@ const monitorJobAtNERSC = async (
       if (response.data.output && response.data.output.length > 0) {
         const jobDetails = response.data.output[0]
         jobStatus = jobDetails.state
+        // can we call updateStepStatus here?
+        const status: IStepStatus = {
+          status: 'Running',
+          message: `Watching BilboMD Job: ${jobStatus}`
+        }
+        await updateStepStatus(Job, 'nersc_job_status', status)
         statusResponse = {
           api_status: response.data.status,
           api_error: response.data.error,
@@ -160,7 +167,7 @@ const monitorJobAtNERSC = async (
         logger.warn('No job details found or output array is empty.')
       }
       logger.info(`Current job ${jobID} status: ${jobStatus}`)
-      // if jobStatus is RUNNING then download slurm-######.out and update status
+
       if (jobStatus === 'RUNNING') {
         await updateStatus(Job)
       }
