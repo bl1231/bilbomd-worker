@@ -280,7 +280,7 @@ const updateStatus = async (Job: IJob) => {
       const key = step as StepKey // Assert that step is a valid key of IBilboMDSteps
       Job.steps[key] = {
         status: status,
-        message: `${step} : ${status}`
+        message: status
       }
     }
   })

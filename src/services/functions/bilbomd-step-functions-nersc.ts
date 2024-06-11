@@ -97,7 +97,7 @@ const monitorBilboMDJob = async (MQjob: BullMQJob, DBjob: IJob, Pjob: string) =>
     await MQjob.log('start nersc watch job')
     let status: IStepStatus = {
       status: 'Running',
-      message: 'Watching BilboMD job started.'
+      message: 'Watching BilboMD Job'
     }
     await updateStepStatus(DBjob, 'nersc_job_status', status)
     const jobResult = await monitorJobAtNERSC(DBjob, Pjob)
