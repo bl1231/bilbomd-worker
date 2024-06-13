@@ -45,6 +45,9 @@ podman-hpc build --build-arg NPM_TOKEN=$NPM_TOKEN -t bilbomd/bilbomd-spin-worker
 
 ## Version History
 
+- 1.6.3
+  - Add steps object to mongodb entry
+  - Some improvements to logging
 - 1.6.2
   - Use @bl1231/bilbomd-mongodb-schema
   - Update dependencies
