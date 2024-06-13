@@ -1,97 +1,45 @@
 import { createLogger, transports, format } from 'winston'
-import { Request, Response, NextFunction } from 'express'
+import DailyRotateFile from 'winston-daily-rotate-file'
 import moment from 'moment-timezone'
 
-const { splat, combine, timestamp, label, colorize, json, printf, prettyPrint } = format
+const { combine, timestamp, label, printf, colorize } = format
 const localTimezone = 'America/Los_Angeles'
-const customTimestamp = () => {
-  return moment().tz(localTimezone).format('YYYY-MM-DD HH:mm:ss')
-}
-const logsFolder = `./logs`
+const logsFolder = `/bilbomd/logs`
 
-// const getLabel = (callingModule) => {
-//   const parts = callingModule.filename.split('/')
-//   const thing = parts[parts.length - 2] + '/' + parts.pop()
-//   console.log(thing)
-//   return parts[parts.length - 2] + '/' + parts.pop()
-// }
+const customTimestamp = () => moment().tz(localTimezone).format('YYYY-MM-DD HH:mm:ss')
 
-// Transports for request Logger
-const loggerRequestTransports = [
-  new transports.File({
-    level: 'warn',
-    filename: `${logsFolder}/bilbomd-worker-req-warn.log`
+const logFormat = printf(({ level, message, label, timestamp }) => {
+  return `${timestamp} - ${level}: [${label}] ${message}`
+})
+
+// Declare as an array of any transport types available
+const loggerTransports = [
+  new DailyRotateFile({
+    filename: `${logsFolder}/bilbomd-worker-%DATE%.log`,
+    datePattern: 'YYYY-MM-DD',
+    zippedArchive: true,
+    maxSize: '20m',
+    maxFiles: '14d'
   }),
-  new transports.File({
+  new DailyRotateFile({
     level: 'error',
-    filename: `${logsFolder}/bilbomd-worker-req-error.log`
+    filename: `${logsFolder}/bilbomd-worker-error-%DATE%.log`,
+    datePattern: 'YYYY-MM-DD',
+    zippedArchive: true,
+    maxSize: '20m',
+    maxFiles: '30d'
   }),
-  new transports.File({
-    level: 'info',
-    filename: `${logsFolder}/bilbomd-worker-req-info.log`
-  })
+  new transports.Console({ format: combine(colorize(), logFormat) })
 ]
 
-//Custom format using the printf format.
-const customFormat = printf(({ level, message, label, timestamp }) => {
-  return `${timestamp} - ${level}: [${label}]  ${message}`
-})
-
-// Format for console output
-const consoleFormat = combine(
-  colorize({ all: true }),
-  splat(),
-  timestamp({
-    format: customTimestamp
-  }),
-  label({ label: 'bilbomd-worker' }),
-  customFormat
-)
-
-// Format for log file
-const fileFormat = combine(timestamp({ format: customTimestamp }), splat(), json())
-
-// Create a Winston logger instance
 const logger = createLogger({
   level: 'info',
-  transports: [
-    new transports.Console({
-      format: consoleFormat
-    }),
-    new transports.File({
-      filename: `${logsFolder}/bilbomd-worker-error.log`,
-      level: 'error',
-      format: fileFormat
-    }),
-    new transports.File({
-      filename: `${logsFolder}/bilbomd-worker.log`,
-      format: fileFormat
-    })
-  ]
+  format: combine(
+    label({ label: 'bilbomd-worker' }),
+    timestamp({ format: customTimestamp }),
+    logFormat
+  ),
+  transports: loggerTransports
 })
 
-// Create a Winston logger instance
-const reqLogger = createLogger({
-  transports: loggerRequestTransports,
-  format: combine(timestamp({ format: customTimestamp }), json(), prettyPrint())
-})
-
-// Define a middleware function for request logging
-const requestLogger = (req: Request, res: Response, next: NextFunction) => {
-  reqLogger.info(`${req.method} ${req.url}`)
-  next()
-}
-
-// Not sure this is working?
-// if (process.env.NODE_ENV !== 'production') {
-//   // loggerTransports.push(new transports.Console())
-
-//   loggerRequestTransports.push(
-//     new transports.File({
-//       level: 'info',
-//       filename: `${logsFolder}/requestInfo.log`
-//     })
-//   )
-// }
-
-export { logger, requestLogger, logsFolder }
+export { logger, logsFolder }

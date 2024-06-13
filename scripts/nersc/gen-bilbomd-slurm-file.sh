@@ -218,6 +218,17 @@ template_heat_file() {
     sed -i "s|{{constinp}}|$constinp|g" "$WORKDIR/heat.inp"
 }
 
+create_status_txt_file() {
+    echo "Create initial status.txt file"
+
+    status_file="${WORKDIR}/status.txt"
+
+    steps=(pdb2crd pae autorg minimize initfoxs heat md dcd2pdb foxs multifoxs copy2cfs)
+    for step in "${steps[@]}"; do
+        echo "$step: Waiting" >> "$status_file"
+    done
+}
+
 initialize_job() {
     echo "Initialize Job"
     echo ""
@@ -233,6 +244,7 @@ initialize_job() {
     copy_template_files
     template_minimization_file
     template_heat_file
+    create_status_txt_file
 }
 
 template_md_input_files() {
@@ -353,7 +365,7 @@ generate_dcd2pdb_input_files() {
 
 generate_bilbomd_slurm_header() {
     local cpus=$1
-    echo "generate_bilbomd_slurm_header $1"
+    echo "generate_bilbomd_slurm_header for $1 OMP threads"
     cat << EOF > $WORKDIR/slurmheader
 #!/bin/bash -l
 #SBATCH --qos=${queue}
@@ -372,6 +384,33 @@ export OMP_NUM_THREADS=$1
 export OMP_PLACES=threads
 export OMP_PROC_BIND=spread
 
+# -----------------------------------------------------------------------------
+# Status Stuff
+set -o monitor
+
+status_file="${WORKDIR}/status.txt"
+
+# Updates our status.txt file using sed to update values
+update_status() {
+    local step=\$1
+    local status=\$2
+    echo "Update \$step status: \$status"
+    # Use sed to update the status file
+    sed -i "s/^\$step: .*/\$step: \$status/" "\$status_file"
+}
+
+# Check exit code and cancel the SLURM job if non-zero
+check_exit_code() {
+  local exit_code=\$1
+  local step=\$2
+  if [ \$exit_code -ne 0 ]; then
+    echo "Process in \$step failed with exit code \$exit_code. Cancelling SLURM job."
+    update_status \$step Error
+    scancel \$SLURM_JOB_ID
+    exit \$exit_code
+  fi
+}
+
 EOF
 }
 
@@ -380,27 +419,48 @@ generate_pdb2crd_commands() {
 # -----------------------------------------------------------------------------
 # Convert PDB to CRD/PSF
 EOF
+    echo "echo \"START\"" >> $WORKDIR/pdb2crd
+    echo "update_status pdb2crd Running" >> $WORKDIR/pdb2crd
+    # echo "set_error_trap_child pdb2crd" >> $WORKDIR/pdb2crd
     local num_inp_files=${#g_pdb2crd_inp_files[@]}
     local cpus=$(($NUM_CORES/$num_inp_files))
+    local count=1
     for inp in "${g_pdb2crd_inp_files[@]}"; do
-        echo "echo \"Starting $inp\" &" >> $WORKDIR/pdb2crd
+        # echo "echo \"Starting $inp\" &" >> $WORKDIR/pdb2crd
         local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name pdb2crd podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
         echo $command >> $WORKDIR/pdb2crd
+        echo "PDB2CRD_PID$count=\$!" >> $WORKDIR/pdb2crd
         echo sleep 10 >> $WORKDIR/pdb2crd
-
+        ((count++))
     done
     echo "" >> $WORKDIR/pdb2crd
     echo "# Wait for all PDB to CRD jobs to finish" >> $WORKDIR/pdb2crd
-    echo "wait" >> $WORKDIR/pdb2crd
+    local count=1
+    for inp in "${g_pdb2crd_inp_files[@]}"; do
+        echo "wait \$PDB2CRD_PID$count" >> $WORKDIR/pdb2crd
+        echo "PDB2CRD_EXIT$count=\$?" >> $WORKDIR/pdb2crd
+        echo "check_exit_code \$PDB2CRD_EXIT$count pdb2crd" >> $WORKDIR/pdb2crd
+        ((count++))
+    done
+    echo "" >> $WORKDIR/pdb2crd
+    local count=1
+    for inp in "${g_pdb2crd_inp_files[@]}"; do
+        echo "echo \"Exit code for pdb2crd$count \$PDB2CRD_PID$count: \$PDB2CRD_EXIT$count\"" >> $WORKDIR/pdb2crd
+        ((count++))
+    done
     echo "" >> $WORKDIR/pdb2crd
     echo "echo \"Individual chains converted to CRD files.\"" >> $WORKDIR/pdb2crd
     echo "" >> $WORKDIR/pdb2crd
     echo "# Meld all individual CRD files" >> $WORKDIR/pdb2crd
     echo "echo \"Melding pdb2crd_charmm_meld.inp\"" >> $WORKDIR/pdb2crd
+    # echo "set_error_trap pdb2crd" >> $WORKDIR/pdb2crd
     local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name meld podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o pdb2crd_charmm_meld.out -i pdb2crd_charmm_meld.inp\""
     echo $command >> $WORKDIR/pdb2crd
+    echo "MELD_EXIT=\$?" >> $WORKDIR/pdb2crd
+    echo "check_exit_code \$MELD_EXIT pdb2crd" >> $WORKDIR/pdb2crd
     echo "" >> $WORKDIR/pdb2crd
     echo "echo \"All Individual CRD files melded into bilbomd_pdb2crd.crd\"" >> $WORKDIR/pdb2crd
+    echo "update_status pdb2crd Success" >> $WORKDIR/pdb2crd
     echo "" >> $WORKDIR/pdb2crd
 }
 
@@ -409,11 +469,16 @@ generate_pae2const_commands() {
 # -----------------------------------------------------------------------------
 # Create const.inp from Alphafold PAE Matrix
 EOF
+    echo "update_status pae Running" >> $WORKDIR/pae2const
+    # echo "set_error_trap pae" >> $WORKDIR/pae2const
     echo "echo \"Calculate const.inp from PAE matrix...\"" >> $WORKDIR/pae2const
     local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name pae2const podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file} > pae_ratios.log 2>&1\""
     echo $command >> $WORKDIR/pae2const
+    echo "PAE_EXIT=\$?" >> $WORKDIR/pae2const
+    echo "check_exit_code \$PAE_EXIT pae" >> $WORKDIR/pae2const
     echo "" >> $WORKDIR/pae2const
     echo "echo \"const.inp generated from PAE matrix\"" >> $WORKDIR/pae2const
+    echo "update_status pae Success" >> $WORKDIR/pae2const
     echo "" >> $WORKDIR/pae2const
 }
 
@@ -433,23 +498,35 @@ generate_min_heat_commands(){
 # -----------------------------------------------------------------------------
 # CHARMM Minimize
 echo "Running CHARMM Minimize..."
+update_status minimize Running
 srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name minimize podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o minimize.out -i minimize.inp"
+MIN_EXIT=\$?
+check_exit_code \$MIN_EXIT minimize
 
 echo "CHARMM Minimize complete"
+update_status minimize Success
 
 # -----------------------------------------------------------------------------
 # FoXS Analysis of minimized PDB
 echo "Running Initial FoXS Analysis..."
+update_status initfoxs Running
 srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name initfoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && foxs ${foxs_args[@]} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.log"
+INITFOXS_EXIT=\$?
+check_exit_code \$INITFOXS_EXIT initfoxs
 
 echo "Initial FoXS Analysis complete"
+update_status initfoxs Success
 
 # -----------------------------------------------------------------------------
 # CHARMM Heat
 echo "Running CHARMM Heat..."
+update_status heat Running
 srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name heat podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o heat.out -i heat.inp"
+HEAT_EXIT=\$?
+check_exit_code \$HEAT_EXIT heat
 
 echo "CHARMM Heating complete"
+update_status heat Success
 
 EOF
 }
@@ -463,18 +540,32 @@ EOF
     local count=1
     cpus=$(($NUM_CORES/$num_inp_files))
     echo "echo \"Running CHARMM Molecular Dynamics...\"" >> $WORKDIR/dynamics
+    echo "update_status md Running" >> $WORKDIR/dynamics
     for inp in "${g_md_inp_files[@]}"; do
-        echo "echo \"Starting $inp\"" >> $WORKDIR/dynamics
         local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name md$count podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
         echo $command >> $WORKDIR/dynamics
-        echo sleep 10 >> $WORKDIR/dynamics
+        echo "MD_PID$count=\$!" >> $WORKDIR/dynamics
+        echo "sleep 5" >> $WORKDIR/dynamics
         ((count++))
     done
     echo "" >> $WORKDIR/dynamics
     echo "# Wait for all Molecular Dynamics jobs to finish" >> $WORKDIR/dynamics
-    echo "wait" >> $WORKDIR/dynamics
+    # echo "wait" >> $WORKDIR/dynamics
+    local count=1
+    for inp in "${g_md_inp_files[@]}"; do
+        echo "wait \$MD_PID$count" >> $WORKDIR/dynamics
+        echo "MD_EXIT$count=\$?" >> $WORKDIR/dynamics
+        echo "check_exit_code \$MD_EXIT$count md" >> $WORKDIR/dynamics
+        ((count++))
+    done
     echo "" >> $WORKDIR/dynamics
+    local count=1
+    for inp in "${g_md_inp_files[@]}"; do
+        echo "echo \"Exit code for md$count \$MD_PID$count: \$MD_EXIT$count\"" >> $WORKDIR/dynamics
+        ((count++))
+    done
     echo "echo \"CHARMM Molecular Dynamics complete\"" >> $WORKDIR/dynamics
+    echo "update_status md Success" >> $WORKDIR/dynamics
     echo "" >> $WORKDIR/dynamics
 
 }
@@ -485,11 +576,15 @@ generate_dcd2pdb_commands() {
 # -----------------------------------------------------------------------------
 # CHARMM Extract PDB from DCD Trajectories
 echo "Running CHARMM Extract PDB from DCD Trajectories..."
+update_status dcd2pdb Running
 $command
+DCD2PDB_EXIT=\$?
+check_exit_code \$DCD2PDB_EXIT dcd2pdb
 
 echo "Extract PDB from DCD Trajectories complete."
+update_status dcd2pdb Success
+
 EOF
-    echo "" >> $WORKDIR/dcd2pdb
 }
 
 generate_dcd2pdb_script() {
@@ -506,16 +601,16 @@ generate_foxs_commands() {
     cat << EOF > $WORKDIR/foxssection
 # -----------------------------------------------------------------------------
 # Run FoXS to calculate SAXS curves
+echo "Run FoXS to calculate SAXS curves..."
+update_status foxs Running
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name foxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/foxs && ../run_foxs.sh"
+FOXS_EXIT=\$?
+check_exit_code \$FOXS_EXIT foxs
+
+echo "FoXS to calculate SAXS curves complete"
+update_status foxs Success
+
 EOF
-    echo "echo \"Run FoXS to calculate SAXS curves...\"" >> $WORKDIR/foxssection
-    # dir_path="/bilbomd/work/foxs/rg${rg}_run##"
-    # echo "echo \"Processing directory: $dir_path\"" >> $WORKDIR/foxssection
-    # If these srun commands are run sequentially then give each one all the available cores
-    local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name foxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/foxs && ../run_foxs.sh\""
-    echo $command >> $WORKDIR/foxssection
-    echo "" >> $WORKDIR/foxssection
-    echo "echo \"FoXS to calculate SAXS curves complete\"" >> $WORKDIR/foxssection
-    echo "" >> $WORKDIR/foxssection
 }
 
 generate_foxs_scripts() {
@@ -564,26 +659,40 @@ generate_multifoxs_command() {
     cat << EOF > $WORKDIR/multifoxssection
 # -----------------------------------------------------------------------------
 # Run MultiFoXS to calculate best ensemble
+echo "Run MultiFoXS to calculate best ensemble..."
+update_status multifoxs Running
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name multifoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && ./run_multifoxs.sh"
+MFOXS_EXIT=\$?
+check_exit_code \$MFOXS_EXIT multifoxs
+
+echo "MultiFoXS processing complete."
+update_status multifoxs Success
+
 EOF
-    echo "echo \"Run MultiFoXS to calculate best ensemble...\"" >> $WORKDIR/multifoxssection
-    echo "srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name multifoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_multifoxs.sh\"" >> $WORKDIR/multifoxssection
-    echo "" >> $WORKDIR/multifoxssection
-    echo "echo \"MultiFoXS processing complete.\"" >> $WORKDIR/multifoxssection
-    echo "" >> $WORKDIR/multifoxssection
 }
 
 generate_copy_commands() {
-    cat << EOF > $WORKDIR/endsection
+    cat << EOF > $WORKDIR/copysection
 # -----------------------------------------------------------------------------
 # Copy results back to CFS
+echo "Copying results back to CFS..."
+update_status copy2cfs Running
+cp -nR $WORKDIR/* $UPLOAD_DIR
+CP_EXIT=\$?
+check_exit_code \$CP_EXIT copy2cfs
+update_status copy2cfs Success
+
 EOF
-    echo "echo \"Copying results back to CFS...\"" >> $WORKDIR/endsection
-    echo "cp -nR $WORKDIR/* $UPLOAD_DIR" >> $WORKDIR/endsection
-    echo "" >> $WORKDIR/endsection
-    echo "echo \"DONE ${UUID}\"" >> $WORKDIR/endsection
-    echo "" >> $WORKDIR/endsection
-    echo "sleep 30" >> $WORKDIR/endsection
-    echo "sacct --format=JobID,JobName,Account,AllocCPUS,State,Elapsed,ExitCode,Start,End -j \$SLURM_JOB_ID" >> $WORKDIR/endsection
+}
+
+generate_end_matters() {
+    cat << EOF > $WORKDIR/endsection
+# -----------------------------------------------------------------------------
+# Finish up
+echo "DONE ${UUID}"
+
+sacct --format=JobID,JobName,Account,AllocCPUS,State,Elapsed,ExitCode,DerivedExitCode,Start,End -j \$SLURM_JOB_ID
+EOF
 }
 
 append_slurm_sections() {
@@ -655,7 +764,8 @@ generate_foxs_commands
 generate_foxs_scripts
 generate_multifoxs_command
 generate_multifoxs_script
-generate_copy_commands
+# generate_copy_commands
+generate_end_matters
 #
 echo "CPUS: $cpus"
 generate_bilbomd_slurm_header $cpus

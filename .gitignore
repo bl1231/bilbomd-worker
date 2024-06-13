@@ -115,3 +115,4 @@ test/
 test-data/
 *.slurm
 scripts/nersc/workdir
+scripts/nersc/test-scripts

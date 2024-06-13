@@ -12,7 +12,7 @@ RUN mkdir -p /bilbomd/uploads
 WORKDIR /app
 
 # Update NPM
-RUN npm install -g npm@10.8.0
+RUN npm install -g npm@10.8.1
 
 # Copy over the package*.json files
 COPY package*.json .
