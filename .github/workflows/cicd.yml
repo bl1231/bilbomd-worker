@@ -31,6 +31,15 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: ghcr.io/${{ github.repository }}/bilbomd-spin-worker
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
+
+      - name: Generate version
+        id: version
+        run: echo "VERSION=$(date +'%Y.%m.%d')-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
@@ -38,7 +47,10 @@ jobs:
           context: .
           file: bilbomd-spin-worker.dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/${{ github.repository }}/bilbomd-spin-worker:latest
+            ghcr.io/${{ github.repository }}/bilbomd-spin-worker:${{ steps.version.outputs.VERSION }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             NPM_TOKEN=${{ secrets.GITHUB_TOKEN }}
