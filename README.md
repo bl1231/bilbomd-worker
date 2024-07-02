@@ -31,11 +31,11 @@ cd bilbomd-worker
 podman-hpc build --build-arg USER_ID=$UID -t bilbomd/bilbomd-perlmutter-worker -f bilbomd-perlmutter-worker.dockerfile .
 ```
 
-To build `bilbomd-spin-worker` for running on the SPIN Kubernetes cluster. The `$NPM_TOKEN` comes from GitHub... ask me if you need to know about this.
+To build `bilbomd-spin-worker` for running on the SPIN Kubernetes cluster. The `$GITHUB_TOKEN` comes from GitHub... ask me if you need to know about this.
 
 ```bash
 cd bilbomd-worker
-podman-hpc build --build-arg NPM_TOKEN=$NPM_TOKEN -t bilbomd/bilbomd-spin-worker -f bilbomd-spin-worker.dockerfile .
+podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-worker -f bilbomd-spin-worker.dockerfile .
 ```
 
 ## Authors
