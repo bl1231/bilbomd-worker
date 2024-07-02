@@ -6,7 +6,7 @@ RUN apt-get update
 # -----------------------------------------------------------------------------
 # Build stage 2 - worker app for deployment on SPIN
 FROM worker-step1 AS bilbomd-spin-worker
-ARG NPM_TOKEN
+ARG GITHUB_TOKEN
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
 WORKDIR /app
@@ -18,13 +18,13 @@ RUN npm install -g npm@10.8.1
 COPY package*.json .
 
 # Create .npmrc file using the build argument
-RUN echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" > /root/.npmrc
+RUN echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" > /root/.npmrc
 
 # Install dependencies
 RUN npm ci
 
 # Optionally, clean up the environment variable for security
-RUN unset NPM_TOKEN
+RUN unset GITHUB_TOKEN
 
 # Copy the app code
 COPY . .

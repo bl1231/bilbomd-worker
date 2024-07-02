@@ -104,7 +104,7 @@ RUN apt-get update && \
 FROM bilbomd-worker-step5 AS bilbomd-worker
 ARG USER_ID=1001
 ARG GROUP_ID=1001
-ARG NPM_TOKEN
+ARG GITHUB_TOKEN
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
 WORKDIR /app
@@ -126,13 +126,13 @@ USER bilbo:bilbomd
 COPY --chown=bilbo:bilbomd package*.json .
 
 # Create .npmrc file using the build argument
-RUN echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" > /home/bilbo/.npmrc
+RUN echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" > /home/bilbo/.npmrc
 
 # Install dependencies
 RUN npm ci
 
 # Optionally, clean up the environment variable for security
-RUN unset NPM_TOKEN
+RUN unset GITHUB_TOKEN
 
 # Copy the app code
 COPY --chown=bilbo:bilbomd . .
