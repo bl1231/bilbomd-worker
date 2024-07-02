@@ -57,6 +57,6 @@ jobs:
             ghcr.io/${{ github.repository }}/bilbomd-spin-worker:${{ steps.version.outputs.VERSION }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            NPM_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
