@@ -92,12 +92,10 @@ RUN python setup.py build_ext --inplace && \
 # Build stage 7 - IMP 
 FROM bilbomd-worker-step4 AS bilbomd-worker-step5
 
-RUN apt-get update && \
-    apt-get install -y wget && \
-    echo "deb https://integrativemodeling.org/latest/download jammy/" >> /etc/apt/sources.list && \
-    wget -O /etc/apt/trusted.gpg.d/salilab.asc https://salilab.org/~ben/pubkey256.asc && \
+RUN apt-get install -y software-properties-common && \
+    add-apt-repository ppa:salilab/ppa && \
     apt-get update && \
-    apt-get install -y imp openmpi-bin libopenmpi-dev
+    apt-get install -y imp
 
 # -----------------------------------------------------------------------------
 # Build stage 8 - worker app
