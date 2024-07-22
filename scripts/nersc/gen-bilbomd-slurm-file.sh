@@ -14,10 +14,10 @@ UUID=$1
 # -----------------------------------------------------------------------------
 # SBATCH STUFF
 project="m4659"
-queue="regular"
+queue="debug"
 constraint="gpu"
 nodes="1"
-time="00:60:00"
+time="00:30:00"
 mailtype="end,fail"
 mailuser="sclassen@lbl.gov"
 
@@ -41,10 +41,13 @@ TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
 # WORKDIR=${PWD}/workdir/${UUID}
 # TEMPLATEDIR=${PWD}/bilbomd-templates
 
-WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.8
-# WORKER=bl1231/bilbomd-perlmutter-worker
+# WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.8
 
+# OpenMM 8.1.2 
+# WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.9
 
+# OpenMM 8.0.0 
+WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.10
 
 # other globals
 g_md_inp_files=()
@@ -542,7 +545,7 @@ EOF
     echo "echo \"Running CHARMM Molecular Dynamics...\"" >> $WORKDIR/dynamics
     echo "update_status md Running" >> $WORKDIR/dynamics
     for inp in "${g_md_inp_files[@]}"; do
-        local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name md$count podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
+        local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name md$count podman-hpc run --gpu --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
         echo $command >> $WORKDIR/dynamics
         echo "MD_PID$count=\$!" >> $WORKDIR/dynamics
         echo "sleep 5" >> $WORKDIR/dynamics
