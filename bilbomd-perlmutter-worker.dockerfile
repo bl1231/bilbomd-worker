@@ -1,29 +1,16 @@
 # -----------------------------------------------------------------------------
 # Build stage 1 - Install build tools & dependencies
-FROM ubuntu:24.04 AS builder
+# FROM ubuntu:24.04 AS builder
+FROM nvcr.io/nvidia/cuda:12.5.1-devel-ubuntu24.04 AS builder
 RUN apt-get update && \
     apt-get install -y cmake gcc gfortran g++ python3 \
-    libpmix-bin libpmix-dev parallel
-
-# -----------------------------------------------------------------------------
-# Build stage 1.2 - OpenMPI
-FROM builder AS build-openmpi
-ARG OPENMPI_VER=5.0.3
-COPY ./openmpi/openmpi-${OPENMPI_VER}.tar.gz /usr/local/src
-RUN tar -zxvf /usr/local/src/openmpi-${OPENMPI_VER}.tar.gz -C /usr/local/src && \
-    rm /usr/local/src/openmpi-${OPENMPI_VER}.tar.gz
-WORKDIR /usr/local/src/openmpi-${OPENMPI_VER}
-RUN ./configure --prefix=/usr/local --with-pmix --with-slurm
-RUN make all install
-
-# -----------------------------------------------------------------------------
-# Build stage 1.3 - Install Miniconda3
-FROM build-openmpi AS build-conda
-
-# Libraries needed by CHARMM
-RUN apt-get update && \
-    apt-get install -y wget bzip2 ncat gfortran libgl1-mesa-dev libarchive13 && \
+    libpmix-bin libpmix-dev parallel wget bzip2 ncat \
+    gfortran libgl1-mesa-dev libarchive13 zip build-essential && \
     rm -rf /var/lib/apt/lists/*
+
+# -----------------------------------------------------------------------------
+# Build stage 2 - Miniconda3
+FROM builder AS build-conda
 
 # Download and install Miniforge3
 RUN wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" && \
@@ -46,9 +33,9 @@ RUN conda env update -f /tmp/environment.yml && \
 RUN conda install -y cython swig doxygen
 
 # -----------------------------------------------------------------------------
-# Build stage 1.4 - OpenMM
+# Build stage 3 - OpenMM
 FROM build-conda AS build-openmm
-ARG OPENMM_VER=8.0.0
+ARG OPENMM_VER=8.1.2
 
 COPY ./openmm/${OPENMM_VER}.tar.gz /usr/local/src
 RUN tar -zxvf /usr/local/src/${OPENMM_VER}.tar.gz -C /usr/local/src && \
@@ -56,56 +43,32 @@ RUN tar -zxvf /usr/local/src/${OPENMM_VER}.tar.gz -C /usr/local/src && \
 WORKDIR /usr/local/src/openmm-${OPENMM_VER}/build
 RUN cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local
 
-# Build and install OpenMM
 RUN make -j$(nproc) && make install
 
-
-
 # -----------------------------------------------------------------------------
-# Build stage 2 - Configure CHARMM
+# Build stage 4 - CHARMM
 FROM build-openmm AS build-charmm
 ARG CHARMM_VER=c48b2
 
-# Combine the mkdir, tar extraction, and cleanup into a single RUN command
 COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
 RUN mkdir -p /usr/local/src && \
     tar -zxvf /usr/local/src/${CHARMM_VER}.tar.gz -C /usr/local/src && \
     rm /usr/local/src/${CHARMM_VER}.tar.gz
 
-# Configure CHARMM
 WORKDIR /usr/local/src/charmm
 RUN ./configure
 
-# Build CHARMM
 RUN make -j$(nproc) -C build/cmake install
+RUN cp /usr/local/src/charmm/bin/charmm /usr/local/bin/
+
 
 # -----------------------------------------------------------------------------
-# Build stage 3 - Copy CHARMM binary
-#   I'm not sure if this needs to be a separate step.
+# Build stage 5 - BioXTASRAW
 FROM build-charmm AS bilbomd-worker-step1
-COPY --from=build-charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
-
-# -----------------------------------------------------------------------------
-# Build stage 4 - Install NodeJS v20
-FROM bilbomd-worker-step1 AS bilbomd-worker-step2
-ARG NODE_MAJOR=20
-RUN apt-get update && \
-    apt-get install -y gpg curl && \
-    mkdir -p /etc/apt/keyrings && \
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list && \
-    apt-get update && \
-    apt-get install -y nodejs
-
-
-
-# -----------------------------------------------------------------------------
-# Build stage 6 - Install BioXTAS
-FROM bilbomd-worker-step2 AS bilbomd-worker-step4
 
 # Install deps
-RUN apt-get update && \
-    apt-get install -y zip build-essential libarchive13
+# RUN apt-get update && \
+#     apt-get install -y zip build-essential libarchive13
 
 # Copy the BioXTAS GitHiub master zip file
 # 1e2b05c74bbc595dc84e64ee962680b700b258be
@@ -114,32 +77,29 @@ WORKDIR /tmp
 COPY bioxtas/bioxtasraw-master.zip .
 RUN unzip bioxtasraw-master.zip && rm bioxtasraw-master.zip
 
-
 # Install BioXTAS RAW into local Python environment
 WORKDIR /tmp/bioxtasraw-master
 RUN python setup.py build_ext --inplace && \
     pip install .
 
 # -----------------------------------------------------------------------------
-# Build stage 7 - IMP
-FROM bilbomd-worker-step4 AS bilbomd-worker-step5
+# Build stage 6 - IMP
+FROM bilbomd-worker-step1 AS bilbomd-worker-step2
 
-RUN apt-get update && \
-    apt-get install -y wget && \
-    echo "deb https://integrativemodeling.org/latest/download noble/" >> /etc/apt/sources.list && \
-    wget -O /etc/apt/trusted.gpg.d/salilab.asc https://salilab.org/~ben/pubkey256.asc && \
+RUN apt-get install -y software-properties-common && \
+    add-apt-repository ppa:salilab/ppa && \
     apt-get update && \
-    apt-get install -y imp
+    apt-get install -y imp && \
+    rm -rf /var/lib/apt/lists/*
 
-# not sure this is needed...
-RUN mkdir -p /bilbomd/uploads
 
 # -----------------------------------------------------------------------------
-# Build stage 8 - worker app
+# Build stage 7 - worker app
 # need the python script files... I think that's all we need?
-FROM bilbomd-worker-step5 AS bilbomd-perlmutter-worker
-ARG USER_ID=62704
+FROM bilbomd-worker-step2 AS bilbomd-perlmutter-worker
+ARG USER_ID
 WORKDIR /app
 COPY scripts/ scripts/
-#
+
+# Needed in order to have podman-hpc runtime run as me.
 RUN chown -R $USER_ID:0 /app
