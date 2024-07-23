@@ -61,19 +61,12 @@ RUN ./configure
 RUN make -j$(nproc) -C build/cmake install
 RUN cp /usr/local/src/charmm/bin/charmm /usr/local/bin/
 
-
 # -----------------------------------------------------------------------------
 # Build stage 5 - BioXTASRAW
 FROM build-charmm AS bilbomd-worker-step1
 
-# Install deps
-# RUN apt-get update && \
-#     apt-get install -y zip build-essential libarchive13
-
 # Copy the BioXTAS GitHiub master zip file
-# 1e2b05c74bbc595dc84e64ee962680b700b258be
 WORKDIR /tmp
-# RUN git clone https://github.com/jbhopkins/bioxtasraw.git
 COPY bioxtas/bioxtasraw-master.zip .
 RUN unzip bioxtasraw-master.zip && rm bioxtasraw-master.zip
 
@@ -86,12 +79,12 @@ RUN python setup.py build_ext --inplace && \
 # Build stage 6 - IMP
 FROM bilbomd-worker-step1 AS bilbomd-worker-step2
 
-RUN apt-get install -y software-properties-common && \
+RUN apt-get update && \ 
+    apt-get install -y software-properties-common && \
     add-apt-repository ppa:salilab/ppa && \
     apt-get update && \
     apt-get install -y imp && \
     rm -rf /var/lib/apt/lists/*
-
 
 # -----------------------------------------------------------------------------
 # Build stage 7 - worker app
