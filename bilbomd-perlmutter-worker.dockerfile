@@ -1,7 +1,10 @@
 # -----------------------------------------------------------------------------
 # Build stage 1 - Install build tools & dependencies
 # FROM ubuntu:24.04 AS builder
-FROM nvcr.io/nvidia/cuda:12.5.1-devel-ubuntu24.04 AS builder
+# FROM nvcr.io/nvidia/cuda:12.5.1-devel-ubuntu24.04 AS builder
+# FROM nvcr.io/nvidia/cuda:12.2.2-devel-ubuntu22.04 AS builder
+# FROM nvcr.io/nvidia/cuda:12.0.0-devel-ubuntu22.04 AS builder
+FROM nvcr.io/nvidia/cuda:12.0.1-devel-ubuntu22.04 AS builder
 RUN apt-get update && \
     apt-get install -y cmake gcc gfortran g++ python3 \
     libpmix-bin libpmix-dev parallel wget bzip2 ncat \
@@ -41,14 +44,24 @@ COPY ./openmm/${OPENMM_VER}.tar.gz /usr/local/src
 RUN tar -zxvf /usr/local/src/${OPENMM_VER}.tar.gz -C /usr/local/src && \
     rm /usr/local/src/${OPENMM_VER}.tar.gz
 WORKDIR /usr/local/src/openmm-${OPENMM_VER}/build
-RUN cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local
+RUN cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local/openmm
 
 RUN make -j$(nproc) && make install
+
+# Set environment variables needed for CHARMM build
+ENV CUDATK=/usr/local/cuda
+ENV OPENMM_PLUGIN_DIR=/usr/local/openmm/lib/plugins
+ENV LD_LIBRARY_PATH=/usr/local/openmm/lib:$OPENMM_PLUGIN_DIR:$LD_LIBRARY_PATH
 
 # -----------------------------------------------------------------------------
 # Build stage 4 - CHARMM
 FROM build-openmm AS build-charmm
 ARG CHARMM_VER=c48b2
+
+# Probably not needed for OpenMM, but installed anyways for testing purposes.
+RUN apt-get update && \ 
+    apt-get install -y fftw3 fftw3-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
 RUN mkdir -p /usr/local/src && \
@@ -56,13 +69,13 @@ RUN mkdir -p /usr/local/src && \
     rm /usr/local/src/${CHARMM_VER}.tar.gz
 
 WORKDIR /usr/local/src/charmm
-RUN ./configure
+RUN ./configure --with-gnu
 
 RUN make -j$(nproc) -C build/cmake install
 RUN cp /usr/local/src/charmm/bin/charmm /usr/local/bin/
 
 # -----------------------------------------------------------------------------
-# Build stage 5 - BioXTASRAW
+# Build stage 5 - BioXTAS RAW
 FROM build-charmm AS bilbomd-worker-step1
 
 # Copy the BioXTAS GitHiub master zip file
