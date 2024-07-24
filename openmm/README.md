@@ -5,17 +5,24 @@ tar xvf 8.1.2.tar.gz
 cd openmm-8.1.2/
 mkdir build
 cd build/
-cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local
+cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local/openmm
 
 make -j8
 make install
 
 ## Docker builds
 
-### bilbomd/bilbomd-perlmutter-worker:0.0.9
+### bilbomd/bilbomd-perlmutter-worker:0.0.12
 
-build with OpenMM 8.1.2
+ - OpenMM 8.1.2
+ - nvcr.io/nvidia/cuda:12.2.2-devel-ubuntu22.04
 
-### bilbomd/bilbomd-perlmutter-worker:0.0.10
+### bilbomd/bilbomd-perlmutter-worker:0.0.13
 
-build with OpenMM 8.0.0
+ - OpenMM 8.1.2
+ - nvcr.io/nvidia/cuda:12.0.0-devel-ubuntu22.04
+
+### bilbomd/bilbomd-perlmutter-worker:0.0.14
+
+ - OpenMM 8.1.2
+ - nvcr.io/nvidia/cuda:12.0.1-devel-ubuntu22.04
