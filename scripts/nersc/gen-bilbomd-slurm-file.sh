@@ -14,10 +14,10 @@ UUID=$1
 # -----------------------------------------------------------------------------
 # SBATCH STUFF
 project="m4659"
-queue="debug"
+queue="regular"
 constraint="gpu"
 nodes="1"
-time="00:30:00"
+time="00:60:00"
 mailtype="end,fail"
 mailuser="sclassen@lbl.gov"
 
@@ -37,17 +37,7 @@ UPLOAD_DIR=${CFS}/${project}/bilbomd-uploads/${UUID}
 WORKDIR=${PSCRATCH}/bilbmod/${UUID}
 TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
 
-# UPLOAD_DIR=${PWD}/bilbomd-uploads/${UUID}
-# WORKDIR=${PWD}/workdir/${UUID}
-# TEMPLATEDIR=${PWD}/bilbomd-templates
-
-# WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.8
-
-# OpenMM 8.1.2 
-# WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.9
-
-# OpenMM 8.0.0 
-WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.10
+WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.14
 
 # other globals
 g_md_inp_files=()
@@ -292,47 +282,48 @@ generate_pdb2crd_input_files() {
 }
 
 run_autorg(){
-    # runs autoprg.py
-    # which will return an onject with this shape
+    # Runs autorg.py
+    # which will return an object with this shape
     # {"rg": 46, "rg_min": 37, "rg_max": 69}
-    local command="cd /bilbomd/work/ && python /app/scripts/autorg.py $saxs_data > autorg_output.txt"
-    # docker run --rm --userns=keep-id --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command"
-    docker run --rm --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command"
+    local command="cd /bilbomd/work/ && python /app/scripts/autorg.py $saxs_data > autorg_output.txt 2>autorg_error.log"
+    docker run --rm --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command" 2>/dev/null
+}
+
+generate_md_input_files() {
+    echo "Calculate Rg values"
+    run_autorg
+
     if [[ -f "${WORKDIR}/autorg_output.txt" ]]; then
         local output=$(cat "${WORKDIR}/autorg_output.txt")
-        local rg_min=$(echo $output | jq '.rg_min')
-        local rg_max=$(echo $output | jq '.rg_max')
-        echo "$rg_min $rg_max"
+        # Use sed to extract JSON object
+        local json_output=$(echo "$output" | sed -n 's/.*\({.*}\).*/\1/p')
+        local rg_min=$(echo $json_output | jq '.rg_min')
+        local rg_max=$(echo $json_output | jq '.rg_max')
+
+        echo "Rg range: $rg_min to $rg_max"
+        # Calculate the step size
+        local step=$(( (rg_max - rg_min) / 4 ))
+        step=$(( step > 0 ? step : 1 ))  # Ensuring that step is at least 1
+        echo "Rg step is: ${step} Ang."
+
+        # Base template for CHARMM files
+        local charmm_template="dynamics"
+
+        for (( rg=rg_min; rg<=rg_max; rg+=step )); do
+            local charmm_inp_file="${charmm_template}_rg${rg}.inp"
+            local inp_basename="${charmm_template}_rg${rg}"
+            template_md_input_files $charmm_inp_file $inp_basename $rg
+            g_md_inp_files+=("$charmm_inp_file")
+            g_rgs+="${rg} "
+        done
     else
         echo "Output file not found." >&2
         exit 1
     fi
 }
 
-generate_md_input_files() {
-    echo "Calculate Rg values"
-    local rg_values=$(run_autorg)
-    local rg_min=$(echo $rg_values | cut -d' ' -f1)
-    local rg_max=$(echo $rg_values | cut -d' ' -f2)
 
-    echo "Rg range: $rg_min to $rg_max"
-    # Calculate the step size
-    local step=$(($((rg_max - rg_min)) / 4))
-    local step=$(( step > 0 ? step : 1 ))  # Ensuring that step is at least 1
-    echo "Rg step is: ${step} Ang."
 
-    # Base template for CHARMM files
-    local charmm_template="dynamics"
-
-    for (( rg=rg_min; rg<=rg_max; rg+=step )); do
-        local charmm_inp_file="${charmm_template}_rg${rg}.inp"
-        local inp_basename="${charmm_template}_rg${rg}"
-        template_md_input_files $charmm_inp_file $inp_basename $rg
-        # g_md_inp_files+="${charmm_inp_file} "
-        g_md_inp_files+=("$charmm_inp_file")
-        g_rgs+="${rg} "
-    done
-}
 
 template_dcd2pdb_file() {
     local inp_file="$1"
