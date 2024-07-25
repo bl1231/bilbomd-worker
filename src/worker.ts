@@ -46,7 +46,7 @@ const checkNERSC = async () => {
       logger.info(`Successfully obtained NERSC token: ${token.slice(0, 10)}...`)
       return true
     } else {
-      logger.info(`Did not successfully obtained NERSC token: ${token}`)
+      logger.warn(`Did not successfully obtain NERSC token: ${token}`)
       return false
     }
   } catch (error) {
