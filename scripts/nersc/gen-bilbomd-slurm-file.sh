@@ -33,18 +33,27 @@ else
     exit 1  # Exit the script if the constraint is not recognized
 fi
 
-UPLOAD_DIR=${CFS}/${project}/bilbomd-uploads/${UUID}
+# Set the environment (default to 'development' if not set)
+ENVIRONMENT=${ENVIRONMENT:-development}
+
+# Map 'development' to 'dev' and 'production' to 'prod'
+if [ "$ENVIRONMENT" = "production" ]; then
+  ENV_DIR="prod"
+else
+  ENV_DIR="dev"
+fi
+
+# Define base directories
+BASE_DIR=${CFS}/${project}/bilbomd
+UPLOAD_DIR=${BASE_DIR}/${ENV_DIR}/uploads
 WORKDIR=${PSCRATCH}/bilbmod/${UUID}
 TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
 
-# UPLOAD_DIR=${PWD}/bilbomd-uploads/${UUID}
-# WORKDIR=${PWD}/workdir/${UUID}
-# TEMPLATEDIR=${PWD}/bilbomd-templates
+echo "Upload directory: $UPLOAD_DIR"
+echo "Work directory: $WORKDIR"
+echo "Template directory: $TEMPLATEDIR"
 
-WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.8
-# WORKER=bl1231/bilbomd-perlmutter-worker
-
-
+WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.14
 
 # other globals
 g_md_inp_files=()
@@ -289,47 +298,48 @@ generate_pdb2crd_input_files() {
 }
 
 run_autorg(){
-    # runs autoprg.py
-    # which will return an onject with this shape
+    # Runs autorg.py
+    # which will return an object with this shape
     # {"rg": 46, "rg_min": 37, "rg_max": 69}
-    local command="cd /bilbomd/work/ && python /app/scripts/autorg.py $saxs_data > autorg_output.txt"
-    # docker run --rm --userns=keep-id --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command"
-    docker run --rm --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command"
+    local command="cd /bilbomd/work/ && python /app/scripts/autorg.py $saxs_data > autorg_output.txt 2>autorg_error.log"
+    docker run --rm --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command" 2>/dev/null
+}
+
+generate_md_input_files() {
+    echo "Calculate Rg values"
+    run_autorg
+
     if [[ -f "${WORKDIR}/autorg_output.txt" ]]; then
         local output=$(cat "${WORKDIR}/autorg_output.txt")
-        local rg_min=$(echo $output | jq '.rg_min')
-        local rg_max=$(echo $output | jq '.rg_max')
-        echo "$rg_min $rg_max"
+        # Use sed to extract JSON object
+        local json_output=$(echo "$output" | sed -n 's/.*\({.*}\).*/\1/p')
+        local rg_min=$(echo $json_output | jq '.rg_min')
+        local rg_max=$(echo $json_output | jq '.rg_max')
+
+        echo "Rg range: $rg_min to $rg_max"
+        # Calculate the step size
+        local step=$(( (rg_max - rg_min) / 4 ))
+        step=$(( step > 0 ? step : 1 ))  # Ensuring that step is at least 1
+        echo "Rg step is: ${step} Ang."
+
+        # Base template for CHARMM files
+        local charmm_template="dynamics"
+
+        for (( rg=rg_min; rg<=rg_max; rg+=step )); do
+            local charmm_inp_file="${charmm_template}_rg${rg}.inp"
+            local inp_basename="${charmm_template}_rg${rg}"
+            template_md_input_files $charmm_inp_file $inp_basename $rg
+            g_md_inp_files+=("$charmm_inp_file")
+            g_rgs+="${rg} "
+        done
     else
         echo "Output file not found." >&2
         exit 1
     fi
 }
 
-generate_md_input_files() {
-    echo "Calculate Rg values"
-    local rg_values=$(run_autorg)
-    local rg_min=$(echo $rg_values | cut -d' ' -f1)
-    local rg_max=$(echo $rg_values | cut -d' ' -f2)
 
-    echo "Rg range: $rg_min to $rg_max"
-    # Calculate the step size
-    local step=$(($((rg_max - rg_min)) / 4))
-    local step=$(( step > 0 ? step : 1 ))  # Ensuring that step is at least 1
-    echo "Rg step is: ${step} Ang."
 
-    # Base template for CHARMM files
-    local charmm_template="dynamics"
-
-    for (( rg=rg_min; rg<=rg_max; rg+=step )); do
-        local charmm_inp_file="${charmm_template}_rg${rg}.inp"
-        local inp_basename="${charmm_template}_rg${rg}"
-        template_md_input_files $charmm_inp_file $inp_basename $rg
-        # g_md_inp_files+="${charmm_inp_file} "
-        g_md_inp_files+=("$charmm_inp_file")
-        g_rgs+="${rg} "
-    done
-}
 
 template_dcd2pdb_file() {
     local inp_file="$1"
@@ -542,7 +552,7 @@ EOF
     echo "echo \"Running CHARMM Molecular Dynamics...\"" >> $WORKDIR/dynamics
     echo "update_status md Running" >> $WORKDIR/dynamics
     for inp in "${g_md_inp_files[@]}"; do
-        local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name md$count podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
+        local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name md$count podman-hpc run --gpu --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
         echo $command >> $WORKDIR/dynamics
         echo "MD_PID$count=\$!" >> $WORKDIR/dynamics
         echo "sleep 5" >> $WORKDIR/dynamics

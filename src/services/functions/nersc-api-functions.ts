@@ -8,6 +8,8 @@ import { ensureValidToken } from './nersc-api-token-functions'
 import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc'
 import { updateStepStatus } from './mongo-utils'
 
+const environment: string = process.env.NODE_ENV || 'development'
+
 type StepKey = keyof IBilboMDSteps
 
 // Configure axios to retry on failure
@@ -24,7 +26,7 @@ const executeNerscScript = async (
     'Content-Type': 'application/x-www-form-urlencoded',
     Authorization: `Bearer ${token}`
   }
-  const cmd = `${config.nerscScriptDir}/${scriptName} ${scriptArgs}`
+  const cmd = `ENVIRONMENT=${environment} ${config.nerscScriptDir}/${scriptName} ${scriptArgs}`
   logger.info(`Executing command: ${cmd}`)
   const data = qs.stringify({
     executable: `bash -c "${cmd}"`
