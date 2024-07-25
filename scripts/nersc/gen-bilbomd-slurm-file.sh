@@ -33,9 +33,25 @@ else
     exit 1  # Exit the script if the constraint is not recognized
 fi
 
-UPLOAD_DIR=${CFS}/${project}/bilbomd-uploads/${UUID}
+# Set the environment (default to 'development' if not set)
+ENVIRONMENT=${ENVIRONMENT:-development}
+
+# Map 'development' to 'dev' and 'production' to 'prod'
+if [ "$ENVIRONMENT" = "production" ]; then
+    ENV_DIR="prod"
+else
+    ENV_DIR="dev"
+fi
+
+# Define base directories
+BASE_DIR=${CFS}/${project}/bilbomd
+UPLOAD_DIR=${BASE_DIR}/${ENV_DIR}/uploads/${UUID}
 WORKDIR=${PSCRATCH}/bilbmod/${UUID}
 TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
+
+echo "Upload directory: $UPLOAD_DIR"
+echo "Work directory: $WORKDIR"
+echo "Template directory: $TEMPLATEDIR"
 
 WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.14
 
