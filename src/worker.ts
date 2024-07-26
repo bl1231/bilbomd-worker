@@ -15,6 +15,14 @@ import { processBilboMDJobNersc } from './services/process/bilbomd-nersc'
 
 dotenv.config()
 
+const environment: string = process.env.NODE_ENV || 'development'
+
+if (environment === 'production') {
+  logger.info('Running in production mode')
+} else {
+  logger.info('Running in development mode')
+}
+
 connectDB()
 
 let bilboMdWorker: Worker
@@ -38,7 +46,7 @@ const checkNERSC = async () => {
       logger.info(`Successfully obtained NERSC token: ${token.slice(0, 10)}...`)
       return true
     } else {
-      logger.info(`Did not successfully obtained NERSC token: ${token}`)
+      logger.warn(`Did not successfully obtain NERSC token: ${token}`)
       return false
     }
   } catch (error) {

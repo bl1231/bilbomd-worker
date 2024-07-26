@@ -11,7 +11,19 @@ UUID=$1
 
 PROJECT="m4659"
 
-UPLOAD_DIR=${CFS}/${PROJECT}/bilbomd-uploads/${UUID}
+# Set the environment (default to 'development' if not set)
+ENVIRONMENT=${ENVIRONMENT:-development}
+
+# Map 'development' to 'dev' and 'production' to 'prod'
+if [ "$ENVIRONMENT" = "production" ]; then
+    ENV_DIR="prod"
+else
+    ENV_DIR="dev"
+fi
+
+# Define base directories
+BASE_DIR=${CFS}/${PROJECT}/bilbomd
+UPLOAD_DIR=${BASE_DIR}/${ENV_DIR}/uploads/${UUID}
 WORKDIR=${PSCRATCH}/bilbmod/${UUID}
 
 echo "Copying results back to CFS..."
