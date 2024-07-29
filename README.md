@@ -37,6 +37,7 @@ To build `bilbomd-spin-worker` for running on the SPIN Kubernetes cluster. The `
 cd bilbomd-worker
 podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-worker -f bilbomd-spin-worker.dockerfile .
 ```
+test
 
 ## Authors
 
