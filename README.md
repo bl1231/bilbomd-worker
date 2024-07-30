@@ -38,6 +38,8 @@ cd bilbomd-worker
 podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-worker -f bilbomd-spin-worker.dockerfile .
 ```
 
+test2-webhook-api
+
 ## Authors
 
 - Scott Classen sclassen at lbl dot gov
