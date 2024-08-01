@@ -26,12 +26,4 @@ interface WebhooksJob extends Job {
   id: string
 }
 
-type WorkerJob =
-  | HelloWorldJob
-  | DoSomeHeavyComputingJob
-  | MayFailOrNotJob
-  | BilboMDPDBJob
-  | BilboMDCRDJob
-  | BilboMDAutoJob
-  | Pdb2CrdJob
-  | WebhooksJob
+type WorkerJob = BilboMDPDBJob | BilboMDCRDJob | BilboMDAutoJob | Pdb2CrdJob | WebhooksJob

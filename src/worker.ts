@@ -1,5 +1,4 @@
 import * as dotenv from 'dotenv'
-// import 'module-alias/register'
 import { connectDB } from './helpers/db'
 import { Job, Worker, WorkerOptions } from 'bullmq'
 import { WorkerJob } from './types/jobtypes'
@@ -142,7 +141,7 @@ const webhooksWorkerHandler = async (job: Job<WorkerJob>) => {
     // logger.info(`webhooksWorkerHandler JOB: ${JSON.stringify(job)}`)
     logger.info(`webhooksWorkerHandler JOB.DATA: ${JSON.stringify(job.data)}`)
     switch (job.data.type) {
-      case 'docker-build':
+      case 'webhooks':
         await processDockerBuildJob(job)
         logger.info(`Finish job: ${job.name}`)
         break
