@@ -14,17 +14,17 @@ interface MayFailOrNotJob {
 }
 interface BilboMDPDBJob extends Job {
   type: 'pdb'
-  data: { title: string; uuid: string; jobid: string }
+  data: { type: string; title: string; uuid: string; jobid: string }
   id: string
 }
 interface BilboMDCRDJob extends Job {
   type: 'crd_psf'
-  data: { title: string; uuid: string; jobid: string }
+  data: { type: string; title: string; uuid: string; jobid: string }
   id: string
 }
 interface BilboMDAutoJob extends Job {
   type: 'auto'
-  data: { title: string; uuid: string; jobid: string }
+  data: { type: string; title: string; uuid: string; jobid: string }
   id: string
 }
 interface Pdb2CrdJob extends Job {
@@ -34,7 +34,7 @@ interface Pdb2CrdJob extends Job {
 }
 interface WebhooksJob extends Job {
   type: 'webhooks'
-  data: { title: string; uuid: string }
+  data: { type: string; title: string; uuid: string }
   id: string
 }
 

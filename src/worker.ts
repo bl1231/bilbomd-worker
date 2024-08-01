@@ -138,7 +138,9 @@ const webhooksWorkerHandler = async (job: Job<WorkerJob>) => {
     return
   }
   try {
-    logger.info(`webhooksWorkerHandler: ${JSON.stringify(job.data)}`)
+    logger.info(`webhooksWorkerHandler JOB: ${JSON.stringify(job)}`)
+    logger.info(`webhooksWorkerHandler JOB.DATA: ${JSON.stringify(job.data)}`)
+    // {"type":"docker-build","title":"Docker Build","uuid":"7d3802a8-75b1-4f73-bbf0-73b9de8e3a2c"}
     switch (job.data.type) {
       case 'webhooks':
         logger.info(`Start Webhooks job: ${job.name}`)
