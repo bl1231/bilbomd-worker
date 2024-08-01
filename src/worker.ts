@@ -12,6 +12,7 @@ import { processBilboMDAutoJob } from './services/process/bilbomd-auto'
 import { processPdb2CrdJob } from './services/process/pdb-to-crd'
 import { processPdb2CrdJobNersc } from './services/process/pdb-to-crd-nersc'
 import { processBilboMDJobNersc } from './services/process/bilbomd-nersc'
+import { processDockerBuildJob } from './services/process/webhooks-nersc'
 
 dotenv.config()
 
@@ -138,29 +139,12 @@ const webhooksWorkerHandler = async (job: Job<WorkerJob>) => {
     return
   }
   try {
-    logger.info(`webhooksWorkerHandler JOB: ${JSON.stringify(job)}`)
+    // logger.info(`webhooksWorkerHandler JOB: ${JSON.stringify(job)}`)
     logger.info(`webhooksWorkerHandler JOB.DATA: ${JSON.stringify(job.data)}`)
-    // {"type":"docker-build","title":"Docker Build","uuid":"7d3802a8-75b1-4f73-bbf0-73b9de8e3a2c"}
     switch (job.data.type) {
-      case 'webhooks':
-        logger.info(`Start Webhooks job: ${job.name}`)
-        // Add logic to handle different event types
-        switch (job.data.data.title) {
-          case 'docker-build':
-            // Call a function to handle the Docker build event
-            // handleDockerBuild(job.data)
-            break
-          case 'deploy':
-            // Call a function to handle the deploy event
-            // handleDeploy(job.data)
-            break
-          // Add more cases as needed for different events
-          default:
-            logger.warn(`Unhandled event type: ${job.data.data.title}`)
-            // res.status(400).json({ message: `Unhandled event type: ${job.data.title}` })
-            return
-        }
-        logger.info(`Finished job: ${job.name}`)
+      case 'docker-build':
+        await processDockerBuildJob(job)
+        logger.info(`Finish job: ${job.name}`)
         break
     }
   } catch (error) {
