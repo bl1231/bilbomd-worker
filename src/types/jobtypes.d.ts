@@ -1,17 +1,5 @@
 import { Job } from 'bullmq'
 
-interface HelloWorldJob {
-  type: 'PrintHelloWorld'
-  data: { hello: string }
-}
-interface DoSomeHeavyComputingJob {
-  type: 'DoSomeHeavyComputing'
-  data: { magicNumber: number }
-}
-interface MayFailOrNotJob {
-  type: 'MayFailOrNot'
-  data: { magicNumber: number }
-}
 interface BilboMDPDBJob extends Job {
   type: 'pdb'
   data: { type: string; title: string; uuid: string; jobid: string }
