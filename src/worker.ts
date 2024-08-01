@@ -138,6 +138,7 @@ const webhooksWorkerHandler = async (job: Job<WorkerJob>) => {
     return
   }
   try {
+    logger.info(`webhooksWorkerHandler: ${JSON.stringify(job.data)}`)
     switch (job.data.type) {
       case 'webhooks':
         logger.info(`Start Webhooks job: ${job.name}`)
