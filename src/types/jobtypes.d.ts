@@ -21,7 +21,7 @@ interface Pdb2CrdJob extends Job {
   id: string
 }
 interface WebhooksJob extends Job {
-  type: 'webhooks'
+  type: 'docker-build'
   data: { type: string; title: string; uuid: string }
   id: string
 }
