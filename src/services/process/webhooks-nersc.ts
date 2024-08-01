@@ -1,10 +1,7 @@
 import { config } from '../../config/config'
 import { Job as BullMQJob } from 'bullmq'
 import { logger } from '../../helpers/loggers'
-import {
-  executeNerscScript,
-  monitorTaskAtNERSC
-} from 'services/functions/nersc-api-functions'
+import { executeNerscScript, monitorTaskAtNERSC } from '../functions/nersc-api-functions'
 
 const processDockerBuildJob = async (MQjob: BullMQJob) => {
   logger.info(`Processing Docker Build Job: ${MQjob.data.uuid}`)
