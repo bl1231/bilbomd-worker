@@ -1,8 +1,8 @@
 import * as dotenv from 'dotenv'
-import 'module-alias/register'
+// import 'module-alias/register'
 import { connectDB } from './helpers/db'
 import { Job, Worker, WorkerOptions } from 'bullmq'
-import { WorkerJob } from 'types/jobtypes'
+import { WorkerJob } from './types/jobtypes'
 import { logger } from './helpers/loggers'
 import { config } from './config/config'
 import { ensureValidToken } from './services/functions/nersc-api-token-functions'
@@ -27,6 +27,7 @@ connectDB()
 
 let bilboMdWorker: Worker
 let pdb2CrdWorker: Worker
+let webhooksWorker: Worker
 
 const checkNERSC = async () => {
   try {
@@ -57,22 +58,30 @@ const checkNERSC = async () => {
 
 const pauseProcessing = async () => {
   if (bilboMdWorker) {
-    await bilboMdWorker.pause() // Ensures worker exists before pausing
+    await bilboMdWorker.pause()
     logger.info('BilboMD Worker paused due to invalid NERSC tokens')
   }
   if (pdb2CrdWorker) {
-    await pdb2CrdWorker.pause() // Ensures worker exists before pausing
+    await pdb2CrdWorker.pause()
+    logger.info('PDB2CRD Worker paused due to invalid NERSC tokens')
+  }
+  if (webhooksWorker) {
+    await webhooksWorker.pause()
     logger.info('PDB2CRD Worker paused due to invalid NERSC tokens')
   }
 }
 
 const resumeProcessing = async () => {
   if (bilboMdWorker) {
-    bilboMdWorker.resume() // Resumes the worker fetching new jobs
+    bilboMdWorker.resume()
     logger.info('BilboMD Worker resumed')
   }
   if (pdb2CrdWorker) {
-    pdb2CrdWorker.resume() // Resumes the worker fetching new jobs
+    pdb2CrdWorker.resume()
+    logger.info('PDB2CRD Worker resumed')
+  }
+  if (webhooksWorker) {
+    webhooksWorker.resume()
     logger.info('PDB2CRD Worker resumed')
   }
 }
@@ -120,6 +129,42 @@ const workerHandler = async (job: Job<WorkerJob>) => {
   }
 }
 
+const webhooksWorkerHandler = async (job: Job<WorkerJob>) => {
+  // NERSC check
+  if (config.runOnNERSC && !(await checkNERSC())) {
+    logger.error('NERSC token invalid. Pausing job processing.')
+    await pauseProcessing()
+    setTimeout(startWorkers, 10000)
+    return
+  }
+  try {
+    switch (job.data.type) {
+      case 'webhooks':
+        logger.info(`Start Webhooks job: ${job.name}`)
+        // Add logic to handle different event types
+        switch (job.data.data.title) {
+          case 'docker-build':
+            // Call a function to handle the Docker build event
+            // handleDockerBuild(job.data)
+            break
+          case 'deploy':
+            // Call a function to handle the deploy event
+            // handleDeploy(job.data)
+            break
+          // Add more cases as needed for different events
+          default:
+            logger.warn(`Unhandled event type: ${job.data.data.title}`)
+            // res.status(400).json({ message: `Unhandled event type: ${job.data.title}` })
+            return
+        }
+        logger.info(`Finished job: ${job.name}`)
+        break
+    }
+  } catch (error) {
+    logger.error(`Error processing job ${job.id}: ${error}`)
+  }
+}
+
 const redisConn = {
   host: 'redis',
   port: 6379
@@ -136,6 +181,11 @@ const pdb2crdWorkerOptions: WorkerOptions = {
   concurrency: 20
 }
 
+const webhooksWorkerOptions: WorkerOptions = {
+  connection: redisConn,
+  concurrency: 1
+}
+
 const startWorkers = async () => {
   const systemName = config.runOnNERSC ? 'NERSC' : 'Hyperion' // Set system name based on the config
   logger.info(`Attempting to start workers on ${systemName}...`)
@@ -144,7 +194,8 @@ const startWorkers = async () => {
     if (await checkNERSC()) {
       if (
         (bilboMdWorker && bilboMdWorker.isPaused()) ||
-        (pdb2CrdWorker && pdb2CrdWorker.isPaused())
+        (pdb2CrdWorker && pdb2CrdWorker.isPaused()) ||
+        (webhooksWorker && webhooksWorker.isPaused())
       ) {
         await resumeProcessing()
       }
@@ -160,12 +211,15 @@ const startWorkers = async () => {
     }
   }
 
-  // Create workers for both scenarios as the actual creation code is the same
+  // Create workers
   bilboMdWorker = new Worker('bilbomd', workerHandler, workerOptions)
   logger.info(`BilboMD Worker started on ${systemName}`)
 
   pdb2CrdWorker = new Worker('pdb2crd', workerHandler, pdb2crdWorkerOptions)
   logger.info(`PDB2CRD Worker started on ${systemName}`)
+
+  webhooksWorker = new Worker('webhooks', webhooksWorkerHandler, webhooksWorkerOptions)
+  logger.info(`Webhooks Worker started on ${systemName}`)
 }
 
 startWorkers()

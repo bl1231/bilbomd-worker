@@ -32,6 +32,11 @@ interface Pdb2CrdJob extends Job {
   data: { title: string; uuid: string }
   id: string
 }
+interface WebhooksJob extends Job {
+  type: 'webhooks'
+  data: { title: string; uuid: string }
+  id: string
+}
 
 type WorkerJob =
   | HelloWorldJob
@@ -41,3 +46,4 @@ type WorkerJob =
   | BilboMDCRDJob
   | BilboMDAutoJob
   | Pdb2CrdJob
+  | WebhooksJob
