@@ -17,6 +17,7 @@ const processDockerBuildJob = async (MQjob: BullMQJob) => {
     )
     const buildResult = await monitorTaskAtNERSC(buildTaskID)
     logger.info(`buildResult: ${JSON.stringify(buildResult)}`)
+    await MQjob.log(`Docker Build Job Result: ${JSON.stringify(buildResult)}`)
     await MQjob.log('Finishing Docker Build Job')
     await MQjob.updateProgress(100)
   } catch (error) {
