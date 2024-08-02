@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Upload tar.gz files
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: external-files
           path: |
