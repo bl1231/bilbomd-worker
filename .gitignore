@@ -107,7 +107,9 @@ dist
 build
 
 # tar.gz files
-*.tar.gz
+# *.tar.gz
+charmm/c47b2.tar.gz
+openmpi/openmpi-5.0.3.tar.gz
 
 *.zip
 

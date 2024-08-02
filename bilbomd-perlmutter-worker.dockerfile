@@ -40,7 +40,9 @@ RUN conda install -y cython swig doxygen
 FROM build-conda AS build-openmm
 ARG OPENMM_VER=8.1.2
 
-COPY ./openmm/${OPENMM_VER}.tar.gz /usr/local/src
+# COPY ./openmm/${OPENMM_VER}.tar.gz /usr/local/src
+WORKDIR /usr/local/src
+RUN wget https://github.com/openmm/openmm/archive/refs/tags/${OPENMM_VER}.tar.gz
 RUN tar -zxvf /usr/local/src/${OPENMM_VER}.tar.gz -C /usr/local/src && \
     rm /usr/local/src/${OPENMM_VER}.tar.gz
 WORKDIR /usr/local/src/openmm-${OPENMM_VER}/build
