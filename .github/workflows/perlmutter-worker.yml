@@ -10,8 +10,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set GH_TOKEN
+        run: echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+
+      - name: List Artifacts for Debugging
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -H "Accept: application/vnd.github+json" /repos/${{ github.repository }}/actions/artifacts
+
       - name: Download external files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: external-files
 
