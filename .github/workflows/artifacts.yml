@@ -17,5 +17,3 @@ jobs:
           name: external-files
           path: |
             charmm/c48b2.tar.gz
-            path: |
-            bioxtas/bioxtasraw-master.zip
