@@ -1,4 +1,4 @@
-name: build-docker-container
+name: Build bilbomd-perlmutter-worker Docker Image
 on:
   pull_request:
     branches:
