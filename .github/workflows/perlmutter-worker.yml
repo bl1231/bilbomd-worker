@@ -10,21 +10,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set GH_TOKEN
-        run: echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+      # - name: Set GH_TOKEN
+      #   run: echo "GH_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
 
-      - name: List Artifacts for Debugging
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api -H "Accept: application/vnd.github+json" /repos/${{ github.repository }}/actions/artifacts
+      # - name: List Artifacts for Debugging
+      #   env:
+      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     gh api -H "Accept: application/vnd.github+json" /repos/${{ github.repository }}/actions/artifacts
 
-      - name: Download external files
-        uses: actions/download-artifact@v4
-        with:
-          # name: external-files
-          run-id: '1771133144'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Download external files
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     # name: external-files
+      #     run-id: '1771133144'
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3

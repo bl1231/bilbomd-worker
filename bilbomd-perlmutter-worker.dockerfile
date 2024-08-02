@@ -66,7 +66,8 @@ RUN apt-get update && \
     apt-get install -y fftw3 fftw3-dev && \
     rm -rf /var/lib/apt/lists/*
 
-COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
+# COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
+RUN wget https://bl1231.als.lbl.gov/pickup/charmm/${CHARMM_VER}.tar.gz -O /usr/local/src/${CHARMM_VER}.tar.gz
 RUN mkdir -p /usr/local/src && \
     tar -zxvf /usr/local/src/${CHARMM_VER}.tar.gz -C /usr/local/src && \
     rm /usr/local/src/${CHARMM_VER}.tar.gz
