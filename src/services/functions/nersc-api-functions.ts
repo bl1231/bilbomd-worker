@@ -29,7 +29,7 @@ const executeNerscScript = async (
   const cmd = `ENVIRONMENT=${environment} ${config.nerscScriptDir}/${scriptName} ${scriptArgs}`
   logger.info(`Executing command: ${cmd}`)
   const data = qs.stringify({
-    executable: `bash -c "${cmd}"`
+    executable: `bash -lc "${cmd}"`
   })
 
   try {
