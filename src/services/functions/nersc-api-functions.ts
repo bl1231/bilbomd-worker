@@ -30,11 +30,11 @@ const executeNerscScript = async (
   }
 
   const logFile = `/global/homes/s/sclassen/script-logs/${scriptName}-${new Date().toISOString()}.log`
-  const cmd = `ENVIRONMENT=${environment} ${config.nerscScriptDir}/${scriptName} ${scriptArgs} | tee ${logFile} 2>&1`
+  const cmd = `ENVIRONMENT=${environment} ${config.nerscScriptDir}/${scriptName} ${scriptArgs} | tee ${logFile} 2>&1 &`
   logger.info(`Executing command: ${cmd}`)
 
   const data = qs.stringify({
-    executable: `bash -c "${cmd}" &`
+    executable: `bash -c "${cmd}"`
   })
 
   try {
