@@ -173,7 +173,7 @@ const monitorJobAtNERSC = async (
       } else {
         logger.warn('No job details found or output array is empty.')
       }
-      logger.info(`Current job ${jobID} status: ${jobStatus}`)
+      // logger.info(`Current job ${jobID} status: ${jobStatus}`)
 
       if (jobStatus === 'RUNNING') {
         await updateStatus(Job)
@@ -240,7 +240,7 @@ const getSlurmOutFile = async (UUID: string, jobID: string): Promise<string> => 
       logger.error(`Error retrieving file: ${response.data.error}`)
       throw new Error(`Error retrieving file: ${response.data.error}`)
     }
-    logger.info(`File retrieved successfully.`)
+    // logger.info(`File retrieved successfully.`)
     return response.data.file // Return the content of the file as a string
   } catch (error) {
     logger.error(`Failed to download file: ${error}`)
@@ -274,7 +274,7 @@ const getSlurmStatusFile = async (UUID: string): Promise<string> => {
       logger.error(`Error retrieving file: ${response.data.error}`)
       throw new Error(`Error retrieving file: ${response.data.error}`)
     }
-    logger.info(`File retrieved successfully.`)
+    // logger.info(`File retrieved successfully.`)
     return response.data.file // Return the content of the file as a string
   } catch (error) {
     logger.error(`Failed to download file: ${error}`)

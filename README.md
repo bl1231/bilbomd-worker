@@ -51,7 +51,7 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 - 1.6.2
   - Use @bl1231/bilbomd-mongodb-schema
   - Update dependencies
-  - Update README 
+  - Update README
 - 1.6.1
   - A fair number of changes for NERSC deployment
 - 1.6.0
