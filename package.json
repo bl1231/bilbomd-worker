@@ -31,7 +31,7 @@
     "mongoose": "^8.5.2",
     "nodemailer": "^6.9.14",
     "nodemailer-express-handlebars": "^6.1.2",
-    "qs": "^6.12.3",
+    "qs": "^6.13.0",
     "winston": "^3.13.1",
     "winston-daily-rotate-file": "^5.0.0"
   },
