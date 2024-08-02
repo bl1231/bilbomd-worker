@@ -40,7 +40,10 @@ RUN conda install -y cython swig doxygen
 FROM build-conda AS build-openmm
 ARG OPENMM_VER=8.1.2
 
-COPY ./openmm/${OPENMM_VER}.tar.gz /usr/local/src
+# COPY ./openmm/${OPENMM_VER}.tar.gz /usr/local/src
+# Download the OpenMM source code using wget
+RUN wget https://github.com/openmm/openmm/archive/refs/tags/${OPENMM_VER}.tar.gz -O /usr/local/src/${OPENMM_VER}.tar.gz
+
 RUN tar -zxvf /usr/local/src/${OPENMM_VER}.tar.gz -C /usr/local/src && \
     rm /usr/local/src/${OPENMM_VER}.tar.gz
 WORKDIR /usr/local/src/openmm-${OPENMM_VER}/build
@@ -80,7 +83,10 @@ FROM build-charmm AS bilbomd-worker-step1
 
 # Copy the BioXTAS GitHiub master zip file
 WORKDIR /tmp
-COPY bioxtas/bioxtasraw-master.zip .
+# COPY bioxtas/bioxtasraw-master.zip .
+
+# Download the BioXTAS RAW master zip file using wget
+RUN wget https://github.com/jbhopkins/bioxtasraw/archive/refs/heads/master.zip -O bioxtasraw-master.zip
 RUN unzip bioxtasraw-master.zip && rm bioxtasraw-master.zip
 
 # Install BioXTAS RAW into local Python environment
