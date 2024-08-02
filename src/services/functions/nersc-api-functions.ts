@@ -20,14 +20,18 @@ const executeNerscScript = async (
   scriptArgs: string
 ): Promise<string> => {
   const token = await ensureValidToken()
+
   const url = `${config.nerscBaseAPI}/utilities/command/perlmutter`
+
   const headers = {
     accept: 'application/json',
     'Content-Type': 'application/x-www-form-urlencoded',
     Authorization: `Bearer ${token}`
   }
-  const cmd = `ENVIRONMENT=${environment} ${config.nerscScriptDir}/${scriptName} ${scriptArgs}`
+  const logFile = `/global/homes/s/sclassen/script-logs/${scriptName}-${new Date().toISOString()}.log`
+  const cmd = `ENVIRONMENT=${environment} ${config.nerscScriptDir}/${scriptName} ${scriptArgs} > ${logFile} 2>&1`
   logger.info(`Executing command: ${cmd}`)
+
   const data = qs.stringify({
     executable: `bash -lc "${cmd}"`
   })
