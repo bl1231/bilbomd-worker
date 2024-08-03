@@ -1,8 +1,9 @@
 name: Build bilbomd-perlmutter-worker Docker Image
 on:
-  pull_request:
-    branches:
-      - main
+  # pull_request:
+  #   branches:
+  #     - main
+  workflow_dispatch:
 jobs:
   build-docker:
     runs-on: ubuntu-latest
