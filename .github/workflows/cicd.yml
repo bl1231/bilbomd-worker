@@ -3,7 +3,6 @@ name: Build and Push bilbomd-spin-worker Docker Image
 on:
   push:
     branches:
-      - 337-enhance-workflow-for-building-docker-images-using-github-actions-cicd #change  to the current branch name if you want to build an image before merging to main
       - main
   pull_request:
     branches:

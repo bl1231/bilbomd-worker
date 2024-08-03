@@ -36,7 +36,7 @@ const updateStepStatus = async (
 
     // Save the modified document
     await job.save()
-    logger.info(`Successfully updated ${stepName} status for job ${job._id}`)
+    // logger.info(`Successfully updated ${stepName} status for job ${job._id}`)
   } catch (error) {
     logger.error(
       `Error updating step status for job ${job._id} in step ${stepName}: ${error}`

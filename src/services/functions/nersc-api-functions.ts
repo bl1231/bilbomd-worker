@@ -20,14 +20,19 @@ const executeNerscScript = async (
   scriptArgs: string
 ): Promise<string> => {
   const token = await ensureValidToken()
+
   const url = `${config.nerscBaseAPI}/utilities/command/perlmutter`
+
   const headers = {
     accept: 'application/json',
     'Content-Type': 'application/x-www-form-urlencoded',
     Authorization: `Bearer ${token}`
   }
-  const cmd = `ENVIRONMENT=${environment} ${config.nerscScriptDir}/${scriptName} ${scriptArgs}`
+
+  const logFile = `/global/homes/s/sclassen/script-logs/${scriptName}-${new Date().toISOString()}.log`
+  const cmd = `ENVIRONMENT=${environment} ${config.nerscScriptDir}/${scriptName} ${scriptArgs} > ${logFile} 2>&1`
   logger.info(`Executing command: ${cmd}`)
+
   const data = qs.stringify({
     executable: `bash -c "${cmd}"`
   })
@@ -168,7 +173,7 @@ const monitorJobAtNERSC = async (
       } else {
         logger.warn('No job details found or output array is empty.')
       }
-      logger.info(`Current job ${jobID} status: ${jobStatus}`)
+      // logger.info(`Current job ${jobID} status: ${jobStatus}`)
 
       if (jobStatus === 'RUNNING') {
         await updateStatus(Job)
@@ -235,7 +240,7 @@ const getSlurmOutFile = async (UUID: string, jobID: string): Promise<string> => 
       logger.error(`Error retrieving file: ${response.data.error}`)
       throw new Error(`Error retrieving file: ${response.data.error}`)
     }
-    logger.info(`File retrieved successfully.`)
+    // logger.info(`File retrieved successfully.`)
     return response.data.file // Return the content of the file as a string
   } catch (error) {
     logger.error(`Failed to download file: ${error}`)
@@ -269,7 +274,7 @@ const getSlurmStatusFile = async (UUID: string): Promise<string> => {
       logger.error(`Error retrieving file: ${response.data.error}`)
       throw new Error(`Error retrieving file: ${response.data.error}`)
     }
-    logger.info(`File retrieved successfully.`)
+    // logger.info(`File retrieved successfully.`)
     return response.data.file // Return the content of the file as a string
   } catch (error) {
     logger.error(`Failed to download file: ${error}`)

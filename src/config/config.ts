@@ -8,6 +8,7 @@ export const config = {
   nerscScriptDir: process.env.SCRIPT_DIR || '/global/cfs/cdirs/m4659/bilbomd-scripts',
   scripts: {
     prepareSlurmScript: process.env.PREPARE_SLURM_SCRIPT || 'gen-bilbomd-slurm-file.sh',
-    copyFromScratchToCFSScript: process.env.CP2CFS_SCRIPT || 'copy-back-to-cfs.sh'
+    copyFromScratchToCFSScript: process.env.CP2CFS_SCRIPT || 'copy-back-to-cfs.sh',
+    dockerBuildScript: process.env.DOCKER_BUILD_SCRIPT || 'build-perlmutter-worker.sh'
   }
 }
