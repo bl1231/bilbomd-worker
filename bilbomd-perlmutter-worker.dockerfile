@@ -9,7 +9,7 @@ RUN apt-get update && \
     apt-get install -y cmake gcc gfortran g++ python3 \
     libpmix-bin libpmix-dev parallel wget bzip2 ncat \
     gfortran libgl1-mesa-dev libarchive13 zip build-essential && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
 # Build stage 2 - Miniconda3
@@ -24,16 +24,15 @@ RUN wget "https://github.com/conda-forge/miniforge/releases/latest/download/Mini
 ENV PATH="/miniforge3/bin/:${PATH}"
 
 # Update conda
-RUN conda update -y -n base -c defaults conda
+RUN conda update -y -n base -c defaults conda && \
+    conda install -y cython swig doxygen && \
+    conda clean -afy
 
-# Copy in the environment.yml file
+# Copy environment.yml and install dependencies
 COPY environment.yml /tmp/environment.yml
-
-# Update existing conda base env from environment.yml
 RUN conda env update -f /tmp/environment.yml && \
-    rm /tmp/environment.yml
-
-RUN conda install -y cython swig doxygen
+    rm /tmp/environment.yml && \
+    conda clean -afy
 
 # -----------------------------------------------------------------------------
 # Build stage 3 - OpenMM
@@ -62,9 +61,9 @@ FROM build-openmm AS build-charmm
 ARG CHARMM_VER=c48b2
 
 # Probably not needed for OpenMM, but installed anyways for testing purposes.
-RUN apt-get update && \ 
-    apt-get install -y fftw3 fftw3-dev && \
-    rm -rf /var/lib/apt/lists/*
+# RUN apt-get update && \ 
+#     apt-get install -y fftw3 fftw3-dev && \
+#     rm -rf /var/lib/apt/lists/*
 
 # COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
 RUN wget https://bl1231.als.lbl.gov/pickup/charmm/${CHARMM_VER}.tar.gz -O /usr/local/src/${CHARMM_VER}.tar.gz
@@ -93,18 +92,18 @@ RUN unzip bioxtasraw-master.zip && rm bioxtasraw-master.zip
 # Install BioXTAS RAW into local Python environment
 WORKDIR /tmp/bioxtasraw-master
 RUN python setup.py build_ext --inplace && \
-    pip install .
+    pip install . && \
+    rm -rf /tmp/bioxtasraw-master
 
 # -----------------------------------------------------------------------------
 # Build stage 6 - IMP
 FROM bilbomd-worker-step1 AS bilbomd-worker-step2
-
-RUN apt-get update && \ 
-    apt-get install -y software-properties-common && \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends software-properties-common && \
     add-apt-repository ppa:salilab/ppa && \
     apt-get update && \
-    apt-get install -y imp && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends imp && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
 # Build stage 7 - worker app
