@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 
 # Exit immediately if a command exits with a non-zero status
 set -e
@@ -16,9 +16,13 @@ fi
 UUID=$1
 
 echo "Building bilbomd-perlmutter-worker with UID: $UID"
-
+env
 # Define repository and branch
-REPO_URL="https://github.com/bl1231/bilbomd-worker.git"
+# This is the type of stuff that could be passed in or extracted 
+# from the GitHub webhook payload.
+#REPO_URL="git@github.com:bl1231/bilbomd-worker.git"
+GITHUB_PAT="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"
+REPO_URL="https://${GITHUB_PAT}@github.com/bl1231/bilbomd-worker.git"
 BRANCH="352-trigger-docker-build-on-perlmutter"
 REPO_DIR="${HOME}/projects/webhooks/build/bilbomd-worker"
 OPENMM_VER="8.1.2"
@@ -70,3 +74,5 @@ podman-hpc build --build-arg USER_ID=$UID -t bilbomd/bilbomd-perlmutter-worker -
 # Migrate (or push) the Docker image
 echo "Migrating Docker image..."
 podman-hpc migrate bilbomd/bilbomd-perlmutter-worker:latest
+
+echo "Done ${date}"
