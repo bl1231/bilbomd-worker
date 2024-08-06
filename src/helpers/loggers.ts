@@ -18,7 +18,7 @@ const loggerTransports = [
     filename: `${logsFolder}/bilbomd-worker-%DATE%.log`,
     datePattern: 'YYYY-MM-DD',
     zippedArchive: true,
-    maxSize: '20m',
+    maxSize: '10m',
     maxFiles: '14d'
   }),
   new DailyRotateFile({
@@ -26,7 +26,7 @@ const loggerTransports = [
     filename: `${logsFolder}/bilbomd-worker-error-%DATE%.log`,
     datePattern: 'YYYY-MM-DD',
     zippedArchive: true,
-    maxSize: '20m',
+    maxSize: '10m',
     maxFiles: '30d'
   }),
   new transports.Console({ format: combine(colorize(), logFormat) })
