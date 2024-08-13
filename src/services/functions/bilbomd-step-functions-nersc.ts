@@ -18,6 +18,18 @@ import {
 import { prepareResults } from './bilbomd-step-functions'
 import { cleanupJob } from './job-utils'
 
+interface INerscTaskResult {
+  id: string
+  status: 'completed' | 'failed' | 'running' | 'pending' | string
+  result:
+    | string
+    | {
+        status: 'ok' | 'error' | string
+        output: string
+        error: string
+      }
+}
+
 // Define type guard functions
 function isBilboMDCRDJob(job: IJob): job is IBilboMDCRDJob {
   return (job as IBilboMDCRDJob).crd_file !== undefined
@@ -34,30 +46,63 @@ function isBilboMDAutoJob(job: IJob): job is IBilboMDAutoJob {
 const makeBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
   try {
     await MQjob.log('start nersc prepare slurm batch')
+
     let status: IStepStatus = {
       status: 'Running',
       message: 'Preparation of Slurm batch file has started.'
     }
     await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+
     const prepTaskID = await executeNerscScript(
       config.scripts.prepareSlurmScript,
       DBjob.uuid
     )
-    const prepResult = await monitorTaskAtNERSC(prepTaskID)
+
+    const prepResult: INerscTaskResult = await monitorTaskAtNERSC(prepTaskID)
     logger.info(`prepResult: ${JSON.stringify(prepResult)}`)
-    status = {
-      status: 'Success',
-      message: 'Slurm batch file prepared successfully.'
+
+    if (
+      prepResult.status === 'completed' &&
+      typeof prepResult.result !== 'string' &&
+      prepResult.result.status === 'ok'
+    ) {
+      status = {
+        status: 'Success',
+        message: 'Slurm batch file prepared successfully.'
+      }
+      await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+    } else {
+      let errorMessage = `Task failed with status: ${prepResult.status}`
+
+      if (typeof prepResult.result === 'string') {
+        if (prepResult.result.includes('timed out after 600 seconds')) {
+          errorMessage += ', reason: Command timed out after 600 seconds'
+        } else {
+          errorMessage += `, result: ${prepResult.result}`
+        }
+      } else if (prepResult.result && prepResult.result.error) {
+        errorMessage += `, error: ${prepResult.result.error}`
+      }
+
+      status = {
+        status: 'Error',
+        message: errorMessage
+      }
+      await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+
+      // Optionally throw an error if you want the process to be halted
+      throw new Error(errorMessage)
     }
-    await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+
     await MQjob.log('end nersc prepare slurm batch')
   } catch (error) {
+    const errorMessage = `Failed to prepare Slurm batch file: ${error}`
     const status: IStepStatus = {
       status: 'Error',
-      message: `Failed to prepare Slurm batch file: ${error}`
+      message: errorMessage
     }
     await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
-    logger.error(`Error during preparation of Slurm batch: ${error}`)
+    logger.error(`Error during preparation of Slurm batch: ${errorMessage}`)
   }
 }
 
