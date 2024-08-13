@@ -10,6 +10,16 @@
   "[markdown]": {
     "editor.formatOnSave": false
   },
+    "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true
+  },
   "editor.formatOnPaste": true,
   "editor.formatOnSave": true
 }
