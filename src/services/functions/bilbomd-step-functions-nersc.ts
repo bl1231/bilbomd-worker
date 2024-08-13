@@ -61,36 +61,45 @@ const makeBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
     const prepResult: INerscTaskResult = await monitorTaskAtNERSC(prepTaskID)
     logger.info(`prepResult: ${JSON.stringify(prepResult)}`)
 
-    if (
-      prepResult.status === 'completed' &&
-      typeof prepResult.result !== 'string' &&
-      prepResult.result.status === 'ok'
-    ) {
-      status = {
-        status: 'Success',
-        message: 'Slurm batch file prepared successfully.'
-      }
-      await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
-    } else {
-      let errorMessage = `Task failed with status: ${prepResult.status}`
+    if (prepResult.status === 'completed') {
+      let resultData
 
       if (typeof prepResult.result === 'string') {
-        if (prepResult.result.includes('timed out after 600 seconds')) {
-          errorMessage += ', reason: Command timed out after 600 seconds'
-        } else {
-          errorMessage += `, result: ${prepResult.result}`
+        try {
+          resultData = JSON.parse(prepResult.result)
+        } catch (parseError) {
+          logger.error(`Failed to parse result JSON: ${parseError}`)
+          throw new Error(`Failed to parse result JSON: ${prepResult.result}`)
         }
-      } else if (prepResult.result && prepResult.result.error) {
-        errorMessage += `, error: ${prepResult.result.error}`
+      } else {
+        resultData = prepResult.result
       }
 
+      if (resultData && resultData.status === 'ok') {
+        status = {
+          status: 'Success',
+          message: 'Slurm batch file prepared successfully.'
+        }
+        await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+      } else {
+        let errorMessage = `Task failed with status: ${prepResult.status}`
+        if (resultData && resultData.error) {
+          errorMessage += `, error: ${resultData.error}`
+        }
+        status = {
+          status: 'Error',
+          message: errorMessage
+        }
+        await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+        throw new Error(errorMessage)
+      }
+    } else {
+      const errorMessage = `Unexpected task status: ${prepResult.status}`
       status = {
         status: 'Error',
         message: errorMessage
       }
       await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
-
-      // Optionally throw an error if you want the process to be halted
       throw new Error(errorMessage)
     }
 
@@ -130,10 +139,10 @@ const submitBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
   } catch (error) {
     const status: IStepStatus = {
       status: 'Error',
-      message: `Failed to prepare Slurm batch file: ${error}`
+      message: `Failed to submit Slurm batch file: ${error}`
     }
     await updateStepStatus(DBjob, 'nersc_submit_slurm_batch', status)
-    logger.error(`Error during preparation of Slurm batch: ${error}`)
+    logger.error(`Error during submission of Slurm batch: ${error}`)
   }
 }
 
