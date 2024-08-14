@@ -19,7 +19,7 @@
   "license": "ISC",
   "dependencies": {
     "@bl1231/bilbomd-mongodb-schema": "^1.0.23",
-    "axios": "^1.7.3",
+    "axios": "^1.7.4",
     "axios-retry": "^4.5.0",
     "bullmq": "^5.12.5",
     "dotenv": "^16.4.5",
