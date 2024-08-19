@@ -192,6 +192,10 @@ def apply_charmm_residue_names(lines):
         "DG ": "GUA ",
         "DA ": "ADE ",
         "DT ": "THY ",
+        " DC": "CYT ",
+        " DG": "GUA ",
+        " DA": "ADE ",
+        " DT": "THY ",
         "NAG": "BGLC",
         "BMA": "BMAN",
         "MAN": "AMAN",
@@ -389,7 +393,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
 
 def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
     """
-    Melds individual chain CRD files into a sinle CRD file for subsequent CHARMM steps
+    Melds individual chain CRD files into a single CRD file for subsequent CHARMM steps
     """
     charmm_generate_options = {
         "PRO": "setup warn first none last CTER",
