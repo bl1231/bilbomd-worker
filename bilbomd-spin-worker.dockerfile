@@ -4,12 +4,37 @@ FROM node:20-slim AS worker-step1
 
 # Update package lists, install Python, and create alias
 RUN apt-get update && \
-    apt-get install -y python3 python3-pip && \
+    apt-get install -y python3 python3-pip cmake gcc gfortran g++ && \
     ln -s /usr/bin/python3 /usr/bin/python
 
 # -----------------------------------------------------------------------------
+# Build stage 2 - Configure CHARMM
+FROM worker-step1 AS build_charmm
+ARG CHARMM_VER=c48b2
+
+# Combine the mkdir, tar extraction, and cleanup into a single RUN command
+# COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
+RUN wget https://bl1231.als.lbl.gov/pickup/charmm/${CHARMM_VER}.tar.gz -O /usr/local/src/${CHARMM_VER}.tar.gz
+RUN mkdir -p /usr/local/src && \
+    tar -zxvf /usr/local/src/${CHARMM_VER}.tar.gz -C /usr/local/src && \
+    rm /usr/local/src/${CHARMM_VER}.tar.gz
+
+# Configure CHARMM in the same layer as the extraction if possible
+WORKDIR /usr/local/src/charmm
+RUN ./configure
+
+# Build CHARMM
+RUN make -j$(nproc) -C build/cmake install
+
+# -----------------------------------------------------------------------------
+# Build stage 3 - Copy CHARMM binary
+#   I'm not sure if this needs to be a separate step.
+FROM build_charmm AS worker-step2
+COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
+
+# -----------------------------------------------------------------------------
 # Build stage 2 - worker app for deployment on SPIN
-FROM worker-step1 AS bilbomd-spin-worker
+FROM worker-step2 AS bilbomd-spin-worker
 ARG GITHUB_TOKEN
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
