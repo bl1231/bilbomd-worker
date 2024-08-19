@@ -35,16 +35,28 @@ COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 # -----------------------------------------------------------------------------
 # Build stage 2 - worker app for deployment on SPIN
 FROM worker-step2 AS bilbomd-spin-worker
+ARG USER_ID=1001
+ARG GROUP_ID=1001
 ARG GITHUB_TOKEN
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
 WORKDIR /app
 
+# Create a user and group with the provided IDs
+RUN mkdir -p /home/bilbo
+RUN groupadd -g $GROUP_ID bilbomd && useradd -u $USER_ID -g $GROUP_ID -d /home/bilbo -s /bin/bash bilbo
+
+# Change ownership of directories to the user and group
+RUN chown -R bilbo:bilbomd /app /bilbomd/uploads /home/bilbo
+
 # Update NPM
 RUN npm install -g npm@10.8.2
 
+# Switch to the non-root user
+USER bilbo:bilbomd
+
 # Copy over the package*.json files
-COPY package*.json .
+COPY --chown=bilbo:bilbomd package*.json .
 
 # Create .npmrc file using the build argument
 RUN echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" > /root/.npmrc
@@ -56,7 +68,7 @@ RUN npm ci
 RUN unset GITHUB_TOKEN
 
 # Copy the app code
-COPY . .
+COPY --chown=bilbo:bilbomd . .
 
 # USER root
 RUN chown -R 62704:0 /app
