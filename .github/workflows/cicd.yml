@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
+    paths-ignore:
+      - '**/*.md'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - '**/*.md'
 
 jobs:
   build-and-push-image:
@@ -35,25 +41,40 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}/bilbomd-spin-worker
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha
+            type=raw,value=latest
+          labels: ${{ steps.meta.outputs.labels }}
 
       - name: Generate version
         id: version
-        run: echo "VERSION=$(date +'%Y.%m.%d')-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
-      - name: Build and push Docker image
+      - name: Build and push bilbomd-spin-worker Docker image (latest)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: bilbomd-spin-worker.dockerfile
           push: true
-          platforms: linux/amd64 # add linux/amd64,linux/arm64 to build the image for both amd and arm64 architecture
+          platforms: linux/amd64
           tags: |
             ghcr.io/${{ github.repository }}/bilbomd-spin-worker:latest
-            ghcr.io/${{ github.repository }}/bilbomd-spin-worker:${{ steps.version.outputs.VERSION }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push bilbomd-spin-worker Docker image (versioned)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: bilbomd-spin-worker.dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/${{ github.repository }}/bilbomd-spin-worker:${{ env.VERSION }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
