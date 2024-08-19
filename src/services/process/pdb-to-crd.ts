@@ -14,14 +14,14 @@ interface Pdb2CrdCharmmInputData {
 }
 
 const initializeJob = async (MQJob: BullMQJob) => {
-  logger.info('-------------------------------------')
+  logger.info('---------------------initializeJob---------------------')
   // Clear the BullMQ Job logs
   await MQJob.clearLogs()
   await MQJob.log('Init!')
 }
 
 const cleanupJob = async (MQjob: BullMQJob) => {
-  logger.info('-------------------------------------')
+  logger.info('----------------------cleanupJob-----------------------')
   await MQjob.log('Done!')
 }
 
