@@ -3,6 +3,9 @@
 FROM node:20-slim AS worker-step1
 RUN apt-get update
 
+# Install Python
+RUN apt-get install -y python3 python3-pip
+
 # -----------------------------------------------------------------------------
 # Build stage 2 - worker app for deployment on SPIN
 FROM worker-step1 AS bilbomd-spin-worker
