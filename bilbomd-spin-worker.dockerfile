@@ -4,7 +4,7 @@ FROM node:20-slim AS worker-step1
 
 # Update package lists, install Python, and create alias
 RUN apt-get update && \
-    apt-get install -y python3 python3-pip cmake gcc gfortran g++ && \
+    apt-get install -y python3 python3-pip cmake gcc gfortran g++ wget && \
     ln -s /usr/bin/python3 /usr/bin/python
 
 # -----------------------------------------------------------------------------
