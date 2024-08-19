@@ -1,10 +1,11 @@
 # -----------------------------------------------------------------------------
 # Build stage 1 - grab NodeJS v20 and update container.
 FROM node:20-slim AS worker-step1
-RUN apt-get update
 
-# Install Python
-RUN apt-get install -y python3 python3-pip
+# Update package lists, install Python, and create alias
+RUN apt-get update && \
+    apt-get install -y python3 python3-pip && \
+    ln -s /usr/bin/python3 /usr/bin/python
 
 # -----------------------------------------------------------------------------
 # Build stage 2 - worker app for deployment on SPIN
