@@ -53,7 +53,9 @@ echo "Upload directory: $UPLOAD_DIR"
 echo "Work directory: $WORKDIR"
 echo "Template directory: $TEMPLATEDIR"
 
-WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.14
+# WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.14
+# WORKER=ghcr.io/bl1231/bilbomd-worker/bilbomd-perlmutter-worker:latest
+WORKER=bilbomd/bilbomd-perlmutter-worker:latest
 
 # other globals
 g_md_inp_files=()
