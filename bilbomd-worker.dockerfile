@@ -115,7 +115,7 @@ RUN groupadd -g $GROUP_ID bilbomd && useradd -u $USER_ID -g $GROUP_ID -d /home/b
 RUN chown -R bilbo:bilbomd /app /bilbomd/uploads /home/bilbo
 
 # Update NPM
-RUN npm install -g npm@10.8.1
+RUN npm install -g npm@10.8.2
 
 # Switch to the non-root user
 USER bilbo:bilbomd
