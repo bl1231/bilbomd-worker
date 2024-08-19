@@ -4,7 +4,8 @@ Each file containing one chain from the input PDB file.
 Sanitizes the PDB files to be used by CHARMM in order to convert to CRD and PSF files.
 Writes a CHARMM-compatible pdb_2_crd.inp file for CHARMM.
 
-PDB specification from https://www.wwpdb.org/documentation/file-format-content/format33/sect1.html
+PDB specification from:
+    https://www.wwpdb.org/documentation/file-format-content/format33/sect1.html
 
 COLUMNS        DATA  TYPE    FIELD        DEFINITION
 -------------------------------------------------------------------------------------
@@ -188,6 +189,14 @@ def apply_charmm_residue_names(lines):
         "G  ": "GUA ",
         "A  ": "ADE ",
         "U  ": "URA ",
+        " C ": "CYT ",
+        " G ": "GUA ",
+        " A ": "ADE ",
+        " U ": "URA ",
+        "  C": "CYT ",
+        "  G": "GUA ",
+        "  A": "ADE ",
+        "  U": "URA ",
         "DC ": "CYT ",
         "DG ": "GUA ",
         "DA ": "ADE ",
@@ -293,7 +302,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
     """
     Write individual CHARMM input file to convert each chain to a CRD file.
     """
-    charmm_generate_options = {
+    charmm_gen_options = {
         "PRO": "setup warn first none last CTER",
         "DNA": "setup warn first 5TER last 3TER",
         "RNA": "setup warn first 5TER last 3TER",
@@ -348,7 +357,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
 
             outfile.write("rewind unit 1\n")
             outfile.write(
-                f"generate {charmmgui_chain_id} {charmm_generate_options[molecule_type]}\n"
+                f"generate {charmmgui_chain_id} {charmm_gen_options[molecule_type]}\n"
             )
             outfile.write(f"read coor pdb unit 1 offset -{start_res_num_str}\n")
             outfile.write("close unit 1\n")
@@ -369,7 +378,8 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             )
             outfile.write(f"hbuild sele segid {charmmgui_chain_id} .and. type H* end\n")
             outfile.write(
-                f"define test sele segid {charmmgui_chain_id} .and. .not. init show end\n"
+                f"define test sele segid {charmmgui_chain_id} "
+                f".and. .not. init show end\n"
             )
             outfile.write("\n")
             outfile.write("! CALCULATE ENERGY\n")
@@ -384,7 +394,8 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
                 f"write coor card name bilbomd_pdb2crd_{charmmgui_chain_id}.crd\n"
             )
             outfile.write(
-                f"write coor pdb name bilbomd_pdb2crd_{charmmgui_chain_id}.pdb official\n"
+                f"write coor pdb name bilbomd_pdb2crd_{charmmgui_chain_id}.pdb "
+                f"official\n"
             )
             outfile.write("\n")
             outfile.write("stop\n")
@@ -395,7 +406,7 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
     """
     Melds individual chain CRD files into a single CRD file for subsequent CHARMM steps
     """
-    charmm_generate_options = {
+    charmm_gen_options = {
         "PRO": "setup warn first none last CTER",
         "DNA": "setup warn first 5TER last 3TER",
         "RNA": "setup warn first 5TER last 3TER",
@@ -435,14 +446,15 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
 
             outfile.write(f"! Read {charmmgui_chain_id}\n")
             outfile.write(
-                f"open read card unit 1 name bilbomd_pdb2crd_{charmmgui_chain_id.lower()}.crd\n"
+                f"open read card unit 1 name "
+                f"bilbomd_pdb2crd_{charmmgui_chain_id.lower()}.crd\n"
             )
             outfile.write("read sequence coor unit 1 resid\n")
             # not sure we need to do this again since we already ran "generate"
             # when converting PDB to CRD
             #
             outfile.write(
-                f"generate {charmmgui_chain_id} {charmm_generate_options[molecule_type]}\n"
+                f"generate {charmmgui_chain_id} {charmm_gen_options[molecule_type]}\n"
             )
             outfile.write("rewind unit 1\n")
             outfile.write("read coor unit 1 card resid\n")
@@ -500,7 +512,8 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
                 record_type = line[:6].strip()  # ATOM or HETATM
                 chain_id = line[21]  # Chain ID
 
-                # Create a unique key for each chain that includes both chain ID and record type
+                # Create a unique key for each chain that includes both chain ID and
+                #  record type
                 unique_chain_key = f"{record_type}_{chain_id}"
 
                 # Initialize the chain in the dictionary if not already present
@@ -525,7 +538,8 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
         processed_lines = remove_alt_conformers(processed_lines)
         processed_lines = apply_charmm_residue_names(processed_lines)
         processed_lines = replace_hetatm(processed_lines)
-        # commenting this out since we really shouldn't be renumbering peoples input PDB files
+        # commenting this out since we really shouldn't be renumbering peoples input
+        # PDB files...
         # processed_lines = renumber_residues(processed_lines)
 
         # if processed_lines:  # Check if there are any lines after processing
