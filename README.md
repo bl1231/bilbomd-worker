@@ -45,6 +45,10 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.6.4
+  - Dependency updates
+  - Implement GitHub Actions CI workflows
+  - Better job-handling logic for NERSC Jobs
 - 1.6.3
   - Add steps object to mongodb entry
   - Some improvements to logging
