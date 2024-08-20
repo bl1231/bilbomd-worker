@@ -14,6 +14,8 @@ Processes BilboMD jobs and run CHARMM, FoXS, and MultiFoXS
 
 In order to build the docker images you will need to obtain the source codes for CHARMM, BioXTAS, and OpenMPI and place them in the appropriate folders prior to running any `docker build` commands.
 
+### Deploy via `docker compose` on Hyperion
+
 To build the Docker image from the command line.
 
 ```bash
@@ -22,9 +24,11 @@ cd bilbomd-worker
 docker build --build-arg USER_ID=$UID -t bl1231/bilbomd-worker -f bilbomd-worker.dockerfile .
 ```
 
-At the moment there are 2 versions of the `bilbomd-worker` needed for deploying **BilboMD** at NERSC. One version for doing the work on a perlmutter compute node and a second version that does no real "work", but is deployed to SPIN where it monitors for jobs and uses the Superfacility API to prepare and launch jobs via slurm batch scripts.
+### Deploy via Rancher/SPIN at NERSC
 
-To build `bilbomd-perlmutter-worker` which is the podman-hpc runtime for performing the Molecular Dynamics steps on Perlmutter compute nodes:
+At the moment there are two versions of the `bilbomd-worker` needed for deploying **BilboMD** at NERSC. One version for doing the work on a perlmutter compute node and a second version that does no real "work", but is deployed to SPIN where it monitors for jobs and uses the Superfacility API to prepare and launch jobs via slurm batch scripts.
+
+In general, all of the build steps are performed as part of the Continuous Integration steps coordinated by GitHub Actions. If you need to buidl the Docker images manually you will need to build two images. To build `bilbomd-perlmutter-worker` which is the podman-hpc runtime for performing the Molecular Dynamics steps on Perlmutter compute nodes:
 
 ```bash
 cd bilbomd-worker
@@ -81,7 +85,7 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 - 1.4.0
   - Add new functions for converting PDB to CRD and PSF.
   - Enforce Python style guidelines with Black.
-  - Add `pdb2crd.py` script for creating teh CHARMM input file for PDB to CRD.
+  - Add `pdb2crd.py` script for creating the CHARMM input file for PDB to CRD.
 - 1.3.1
   - Close fs streams properly so we don't have dangling NFS lock files.
 - 1.3.0
