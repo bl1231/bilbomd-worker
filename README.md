@@ -45,6 +45,9 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.6.5
+  - Fix bug with PAE Jiffy when replacing DNA residues
+  - Install Python and CHARMM into `bilbomd-spin-worker` Docker image
 - 1.6.4
   - Dependency updates
   - Implement GitHub Actions CI workflows

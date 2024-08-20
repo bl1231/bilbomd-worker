@@ -21,7 +21,7 @@
     "@bl1231/bilbomd-mongodb-schema": "^1.0.23",
     "axios": "^1.7.4",
     "axios-retry": "^4.5.0",
-    "bullmq": "^5.12.6",
+    "bullmq": "^5.12.9",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "handlebars": "^4.7.8",
@@ -41,11 +41,11 @@
     "@types/fs-extra": "^11.0.4",
     "@types/jest": "^29.5.12",
     "@types/jsonwebtoken": "^9.0.6",
-    "@types/node": "^22.3.0",
+    "@types/node": "^22.4.1",
     "@types/nodemailer": "^6.4.15",
     "@types/nodemailer-express-handlebars": "^4.0.5",
     "@types/shelljs": "^0.8.15",
-    "@typescript-eslint/eslint-plugin": "^8.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.2.0",
     "copyfiles": "^2.4.1",
     "eslint": "^9.9.0",
     "fs-extra": "^11.2.0",
@@ -57,7 +57,7 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.5.4",
-    "typescript-eslint": "^8.1.0"
+    "typescript-eslint": "^8.2.0"
   },
   "_moduleAliases": {
     "@services": "build/services",
