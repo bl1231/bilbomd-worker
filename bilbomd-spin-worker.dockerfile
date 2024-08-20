@@ -70,8 +70,5 @@ RUN unset GITHUB_TOKEN
 # Copy the app code
 COPY --chown=bilbo:bilbomd . .
 
-# USER root
-RUN chown -R 62704:0 /app
-
 # Fire that bad boy up.
 CMD ["npm", "start"]
