@@ -59,7 +59,7 @@ USER bilbo:bilbomd
 COPY --chown=bilbo:bilbomd package*.json .
 
 # Create .npmrc file using the build argument
-RUN echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" > /root/.npmrc
+RUN echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" > /home/bilbo/.npmrc
 
 # Install dependencies
 RUN npm ci
