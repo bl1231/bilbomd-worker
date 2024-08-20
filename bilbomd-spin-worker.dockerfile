@@ -35,8 +35,8 @@ COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 # -----------------------------------------------------------------------------
 # Build stage 2 - worker app for deployment on SPIN
 FROM worker-step2 AS bilbomd-spin-worker
-ARG USER_ID=1001
-ARG GROUP_ID=1001
+ARG USER_ID
+ARG GROUP_ID
 ARG GITHUB_TOKEN
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
