@@ -1,6 +1,6 @@
 # -----------------------------------------------------------------------------
 # Build stage 1 - grab NodeJS v20 and update container.
-FROM node:20-slim AS worker-step1
+FROM ubuntu:22.04 AS worker-step1
 
 # Update package lists, install build tools, dependencies, and clean up
 RUN apt-get update && \
@@ -14,8 +14,8 @@ FROM worker-step1 AS build_charmm
 ARG CHARMM_VER=c48b2
 
 # Copy or Download CHARMM source code, extract, and remove the tarball
-# COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
-RUN wget https://bl1231.als.lbl.gov/pickup/charmm/${CHARMM_VER}.tar.gz -O /usr/local/src/${CHARMM_VER}.tar.gz
+COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
+# RUN wget https://bl1231.als.lbl.gov/pickup/charmm/${CHARMM_VER}.tar.gz -O /usr/local/src/${CHARMM_VER}.tar.gz
 RUN mkdir -p /usr/local/src && \
     tar -zxvf /usr/local/src/${CHARMM_VER}.tar.gz -C /usr/local/src && \
     rm /usr/local/src/${CHARMM_VER}.tar.gz
@@ -34,8 +34,20 @@ FROM build_charmm AS worker-step2
 COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 
 # -----------------------------------------------------------------------------
+# Build stage ## - Install NodeJS
+FROM worker-step2 AS install-node
+ARG NODE_MAJOR=20
+RUN apt-get update && \
+    apt-get install -y gpg curl && \
+    mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update && \
+    apt-get install -y nodejs
+
+# -----------------------------------------------------------------------------
 # Build stage 4 - Miniconda3
-FROM worker-step2 AS build-conda
+FROM install-node AS build-conda
 
 # Download and install Miniforge3
 RUN wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" && \
@@ -116,7 +128,7 @@ COPY --chown=bilbo:bilbomd package*.json .
 RUN echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" > /home/bilbo/.npmrc
 
 # Install dependencies
-RUN npm ci
+RUN npm ci 
 
 # Optionally, clean up the environment variable for security
 RUN unset GITHUB_TOKEN
