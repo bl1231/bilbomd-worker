@@ -14,8 +14,8 @@ FROM worker-step1 AS build_charmm
 ARG CHARMM_VER=c48b2
 
 # Copy or Download CHARMM source code, extract, and remove the tarball
-COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
-# RUN wget https://bl1231.als.lbl.gov/pickup/charmm/${CHARMM_VER}.tar.gz -O /usr/local/src/${CHARMM_VER}.tar.gz
+# COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
+RUN wget https://bl1231.als.lbl.gov/pickup/charmm/${CHARMM_VER}.tar.gz -O /usr/local/src/${CHARMM_VER}.tar.gz
 RUN mkdir -p /usr/local/src && \
     tar -zxvf /usr/local/src/${CHARMM_VER}.tar.gz -C /usr/local/src && \
     rm /usr/local/src/${CHARMM_VER}.tar.gz
