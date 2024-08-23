@@ -49,6 +49,10 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.6.6
+  - Add BioXTAS RAW & IMP to docker image.
+  - Additional changes so we can eventually have a single Docker image for SPIN and beamline deployment
+  - Fix & refactor the `pae_ratios.py` script to deal with adjacent Rigid Domains.
 - 1.6.5
   - Fix bug with PAE Jiffy when replacing DNA residues
   - Install Python and CHARMM into `bilbomd-spin-worker` Docker image
