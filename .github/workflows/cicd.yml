@@ -53,6 +53,10 @@ jobs:
         run: |
           echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
+      - name: Get short Git hash
+        id: git-info
+        run: echo "GIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
       - name: Build and push bilbomd-worker Docker image (latest)
         uses: docker/build-push-action@v5
         with:
@@ -67,6 +71,7 @@ jobs:
             USER_ID=${{ vars.USER_ID }}
             GROUP_ID=${{ vars.GROUP_ID }}
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            GIT_HASH=${{ env.GIT_HASH }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -85,5 +90,6 @@ jobs:
             USER_ID=${{ vars.USER_ID }}
             GROUP_ID=${{ vars.GROUP_ID }}
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            GIT_HASH=${{ env.GIT_HASH }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
