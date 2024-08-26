@@ -62,6 +62,7 @@ jobs:
           platforms: linux/amd64
           tags: |
             ghcr.io/${{ github.repository }}/bilbomd-spin-worker:latest
+            ghcr.io/${{ github.repository }}/bilbomd-worker:latest
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             USER_ID=${{ vars.USER_ID }}
@@ -80,6 +81,7 @@ jobs:
           platforms: linux/amd64
           tags: |
             ghcr.io/${{ github.repository }}/bilbomd-spin-worker:${{ env.VERSION }}
+            ghcr.io/${{ github.repository }}/bilbomd-worker:${{ env.VERSION }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             USER_ID=${{ vars.USER_ID }}
