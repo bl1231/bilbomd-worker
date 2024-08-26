@@ -31,7 +31,7 @@ let webhooksWorker: Worker
 
 const checkNERSC = async () => {
   try {
-    // Eventually could have various checks here
+    // Eventually could have various checks here.
 
     // Perlmutter status
     // const response = await someAPI.healthCheck()
