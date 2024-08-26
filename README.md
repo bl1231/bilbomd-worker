@@ -49,6 +49,8 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.6.7
+  - Unified Docker image for both beamline and NERSC SPIN deployment
 - 1.6.6
   - Add BioXTAS RAW & IMP to docker image.
   - Additional changes so we can eventually have a single Docker image for SPIN and beamline deployment
