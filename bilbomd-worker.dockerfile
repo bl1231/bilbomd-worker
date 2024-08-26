@@ -103,6 +103,7 @@ FROM bilbomd-worker-step6 AS bilbomd-worker
 ARG USER_ID
 ARG GROUP_ID
 ARG GITHUB_TOKEN
+ARG GIT_HASH
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
 RUN mkdir -p /bilbomd/logs
@@ -135,6 +136,9 @@ RUN unset GITHUB_TOKEN
 
 # Copy the app code
 COPY --chown=bilbo:bilbomd . .
+
+# Use the ARG to set the environment variable
+ENV GIT_HASH=${GIT_HASH}
 
 # Fire that bad boy up.
 CMD ["npm", "start"]
