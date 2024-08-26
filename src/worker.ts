@@ -13,11 +13,11 @@ import { processPdb2CrdJob } from './services/process/pdb-to-crd'
 import { processPdb2CrdJobNersc } from './services/process/pdb-to-crd-nersc'
 import { processBilboMDJobNersc } from './services/process/bilbomd-nersc'
 import { processDockerBuildJob } from './services/process/webhooks-nersc'
-import version from '../package.json'
 
 dotenv.config()
 
 const environment: string = process.env.NODE_ENV || 'development'
+const version: string = process.env.BILBOMD_WORKER_VERSION || '0.0.0'
 
 if (environment === 'production') {
   logger.info('Running in production mode')
