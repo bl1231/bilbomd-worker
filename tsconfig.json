@@ -10,6 +10,7 @@
       "*": ["*"],
       "services/*": ["services/*"]
     },
+    "resolveJsonModule": true,
     "allowJs": false /* Allow JavaScript files to be a part of your program. Use the 'checkJS' option to get errors from these files. */,
     "checkJs": false /* Enable error reporting in type-checked JavaScript files. */,
     "outDir": "build" /* Specify an output folder for all emitted files. */,

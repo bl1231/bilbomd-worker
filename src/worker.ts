@@ -1,4 +1,5 @@
 import * as dotenv from 'dotenv'
+import express from 'express'
 import { connectDB } from './helpers/db'
 import { Job, Worker, WorkerOptions } from 'bullmq'
 import { WorkerJob } from './types/jobtypes'
@@ -12,6 +13,7 @@ import { processPdb2CrdJob } from './services/process/pdb-to-crd'
 import { processPdb2CrdJobNersc } from './services/process/pdb-to-crd-nersc'
 import { processBilboMDJobNersc } from './services/process/bilbomd-nersc'
 import { processDockerBuildJob } from './services/process/webhooks-nersc'
+import version from '../package.json'
 
 dotenv.config()
 
@@ -208,5 +210,22 @@ const startWorkers = async () => {
   webhooksWorker = new Worker('webhooks', webhooksWorkerHandler, webhooksWorkerOptions)
   logger.info(`Webhooks Worker started on ${systemName}`)
 }
+
+const app = express()
+
+// Endpoint to return configuration info
+app.get('/config', (req, res) => {
+  const configs = {
+    gitHash: process.env.GIT_HASH || '',
+    version: version || ''
+  }
+  res.json(configs)
+})
+
+// Start the Express server
+const PORT = process.env.PORT || 3000
+app.listen(PORT, () => {
+  logger.info(`Worker configuration server running on port ${PORT}`)
+})
 
 startWorkers()
