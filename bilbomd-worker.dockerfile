@@ -122,6 +122,9 @@ RUN npm install -g npm@10.8.2
 # Switch to the non-root user
 USER bilbo:bilbomd
 
+# Use the ARG to set the environment variable
+ENV GIT_HASH=${GIT_HASH}
+
 # Copy over the package*.json files
 COPY --chown=bilbo:bilbomd package*.json .
 
@@ -136,9 +139,6 @@ RUN unset GITHUB_TOKEN
 
 # Copy the app code
 COPY --chown=bilbo:bilbomd . .
-
-# Use the ARG to set the environment variable
-ENV GIT_HASH=${GIT_HASH}
 
 # Fire that bad boy up.
 CMD ["npm", "start"]
