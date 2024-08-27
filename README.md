@@ -49,6 +49,10 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.7.0
+  - Remove `bilbomd-spin-worker`
+  - Add an API endpoint to deliver config info
+  - Improvements to CI/CD workflow
 - 1.6.7
   - Unified Docker image for both beamline and NERSC SPIN deployment
 - 1.6.6
