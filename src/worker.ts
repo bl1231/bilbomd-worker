@@ -18,6 +18,7 @@ dotenv.config()
 
 const environment: string = process.env.NODE_ENV || 'development'
 const version: string = process.env.BILBOMD_WORKER_VERSION || '0.0.0'
+const gitHash: string = process.env.GIT_HASH || '0.0.0'
 
 if (environment === 'production') {
   logger.info('Running in production mode')
@@ -216,7 +217,7 @@ const app = express()
 // Endpoint to return configuration info
 app.get('/config', (req, res) => {
   const configs = {
-    gitHash: process.env.GIT_HASH || '',
+    gitHash: gitHash || '',
     version: version || ''
   }
   res.json(configs)
