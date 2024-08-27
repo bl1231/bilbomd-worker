@@ -72,6 +72,7 @@ jobs:
             GROUP_ID=${{ vars.GROUP_ID }}
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
             GIT_HASH=${{ env.GIT_HASH }}
+            BILBOMD_WORKER_VERSION=${{ env.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -91,5 +92,6 @@ jobs:
             GROUP_ID=${{ vars.GROUP_ID }}
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
             GIT_HASH=${{ env.GIT_HASH }}
+            BILBOMD_WORKER_VERSION=${{ env.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
