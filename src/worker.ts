@@ -224,7 +224,8 @@ app.get('/config', (req, res) => {
 })
 
 // Start the Express server
-const PORT = process.env.PORT || 3000
+const PORT = 3000
+logger.info('Starting the Express server...')
 app.listen(PORT, () => {
   logger.info(`Worker configuration server running on port ${PORT}`)
 })
