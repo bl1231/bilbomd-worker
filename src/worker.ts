@@ -18,7 +18,7 @@ dotenv.config()
 
 const environment: string = process.env.NODE_ENV || 'development'
 const version: string = process.env.BILBOMD_WORKER_VERSION || '0.0.0'
-const gitHash: string = process.env.GIT_HASH || '0.0.0'
+const gitHash: string = process.env.BILBOMD_WORKER_GIT_HASH || '321cba'
 
 if (environment === 'production') {
   logger.info('Running in production mode')

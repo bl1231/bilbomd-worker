@@ -103,7 +103,7 @@ FROM bilbomd-worker-step6 AS bilbomd-worker
 ARG USER_ID
 ARG GROUP_ID
 ARG GITHUB_TOKEN
-ARG GIT_HASH
+ARG BILBOMD_WORKER_GIT_HASH
 ARG BILBOMD_WORKER_VERSION
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
@@ -124,7 +124,7 @@ RUN npm install -g npm@10.8.2
 USER bilbo:bilbomd
 
 # Use the ARG to set the environment variable
-ENV GIT_HASH=${GIT_HASH}
+ENV BILBOMD_WORKER_GIT_HASH=${BILBOMD_WORKER_GIT_HASH}
 ENV BILBOMD_WORKER_VERSION=${BILBOMD_WORKER_VERSION}
 
 # Copy over the package*.json files
