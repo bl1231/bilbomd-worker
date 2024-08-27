@@ -53,6 +53,20 @@ jobs:
         run: |
           echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
+      - name: Extract version from package.json
+        if: github.ref != 'refs/tags/'
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Determine commit hash
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "GIT_HASH=$(echo ${{ github.event.pull_request.head.sha }} | cut -c1-7)" >> $GITHUB_ENV
+          else
+            echo "GIT_HASH=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_ENV
+          fi
+
       - name: Build and push bilbomd-worker Docker image (latest)
         uses: docker/build-push-action@v5
         with:
@@ -67,6 +81,8 @@ jobs:
             USER_ID=${{ vars.USER_ID }}
             GROUP_ID=${{ vars.GROUP_ID }}
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            BILBOMD_WORKER_GIT_HASH=${{ env.GIT_HASH }}
+            BILBOMD_WORKER_VERSION=${{ env.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -85,5 +101,7 @@ jobs:
             USER_ID=${{ vars.USER_ID }}
             GROUP_ID=${{ vars.GROUP_ID }}
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            BILBOMD_WORKER_GIT_HASH=${{ env.GIT_HASH }}
+            BILBOMD_WORKER_VERSION=${{ env.VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

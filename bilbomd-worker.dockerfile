@@ -103,6 +103,8 @@ FROM bilbomd-worker-step6 AS bilbomd-worker
 ARG USER_ID
 ARG GROUP_ID
 ARG GITHUB_TOKEN
+ARG BILBOMD_WORKER_GIT_HASH
+ARG BILBOMD_WORKER_VERSION
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
 RUN mkdir -p /bilbomd/logs
@@ -121,6 +123,10 @@ RUN npm install -g npm@10.8.2
 # Switch to the non-root user
 USER bilbo:bilbomd
 
+# Use the ARG to set the environment variable
+ENV BILBOMD_WORKER_GIT_HASH=${BILBOMD_WORKER_GIT_HASH}
+ENV BILBOMD_WORKER_VERSION=${BILBOMD_WORKER_VERSION}
+
 # Copy over the package*.json files
 COPY --chown=bilbo:bilbomd package*.json .
 
@@ -135,6 +141,8 @@ RUN unset GITHUB_TOKEN
 
 # Copy the app code
 COPY --chown=bilbo:bilbomd . .
+
+EXPOSE 3000
 
 # Fire that bad boy up.
 CMD ["npm", "start"]

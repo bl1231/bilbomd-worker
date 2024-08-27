@@ -1,4 +1,5 @@
 import * as dotenv from 'dotenv'
+import express from 'express'
 import { connectDB } from './helpers/db'
 import { Job, Worker, WorkerOptions } from 'bullmq'
 import { WorkerJob } from './types/jobtypes'
@@ -16,6 +17,8 @@ import { processDockerBuildJob } from './services/process/webhooks-nersc'
 dotenv.config()
 
 const environment: string = process.env.NODE_ENV || 'development'
+const version: string = process.env.BILBOMD_WORKER_VERSION || '0.0.0'
+const gitHash: string = process.env.BILBOMD_WORKER_GIT_HASH || '321cba'
 
 if (environment === 'production') {
   logger.info('Running in production mode')
@@ -208,5 +211,23 @@ const startWorkers = async () => {
   webhooksWorker = new Worker('webhooks', webhooksWorkerHandler, webhooksWorkerOptions)
   logger.info(`Webhooks Worker started on ${systemName}`)
 }
+
+const app = express()
+
+// Endpoint to return configuration info
+app.get('/config', (req, res) => {
+  const configs = {
+    gitHash: gitHash || '',
+    version: version || ''
+  }
+  res.json(configs)
+})
+
+// Start the Express server
+const PORT = 3000
+logger.info('Starting the Express server...')
+app.listen(PORT, () => {
+  logger.info(`Worker configuration server running on port ${PORT}`)
+})
 
 startWorkers()
