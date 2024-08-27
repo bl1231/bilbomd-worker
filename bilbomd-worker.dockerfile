@@ -104,6 +104,7 @@ ARG USER_ID
 ARG GROUP_ID
 ARG GITHUB_TOKEN
 ARG GIT_HASH
+ARG BILBOMD_WORKER_VERSION
 RUN mkdir -p /app/node_modules
 RUN mkdir -p /bilbomd/uploads
 RUN mkdir -p /bilbomd/logs
@@ -124,6 +125,7 @@ USER bilbo:bilbomd
 
 # Use the ARG to set the environment variable
 ENV GIT_HASH=${GIT_HASH}
+ENV BILBOMD_WORKER_VERSION=${BILBOMD_WORKER_VERSION}
 
 # Copy over the package*.json files
 COPY --chown=bilbo:bilbomd package*.json .
@@ -139,6 +141,8 @@ RUN unset GITHUB_TOKEN
 
 # Copy the app code
 COPY --chown=bilbo:bilbomd . .
+
+EXPOSE 3000
 
 # Fire that bad boy up.
 CMD ["npm", "start"]
