@@ -21,7 +21,7 @@
     "@bl1231/bilbomd-mongodb-schema": "^1.0.23",
     "axios": "^1.7.5",
     "axios-retry": "^4.5.0",
-    "bullmq": "^5.12.10",
+    "bullmq": "^5.12.12",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "handlebars": "^4.7.8",
