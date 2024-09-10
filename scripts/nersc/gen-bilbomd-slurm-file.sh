@@ -11,8 +11,10 @@ fi
 # Assign args to global variables
 UUID=$1
 
+
 # -----------------------------------------------------------------------------
 # SBATCH STUFF
+
 project="m4659"
 queue="regular"
 constraint="gpu"
@@ -33,6 +35,10 @@ else
     exit 1  # Exit the script if the constraint is not recognized
 fi
 
+
+# -----------------------------------------------------------------------------
+# ENV STUFF
+
 # Set the environment (default to 'development' if not set)
 ENVIRONMENT=${ENVIRONMENT:-development}
 
@@ -47,18 +53,20 @@ fi
 BASE_DIR=${CFS}/${project}/bilbomd
 UPLOAD_DIR=${BASE_DIR}/${ENV_DIR}/uploads/${UUID}
 WORKDIR=${PSCRATCH}/bilbmod/${UUID}
-# TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
 TEMPLATEDIR=${BASE_DIR}/${ENV_DIR}/templates
 
 echo "Upload directory: $UPLOAD_DIR"
 echo "Work directory: $WORKDIR"
 echo "Template directory: $TEMPLATEDIR"
 
-# WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.14
-# WORKER=ghcr.io/bl1231/bilbomd-worker/bilbomd-perlmutter-worker:latest
+# Docker images
 WORKER=bilbomd/bilbomd-perlmutter-worker:latest
+AF_WORKER=bilbomd/bilbomd-colabfold:0.0.6
 
-# other globals
+
+# -----------------------------------------------------------------------------
+# GLOBAL STUFF
+
 g_md_inp_files=()
 g_pdb2crd_inp_files=()
 g_rgs=""
@@ -163,12 +171,24 @@ read_job_params() {
             echo "Error: Missing PAE file"
             return 1
         fi
+    elif [ "$job_type" = "BilboMdAF" ]; then
+        echo "Job Type: BilboMdAF"
+        fasta_file=$(jq -r '.fasta_file' $WORKDIR/params.json)
+        pdb_file="af-model-1.pdb"
+        pae_file="af-pae.json"
+        in_psf_file="bilbomd_pdb2crd.psf"
+        in_crd_file="bilbomd_pdb2crd.crd"
+        constinp="const.inp" # Will be calculated by pae_ratios.py
+        if [ -z "$fasta_file" ]; then
+            echo "Error: Missing FASTA file."
+            return 1
+        fi
+        echo "FASTA file: $fasta_file"
     else
         echo "Error: Unrecognized job_type '$job_type'"
         return 1  # Exit with an error status
     fi
 
-    echo ""
     echo "PDB file: $pdb_file"
     echo "SAXS data: $saxs_data"
     echo "Constraint input: $constinp"
@@ -220,6 +240,7 @@ template_minimization_file() {
     sed -i "s|{{charmm_topo_dir}}|$charmm_topo_dir|g" "$WORKDIR/minimize.inp"
     sed -i "s|{{in_psf_file}}|$in_psf_file|g" "$WORKDIR/minimize.inp"
     sed -i "s|{{in_crd_file}}|$in_crd_file|g" "$WORKDIR/minimize.inp"
+    echo "Done Preparing CHARMM Minimize input file"
 }
 
 template_heat_file() {
@@ -228,17 +249,21 @@ template_heat_file() {
     sed -i "s|{{charmm_topo_dir}}|$charmm_topo_dir|g" "$WORKDIR/heat.inp"
     sed -i "s|{{in_psf_file}}|$in_psf_file|g" "$WORKDIR/heat.inp"
     sed -i "s|{{constinp}}|$constinp|g" "$WORKDIR/heat.inp"
+    echo "Done Preparing CHARMM Heat input file"
 }
 
 create_status_txt_file() {
-    echo "Create initial status.txt file"
+    echo "Creating initial status.txt file"
 
     status_file="${WORKDIR}/status.txt"
+    # Truncate the status file (or create it if it doesn't exist)
+    > "$status_file"
 
-    steps=(pdb2crd pae autorg minimize initfoxs heat md dcd2pdb foxs multifoxs copy2cfs)
+    steps=(alphafold pdb2crd meld pae autorg minimize initfoxs heat md dcd2pdb foxs multifoxs copy2cfs)
     for step in "${steps[@]}"; do
         echo "$step: Waiting" >> "$status_file"
     done
+    echo "Done Creating initial status.txt file"
 }
 
 initialize_job() {
@@ -281,7 +306,6 @@ template_md_input_files() {
 }
 
 generate_pdb2crd_input_files() {
-
     local command="cd /bilbomd/work/ && python /app/scripts/pdb2crd.py $pdb_file . > pdb2crd_output.txt"
     # docker run --rm --userns=keep-id --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command"
     docker run --rm --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command"
@@ -300,6 +324,49 @@ generate_pdb2crd_input_files() {
     echo $g_pdb2crd_inp_files
 }
 
+generate_pdb2crd_input_files_af() {
+    cat << EOF > $WORKDIR/make_pdb2crd_inp_files
+# -----------------------------------------------------------------------------
+# Convert AF PDB to CRD/PSF
+update_status pdb2crd Running
+echo "Generating pdb2crd input files..."
+srun --job-name af-pdb2crd podman-hpc run --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${AF_WORKER} /bin/bash -c "cd /bilbomd/work/ && python pdb2crd.py af-rank1.pdb . > pdb2crd_output.txt"
+
+# Parse the file "pdb2crd_output.txt"
+# This will also run CHARMM for each chain-specific *.inp file
+#
+# Get the number of lines (files) in pdb2crd_output.txt
+num_inp_files=\$(wc -l < \${WORKDIR}/pdb2crd_output.txt)
+echo "Number of pdb2crd.inp files to process: \$num_inp_files"
+cpus=\$((NUM_CORES / num_inp_files))
+if [ "\$cpus" -lt 1 ]; then
+    cpus=1
+fi
+# Array to hold all background PIDs
+pids=()
+while IFS= read -r filename; do
+    # Extract the filename prefix (without extension)
+    filename_prefix=\$(basename "\$filename" .inp)
+
+    # Generate the srun command
+    srun --ntasks=1 --cpus-per-task=\$cpus --cpu-bind=cores --job-name pdb2crd podman-hpc run --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o \${filename_prefix}.out -i \${filename}" &
+     # Capture the PID of the backgrounded srun command
+    pids+=(\$!)
+done < \${WORKDIR}/pdb2crd_output.txt
+
+# Wait for all background jobs to complete & check their exit codes
+for pid in "\${pids[@]}"; do
+    wait \$pid
+    exit_code=\$?
+    check_exit_code \$exit_code pdb2crd
+done
+
+echo "Individual chains converted to CRD files."
+update_status pdb2crd Success
+
+EOF
+}
+
 run_autorg(){
     # Runs autorg.py
     # which will return an object with this shape
@@ -308,41 +375,71 @@ run_autorg(){
     docker run --rm --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command" 2>/dev/null
 }
 
-generate_md_input_files() {
-    echo "Calculate Rg values"
-    run_autorg
+generate_meld_all_chains_commands() {
+    cat << EOF > $WORKDIR/meld_cmds
+# -----------------------------------------------------------------------------
+# Meld individual chains to create CRD and PSF file
+update_status meld Running
+echo "Melding pdb2crd_charmm_meld.inp..."
 
-    if [[ -f "${WORKDIR}/autorg_output.txt" ]]; then
-        local output=$(cat "${WORKDIR}/autorg_output.txt")
-        # Use sed to extract JSON object
-        local json_output=$(echo "$output" | sed -n 's/.*\({.*}\).*/\1/p')
-        local rg_min=$(echo $json_output | jq '.rg_min')
-        local rg_max=$(echo $json_output | jq '.rg_max')
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name meld podman-hpc run --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o pdb2crd_charmm_meld.out -i pdb2crd_charmm_meld.inp"
+MELD_EXIT=\$?
+check_exit_code \$MELD_EXIT meld
 
-        echo "Rg range: $rg_min to $rg_max"
-        # Calculate the step size
-        local step=$(( (rg_max - rg_min) / 4 ))
-        step=$(( step > 0 ? step : 1 ))  # Ensuring that step is at least 1
-        echo "Rg step is: ${step} Ang."
+echo "All Individual CRD files melded into bilbomd_pdb2crd.crd"
+update_status meld Success
 
-        # Base template for CHARMM files
-        local charmm_template="dynamics"
-
-        for (( rg=rg_min; rg<=rg_max; rg+=step )); do
-            local charmm_inp_file="${charmm_template}_rg${rg}.inp"
-            local inp_basename="${charmm_template}_rg${rg}"
-            template_md_input_files $charmm_inp_file $inp_basename $rg
-            g_md_inp_files+=("$charmm_inp_file")
-            g_rgs+="${rg} "
-        done
-    else
-        echo "Output file not found." >&2
-        exit 1
-    fi
+EOF
 }
 
+generate_md_input_files() {
+    echo "Checking if rg_min and rg_max can be extracted from params.json"
 
+    # Attempt to extract rg_min and rg_max from params.json
+    if [[ -f "${WORKDIR}/params.json" ]]; then
+        local rg_min=$(jq -r '.rg_min' "${WORKDIR}/params.json")
+        local rg_max=$(jq -r '.rg_max' "${WORKDIR}/params.json")
+    fi
 
+    # Check if rg_min and rg_max are set in params.json
+    if [[ -n "$rg_min" && -n "$rg_max" && "$rg_min" != "null" && "$rg_max" != "null" ]]; then
+        echo "rg_min and rg_max found in params.json: $rg_min to $rg_max"
+    else
+        echo "rg_min and rg_max not found in params.json, running run_autorg"
+
+        run_autorg
+
+        if [[ -f "${WORKDIR}/autorg_output.txt" ]]; then
+            local output=$(cat "${WORKDIR}/autorg_output.txt")
+            # Use sed to extract JSON object
+            local json_output=$(echo "$output" | sed -n 's/.*\({.*}\).*/\1/p')
+            rg_min=$(echo $json_output | jq '.rg_min')
+            rg_max=$(echo $json_output | jq '.rg_max')
+
+            echo "Rg range: $rg_min to $rg_max"
+        else
+            echo "Output file not found." >&2
+            exit 1
+        fi
+    fi
+
+    # Calculate the step size
+    local step=$(( (rg_max - rg_min) / 4 ))
+    step=$(( step > 0 ? step : 1 ))  # Ensure that step is at least 1
+    echo "Rg step is: ${step} Ang."
+
+    # Base template for CHARMM files
+    local charmm_template="dynamics"
+
+    # Loop over the range of Rg values and generate input files
+    for (( rg=rg_min; rg<=rg_max; rg+=step )); do
+        local charmm_inp_file="${charmm_template}_rg${rg}.inp"
+        local inp_basename="${charmm_template}_rg${rg}"
+        template_md_input_files $charmm_inp_file $inp_basename $rg
+        g_md_inp_files+=("$charmm_inp_file")
+        g_rgs+="${rg} "
+    done
+}
 
 template_dcd2pdb_file() {
     local inp_file="$1"
@@ -398,18 +495,26 @@ export OMP_PLACES=threads
 export OMP_PROC_BIND=spread
 
 # -----------------------------------------------------------------------------
+# Some global ENV variables
+NUM_CORES=${NUM_CORES}
+UPLOAD_DIR="${UPLOAD_DIR}"
+WORKDIR="${WORKDIR}"
+STATUS_FILE="${WORKDIR}/status.txt"
+
+# -----------------------------------------------------------------------------
 # Status Stuff
 set -o monitor
 
-status_file="${WORKDIR}/status.txt"
+
+g_pdb2crd_inp_files=()
 
 # Updates our status.txt file using sed to update values
 update_status() {
-    local step=\$1
-    local status=\$2
-    echo "Update \$step status: \$status"
-    # Use sed to update the status file
-    sed -i "s/^\$step: .*/\$step: \$status/" "\$status_file"
+  local step=\$1
+  local status=\$2
+  echo "Update \$step status: \$status"
+  # Use sed to update the status file
+  sed -i "s/^\$step: .*/\$step: \$status/" "\$STATUS_FILE"
 }
 
 # Check exit code and cancel the SLURM job if non-zero
@@ -481,18 +586,16 @@ generate_pae2const_commands() {
     cat << EOF > $WORKDIR/pae2const
 # -----------------------------------------------------------------------------
 # Create const.inp from Alphafold PAE Matrix
+update_status pae Running
+echo "Calculate const.inp from PAE matrix..."
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name pae2const podman-hpc run --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file} > pae_ratios.log 2>&1"
+PAE_EXIT=\$?
+check_exit_code \$PAE_EXIT pae
+
+echo "const.inp generated from PAE matrix"
+update_status pae Success
+
 EOF
-    echo "update_status pae Running" >> $WORKDIR/pae2const
-    # echo "set_error_trap pae" >> $WORKDIR/pae2const
-    echo "echo \"Calculate const.inp from PAE matrix...\"" >> $WORKDIR/pae2const
-    local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name pae2const podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && python /app/scripts/pae_ratios.py ${pae_file} ${in_crd_file} > pae_ratios.log 2>&1\""
-    echo $command >> $WORKDIR/pae2const
-    echo "PAE_EXIT=\$?" >> $WORKDIR/pae2const
-    echo "check_exit_code \$PAE_EXIT pae" >> $WORKDIR/pae2const
-    echo "" >> $WORKDIR/pae2const
-    echo "echo \"const.inp generated from PAE matrix\"" >> $WORKDIR/pae2const
-    echo "update_status pae Success" >> $WORKDIR/pae2const
-    echo "" >> $WORKDIR/pae2const
 }
 
 generate_min_heat_commands(){
@@ -512,7 +615,7 @@ generate_min_heat_commands(){
 # CHARMM Minimize
 echo "Running CHARMM Minimize..."
 update_status minimize Running
-srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name minimize podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o minimize.out -i minimize.inp"
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name minimize podman-hpc run --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o minimize.out -i minimize.inp"
 MIN_EXIT=\$?
 check_exit_code \$MIN_EXIT minimize
 
@@ -523,7 +626,7 @@ update_status minimize Success
 # FoXS Analysis of minimized PDB
 echo "Running Initial FoXS Analysis..."
 update_status initfoxs Running
-srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name initfoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && foxs ${foxs_args[@]} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.log"
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name initfoxs podman-hpc run --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && foxs ${foxs_args[@]} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.log"
 INITFOXS_EXIT=\$?
 check_exit_code \$INITFOXS_EXIT initfoxs
 
@@ -534,12 +637,41 @@ update_status initfoxs Success
 # CHARMM Heat
 echo "Running CHARMM Heat..."
 update_status heat Running
-srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name heat podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o heat.out -i heat.inp"
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name heat podman-hpc run --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && charmm -o heat.out -i heat.inp"
 HEAT_EXIT=\$?
 check_exit_code \$HEAT_EXIT heat
 
 echo "CHARMM Heating complete"
 update_status heat Success
+
+EOF
+}
+
+generate_alphafold_commands() {
+    cat << EOF > $WORKDIR/alphafold_cmd
+# -----------------------------------------------------------------------------
+# Run ColabFoldLocal (i.e AlphaFold)
+# nvidia-smi
+update_status alphafold Running
+echo "Running AlphaFold..."
+srun --gpus=4 --job-name alphafold podman-hpc run --rm --gpu --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${AF_WORKER} /bin/bash -c "cd /bilbomd/work/ && colabfold_batch --num-models=3 --amber --use-gpu-relax --num-recycle=4 T1050.fasta alphafold"
+AF_EXIT=\$?
+check_exit_code \$AF_EXIT alphafold
+
+echo "AlphaFold Done."
+update_status alphafold Success
+
+EOF
+}
+
+generate_prep_af_data_commands() {
+    cat << EOF > $WORKDIR/alphafoldmodel
+# -----------------------------------------------------------------------------
+# Copy Best AlphaFold Model and PAE results to working directory
+echo "Selecting Best AlphaFold Model..."
+cp \${WORKDIR}/alphafold/*_relaxed_rank_001_*.pdb \${WORKDIR}/af-rank1.pdb
+cp \${WORKDIR}/alphafold/*_predicted_aligned_error_v1.json \${WORKDIR}/af-pae.json
+echo "AlphaFold model and PAE file copied to \${WORKDIR}"
 
 EOF
 }
@@ -555,7 +687,7 @@ EOF
     echo "echo \"Running CHARMM Molecular Dynamics...\"" >> $WORKDIR/dynamics
     echo "update_status md Running" >> $WORKDIR/dynamics
     for inp in "${g_md_inp_files[@]}"; do
-        local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name md$count podman-hpc run --gpu --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
+        local command="srun --ntasks=1 --cpus-per-task=$cpus --cpu-bind=cores --job-name md$count podman-hpc run --gpu --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && charmm -o ${inp%.inp}.out -i ${inp}\" &"
         echo $command >> $WORKDIR/dynamics
         echo "MD_PID$count=\$!" >> $WORKDIR/dynamics
         echo "sleep 5" >> $WORKDIR/dynamics
@@ -584,13 +716,12 @@ EOF
 }
 
 generate_dcd2pdb_commands() {
-    local command="srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name dcd2pdb podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c \"cd /bilbomd/work/ && ./run_dcd2pdb.sh\""
     cat << EOF > $WORKDIR/dcd2pdb
 # -----------------------------------------------------------------------------
 # CHARMM Extract PDB from DCD Trajectories
 echo "Running CHARMM Extract PDB from DCD Trajectories..."
 update_status dcd2pdb Running
-$command
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name dcd2pdb podman-hpc run --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && ./run_dcd2pdb.sh"
 DCD2PDB_EXIT=\$?
 check_exit_code \$DCD2PDB_EXIT dcd2pdb
 
@@ -616,7 +747,7 @@ generate_foxs_commands() {
 # Run FoXS to calculate SAXS curves
 echo "Run FoXS to calculate SAXS curves..."
 update_status foxs Running
-srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name foxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/foxs && ../run_foxs.sh"
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name foxs podman-hpc run --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/foxs && ../run_foxs.sh"
 FOXS_EXIT=\$?
 check_exit_code \$FOXS_EXIT foxs
 
@@ -674,7 +805,7 @@ generate_multifoxs_command() {
 # Run MultiFoXS to calculate best ensemble
 echo "Run MultiFoXS to calculate best ensemble..."
 update_status multifoxs Running
-srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name multifoxs podman-hpc run --rm --userns=keep-id -v ${WORKDIR}:/bilbomd/work -v ${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && ./run_multifoxs.sh"
+srun --ntasks=1 --cpus-per-task=$NUM_CORES --cpu-bind=cores --job-name multifoxs podman-hpc run --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${WORKER} /bin/bash -c "cd /bilbomd/work/ && ./run_multifoxs.sh"
 MFOXS_EXIT=\$?
 check_exit_code \$MFOXS_EXIT multifoxs
 
@@ -703,8 +834,9 @@ generate_end_matters() {
 # -----------------------------------------------------------------------------
 # Finish up
 echo "DONE ${UUID}"
-
+sleep 20
 sacct --format=JobID,JobName,Account,AllocCPUS,State,Elapsed,ExitCode,DerivedExitCode,Start,End -j \$SLURM_JOB_ID
+
 EOF
 }
 
@@ -716,6 +848,8 @@ append_slurm_sections() {
         cat slurmheader minheat dynamics dcd2pdb foxssection multifoxssection endsection > bilbomd.slurm
     elif [ "$job_type" = "BilboMdAuto" ]; then
         cat slurmheader pdb2crd pae2const minheat dynamics dcd2pdb foxssection multifoxssection endsection > bilbomd.slurm
+    elif [ "$job_type" = "BilboMdAF" ]; then
+        cat slurmheader alphafold_cmd alphafoldmodel make_pdb2crd_inp_files meld_cmds pae2const minheat dynamics dcd2pdb foxssection multifoxssection endsection > bilbomd.slurm
     else
         echo "Error: Unrecognized job_type '$job_type'"
         return 1  # Exit with an error status
@@ -726,7 +860,7 @@ append_slurm_sections() {
 cleanup() {
     echo "Cleaning $WORKDIR"
     cd $WORKDIR
-    rm -f slurmheader pdb2crd pae2const minheat dynamics dcd2pdb foxssection multifoxssection endsection *.tmpl
+    rm -f slurmheader alphafold_cmd alphafoldmodel pdb2crd make_pdb2crd_inp_files meld_cmds pae2const minheat dynamics dcd2pdb foxssection multifoxssection endsection *.tmpl
 }
 
 countDataPoints() {
@@ -754,9 +888,15 @@ countDataPoints() {
 echo "---------------------------- START JOB PREP ----------------------------"
 echo "----------------- ${UUID} -----------------"
 
-#
 initialize_job
-#
+
+if [ "$job_type" = "BilboMdAF" ]; then
+    generate_alphafold_commands
+    generate_prep_af_data_commands
+    generate_pdb2crd_input_files_af
+    generate_meld_all_chains_commands
+fi
+
 if [ "$job_type" = "BilboMdPDB" ] || [ "$job_type" = "BilboMdAuto" ]; then
     generate_pdb2crd_input_files
     generate_pdb2crd_commands
@@ -765,10 +905,11 @@ fi
 generate_md_input_files
 generate_dcd2pdb_input_files
 
-#
-if [ "$job_type" = "BilboMdAuto" ]; then
+
+if [ "$job_type" = "BilboMdAuto" ] || [ "$job_type" = "BilboMdAF" ]; then
     generate_pae2const_commands
 fi
+
 generate_min_heat_commands
 generate_dynamics_commands
 generate_dcd2pdb_commands
@@ -779,11 +920,11 @@ generate_multifoxs_command
 generate_multifoxs_script
 # generate_copy_commands
 generate_end_matters
-#
+
 echo "CPUS: $cpus"
 generate_bilbomd_slurm_header $cpus
 append_slurm_sections
-#
+
 cleanup
 
 echo "----------------------------- END JOB PREP -----------------------------"
