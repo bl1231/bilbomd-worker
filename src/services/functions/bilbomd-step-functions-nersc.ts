@@ -5,7 +5,8 @@ import {
   IStepStatus,
   IBilboMDPDBJob,
   IBilboMDCRDJob,
-  IBilboMDAutoJob
+  IBilboMDAutoJob,
+  IBilboMDAlphaFoldJob
 } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../../helpers/loggers'
 import { updateStepStatus } from './mongo-utils'
@@ -40,6 +41,10 @@ function isBilboMDPDBJob(job: IJob): job is IBilboMDPDBJob {
 }
 
 function isBilboMDAutoJob(job: IJob): job is IBilboMDAutoJob {
+  return (job as IBilboMDAutoJob).conformational_sampling !== undefined
+}
+
+function isBilboMDAlphaFoldJob(job: IJob): job is IBilboMDAlphaFoldJob {
   return (job as IBilboMDAutoJob).conformational_sampling !== undefined
 }
 
@@ -181,7 +186,12 @@ const prepareBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
     }
     await updateStepStatus(DBjob, 'results', status)
     // Ensure DBjob is one of the acceptable types before calling prepareResults
-    if (isBilboMDCRDJob(DBjob) || isBilboMDPDBJob(DBjob) || isBilboMDAutoJob(DBjob)) {
+    if (
+      isBilboMDCRDJob(DBjob) ||
+      isBilboMDPDBJob(DBjob) ||
+      isBilboMDAutoJob(DBjob) ||
+      isBilboMDAlphaFoldJob(DBjob)
+    ) {
       await prepareResults(MQjob, DBjob)
       status = {
         status: 'Success',

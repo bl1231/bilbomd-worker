@@ -12,7 +12,8 @@ import {
   IJob,
   IBilboMDPDBJob,
   IBilboMDCRDJob,
-  IBilboMDAutoJob
+  IBilboMDAutoJob,
+  IBilboMDAlphaFoldJob
 } from '@bl1231/bilbomd-mongodb-schema'
 import { sendJobCompleteEmail } from '../../helpers/mailer'
 import { exec } from 'node:child_process'
@@ -743,7 +744,7 @@ const copyFiles = async ({
 
 const prepareResults = async (
   MQjob: BullMQJob,
-  DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob
+  DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob
 ): Promise<void> => {
   try {
     const outputDir = path.join(DATA_VOL, DBjob.uuid)
@@ -798,7 +799,7 @@ const prepareResults = async (
 
     // Gather original uploaded files
     const filesToCopy = [
-      { file: DBjob.data_file, label: 'data_file' } // Assuming pdb_file is common
+      { file: DBjob.data_file, label: 'data_file' } // Assuming data_file is common
     ]
 
     if ('pdb_file' in DBjob && DBjob.pdb_file) {
@@ -819,6 +820,19 @@ const prepareResults = async (
 
     if ('const_inp_file' in DBjob && DBjob.const_inp_file) {
       filesToCopy.push({ file: DBjob.const_inp_file, label: 'const_inp_file' })
+    }
+
+    // FASTA file generated from the alphafold_entities
+    if ('fasta_file' in DBjob && DBjob.fasta_file) {
+      filesToCopy.push({ file: DBjob.fasta_file, label: 'fasta_file' })
+    }
+
+    // Additional AlphaFold-specific files
+    if (DBjob.__t === 'BilboMdAlphaFold') {
+      const alphafoldExtraFiles = ['af-pae.json', 'af-rank1.pdb']
+      alphafoldExtraFiles.forEach((file) => {
+        filesToCopy.push({ file, label: file })
+      })
     }
 
     for (const { file, label } of filesToCopy) {
@@ -887,7 +901,7 @@ const prepareResults = async (
 }
 
 const createReadmeFile = async (
-  DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob,
+  DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob,
   numEnsembles: number,
   resultsDir: string
 ): Promise<void> => {
