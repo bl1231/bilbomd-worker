@@ -121,6 +121,18 @@ const workerHandler = async (job: Job<WorkerJob>) => {
           : processBilboMDAutoJob(job))
         logger.info(`Finished job: ${job.name}`)
         break
+      case 'alphafold':
+        logger.info(`Start BilboMD AlphaFold job: ${job.name}`)
+
+        // Ensure AlphaFold jobs only run on NERSC
+        if (!config.runOnNERSC) {
+          const errorMsg = `AlphaFold jobs can only be run on NERSC. Job: ${job.name}`
+          logger.error(errorMsg)
+          throw new Error(errorMsg) // Or handle gracefully?
+        }
+        await processBilboMDJobNersc(job) // AlphaFold job processing on NERSC
+        logger.info(`Finished job: ${job.name}`)
+        break
       case 'Pdb2Crd':
         logger.info(`Start Pdb2Crd job: ${job.name}`)
         await (config.runOnNERSC ? processPdb2CrdJobNersc(job) : processPdb2CrdJob(job))

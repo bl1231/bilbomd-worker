@@ -15,6 +15,11 @@ interface BilboMDAutoJob extends Job {
   data: { type: string; title: string; uuid: string; jobid: string }
   id: string
 }
+interface BilboMDAlphaFoldJob extends Job {
+  type: 'alphafold'
+  data: { type: string; title: string; uuid: string; jobid: string }
+  id: string
+}
 interface Pdb2CrdJob extends Job {
   type: 'Pdb2Crd'
   data: { title: string; uuid: string }
@@ -26,4 +31,10 @@ interface WebhooksJob extends Job {
   id: string
 }
 
-type WorkerJob = BilboMDPDBJob | BilboMDCRDJob | BilboMDAutoJob | Pdb2CrdJob | WebhooksJob
+type WorkerJob =
+  | BilboMDPDBJob
+  | BilboMDCRDJob
+  | BilboMDAutoJob
+  | BilboMDAlphaFoldJob
+  | Pdb2CrdJob
+  | WebhooksJob
