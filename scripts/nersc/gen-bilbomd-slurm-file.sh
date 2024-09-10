@@ -47,7 +47,8 @@ fi
 BASE_DIR=${CFS}/${project}/bilbomd
 UPLOAD_DIR=${BASE_DIR}/${ENV_DIR}/uploads/${UUID}
 WORKDIR=${PSCRATCH}/bilbmod/${UUID}
-TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
+# TEMPLATEDIR=${CFS}/${project}/bilbomd-templates
+TEMPLATEDIR=${BASE_DIR}/${ENV_DIR}/templates
 
 echo "Upload directory: $UPLOAD_DIR"
 echo "Work directory: $WORKDIR"
