@@ -399,7 +399,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             )
             outfile.write("\n")
             outfile.write("stop\n")
-        print(f"FILE_CREATED: {output_file.split('/')[-1]}")
+        print(f"{output_file.split('/')[-1]}")
 
 
 def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):

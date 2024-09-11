@@ -307,21 +307,24 @@ template_md_input_files() {
 
 generate_pdb2crd_input_files() {
     local command="cd /bilbomd/work/ && python /app/scripts/pdb2crd.py $pdb_file . > pdb2crd_output.txt"
-    # docker run --rm --userns=keep-id --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command"
     docker run --rm --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command"
+
     if [[ -f "${WORKDIR}/pdb2crd_output.txt" ]]; then
         local output=$(cat "${WORKDIR}/pdb2crd_output.txt")
     else
         echo "Output file not found." >&2
         exit 1
     fi
+
     # Parse the output to get the names of the generated .inp files
-    g_pdb2crd_inp_files=($(echo "$output" | grep 'FILE_CREATED:' | awk '{print $2}'))
+    g_pdb2crd_inp_files=($(echo "$output"))
+
     if [[ ${#g_pdb2crd_inp_files[@]} -eq 0 ]]; then
         echo "No input files were parsed, check the output for errors." >&2
         exit 1
     fi
-    echo $g_pdb2crd_inp_files
+
+    echo ${g_pdb2crd_inp_files[@]}
 }
 
 generate_pdb2crd_input_files_af() {
