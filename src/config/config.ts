@@ -18,7 +18,7 @@ export const config = {
   nerscWorkDir: getEnvVar('WORK_DIR'),
   scripts: {
     prepareSlurmScript: getEnvVar('PREPARE_SLURM_SCRIPT'),
-    copyFromScratchToCFSScript: getEnvVar('CP2CFS_SCRIPT')
-    // dockerBuildScript: getEnvVar('DOCKER_BUILD_SCRIPT')
+    copyFromScratchToCFSScript: getEnvVar('CP2CFS_SCRIPT'),
+    dockerBuildScript: 'docker-build.sh'
   }
 }
