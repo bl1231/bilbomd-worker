@@ -177,10 +177,10 @@ const monitorJobAtNERSC = async (
           sacct_end: jobDetails.end
         }
         retryCount = 0 // Reset retry count on successful attempt
-      } else {
-        logger.warn('No job details found or output array is empty.')
       }
-      logger.info(`Current job ${jobID} status: ${jobStatus}`)
+      logger.info(
+        `Current job ${jobID} status: ${jobStatus} iteration: ${iterationCount}`
+      )
 
       if (jobStatus === 'RUNNING') {
         await updateStatus(Job)
@@ -205,14 +205,14 @@ const monitorJobAtNERSC = async (
     // RUNNING
     // ...and presumably any other Slurm statuses of which I am unaware.
     switch (jobStatus) {
-      case 'COMPLETED':
-      case 'FAILED':
-      case 'DEADLINE':
-      case 'TIMEOUT':
-      case 'CANCELLED':
-      case 'NODE_FAIL':
-      case 'OUT_OF_MEMORY':
-      case 'PREEMPTED':
+      case jobStatus.startsWith('COMPLETED') ? 'COMPLETED' : '':
+      case jobStatus.startsWith('FAILED') ? 'FAILED' : '':
+      case jobStatus.startsWith('DEADLINE') ? 'DEADLINE' : '':
+      case jobStatus.startsWith('TIMEOUT') ? 'TIMEOUT' : '':
+      case jobStatus.startsWith('CANCELLED') ? 'CANCELLED' : '':
+      case jobStatus.startsWith('NODE_FAIL') ? 'NODE_FAIL' : '':
+      case jobStatus.startsWith('OUT_OF_MEMORY') ? 'OUT_OF_MEMORY' : '':
+      case jobStatus.startsWith('PREEMPTED') ? 'PREEMPTED' : '':
         continueMonitoring = false // Stop monitoring if any of these statuses are met
         // one final update of the status.txt file?
         await updateStatus(Job)
