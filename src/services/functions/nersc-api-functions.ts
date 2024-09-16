@@ -144,7 +144,12 @@ const monitorJobAtNERSC = async (
     api_error: ''
   }
 
-  while (continueMonitoring) {
+  const maxRetries = 10 // Maximum number of retries for failed attempts
+  const maxIterations = 1000 // Maximum number of total iterations
+  let retryCount = 0
+  let iterationCount = 0
+
+  while (continueMonitoring && iterationCount < maxIterations) {
     const token = await ensureValidToken() // Fetch or refresh the token before each request
     const headers = {
       accept: 'application/json',
@@ -171,10 +176,11 @@ const monitorJobAtNERSC = async (
           sacct_start: jobDetails.start,
           sacct_end: jobDetails.end
         }
+        retryCount = 0 // Reset retry count on successful attempt
       } else {
-        // logger.warn('No job details found or output array is empty.')
+        logger.warn('No job details found or output array is empty.')
       }
-      // logger.info(`Current job ${jobID} status: ${jobStatus}`)
+      logger.info(`Current job ${jobID} status: ${jobStatus}`)
 
       if (jobStatus === 'RUNNING') {
         await updateStatus(Job)
@@ -182,10 +188,16 @@ const monitorJobAtNERSC = async (
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 403) {
         logger.info('Token may have expired, refreshing token...')
+        retryCount++ // Increment retry count on failed attempt
+        if (retryCount >= maxRetries) {
+          logger.error(`Max retries reached for job ${jobID}`)
+          throw new Error(`Max retries reached for job ${jobID}`)
+        }
         continue // Force token refresh on the next iteration if token has expired
+      } else {
+        logger.error(`Error monitoring job at NERSC: ${error}`)
+        throw error
       }
-      logger.error(`Error monitoring job at NERSC: ${error}`)
-      throw error
     }
 
     // monitoring will continue for:
@@ -206,11 +218,14 @@ const monitorJobAtNERSC = async (
         await updateStatus(Job)
         break
       default:
+        iterationCount++
         await new Promise((resolve) => setTimeout(resolve, 5000)) // Continue polling otherwise
         break
     }
   }
-
+  if (iterationCount >= maxIterations) {
+    logger.error(`Max iterations reached for job ${jobID}`)
+  }
   return statusResponse
 }
 
