@@ -31,7 +31,7 @@ interface INerscTaskResult {
       }
 }
 
-// Define type guard functions
+// Define some useful type guard functions
 function isBilboMDCRDJob(job: IJob): job is IBilboMDCRDJob {
   return (job as IBilboMDCRDJob).crd_file !== undefined
 }
@@ -41,11 +41,11 @@ function isBilboMDPDBJob(job: IJob): job is IBilboMDPDBJob {
 }
 
 function isBilboMDAutoJob(job: IJob): job is IBilboMDAutoJob {
-  return (job as IBilboMDAutoJob).conformational_sampling !== undefined
+  return (job as IBilboMDAutoJob).pae_file !== undefined
 }
 
 function isBilboMDAlphaFoldJob(job: IJob): job is IBilboMDAlphaFoldJob {
-  return (job as IBilboMDAutoJob).conformational_sampling !== undefined
+  return (job as IBilboMDAlphaFoldJob).alphafold_entities !== undefined
 }
 
 const makeBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
@@ -207,8 +207,9 @@ const prepareBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
       status: 'Error',
       message: `Failed to gather BilboMD results: ${error}`
     }
+    await updateStepStatus(DBjob, 'results', status)
     await updateStepStatus(DBjob, 'nersc_job_status', status)
-    logger.error(`Error during monitoring of BilboMD job: ${error}`)
+    logger.error(`Error during prepareBilboMDResults job: ${error}`)
   }
 }
 
@@ -227,7 +228,7 @@ const copyBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
     // }
     await MQjob.log('end copy from pscratch to cfs')
   } catch (error) {
-    logger.error(`Error during monitoring of BilboMD job: ${error}`)
+    logger.error(`Error during copyBilboMDResults job: ${error}`)
   }
 }
 
@@ -249,8 +250,9 @@ const sendBilboMDEmail = async (MQjob: BullMQJob, DBjob: IJob) => {
       status: 'Error',
       message: `Failed to send email: ${error}`
     }
+    await updateStepStatus(DBjob, 'email', status)
     await updateStepStatus(DBjob, 'nersc_job_status', status)
-    logger.error(`Error during monitoring of BilboMD job: ${error}`)
+    logger.error(`Error during sendBilboMDEmail job: ${error}`)
   }
 }
 
