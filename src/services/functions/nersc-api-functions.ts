@@ -56,7 +56,7 @@ const submitJobToNersc = async (Job: IJob): Promise<string> => {
     'Content-Type': 'application/x-www-form-urlencoded',
     Authorization: `Bearer ${token}`
   }
-  const slurmFile = `/pscratch/sd/s/sclassen/bilbmod/${UUID}/bilbomd.slurm`
+  const slurmFile = `${config.nerscWorkDir}/${UUID}/bilbomd.slurm`
   const data = qs.stringify({
     isPath: 'true',
     job: slurmFile,
@@ -215,8 +215,7 @@ const monitorJobAtNERSC = async (
 
 const getSlurmOutFile = async (UUID: string, jobID: string): Promise<string> => {
   const token = await ensureValidToken()
-  // /pscratch/sd/s/sclassen/bilbmod/1b97dc5b-a139-4f21-8eb4-dba02bcbf186/slurm-25894425.out
-  const path = `/pscratch/sd/s/sclassen/bilbmod/${UUID}/slurm-${jobID}.out`
+  const path = `${config.nerscWorkDir}/${UUID}/slurm-${jobID}.out`
   const url = `${config.nerscBaseAPI}/utilities/download/perlmutter/${encodeURIComponent(
     path
   )}`
@@ -250,7 +249,7 @@ const getSlurmOutFile = async (UUID: string, jobID: string): Promise<string> => 
 
 const getSlurmStatusFile = async (UUID: string): Promise<string> => {
   const token = await ensureValidToken()
-  const path = `pscratch/sd/s/sclassen/bilbmod/${UUID}/status.txt`
+  const path = `${config.nerscWorkDir}/${UUID}/status.txt`
   const url = `${config.nerscBaseAPI}/utilities/download/perlmutter/${encodeURIComponent(
     path
   )}`
