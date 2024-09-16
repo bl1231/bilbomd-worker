@@ -1,3 +1,4 @@
+import path from 'path'
 import axios from 'axios'
 import axiosRetry from 'axios-retry'
 import qs from 'qs'
@@ -28,9 +29,9 @@ const executeNerscScript = async (
     'Content-Type': 'application/x-www-form-urlencoded',
     Authorization: `Bearer ${token}`
   }
-
-  const logFile = `/global/homes/s/sclassen/script-logs/${scriptName}-${new Date().toISOString()}.log`
-  const cmd = `ENVIRONMENT=${environment} ${config.nerscScriptDir}/${scriptName} ${scriptArgs} > ${logFile} 2>&1`
+  const scriptBaseName = path.basename(scriptName)
+  const logFile = `/global/homes/s/sclassen/script-logs/${scriptBaseName}-${new Date().toISOString()}.log`
+  const cmd = `ENVIRONMENT=${environment} ${scriptName} ${scriptArgs} > ${logFile} 2>&1`
   logger.info(`Executing command: ${cmd}`)
 
   const data = qs.stringify({
