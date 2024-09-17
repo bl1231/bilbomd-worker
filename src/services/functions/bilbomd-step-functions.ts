@@ -946,6 +946,21 @@ const createReadmeFile = async (
 `
       break
     }
+    case 'BilboMdAlphaFold': {
+      const alphafoldJob = DBjob as IBilboMDAlphaFoldJob
+      originalFiles = `
+- Original experimental SAXS data file: ${alphafoldJob.data_file}
+- FASTA file: ${alphafoldJob.fasta_file}
+- Generated PDB file: ${alphafoldJob.pdb_file}
+- Generated PAE file: ${alphafoldJob.pae_file}
+- Generated CRD file: ${alphafoldJob.crd_file}
+- Generated PSF file: ${alphafoldJob.psf_file}
+- Generated const.inp file: ${alphafoldJob.const_inp_file}
+- Generated minimized PDB file: minimized_output.pdb
+- Generated minimized PDB DAT file: minimized_output.pdb.dat
+`
+      break
+    }
   }
   const readmeContent = `
 # BilboMD Job Results
