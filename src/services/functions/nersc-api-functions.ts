@@ -14,7 +14,7 @@ const environment: string = process.env.NODE_ENV || 'development'
 type StepKey = keyof IBilboMDSteps
 
 // Configure axios to retry on failure
-axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay })
+axiosRetry(axios, { retries: 11, retryDelay: axiosRetry.exponentialDelay })
 
 const executeNerscScript = async (
   scriptName: string,
