@@ -129,10 +129,10 @@ const createPdb2CrdCharmmInpFiles = async (
               const lines = data.split('\n')
               lines.forEach((line) => {
                 line = line.trim()
-                if (line.startsWith('FILE_CREATED:')) {
-                  const inpFile = line.split(':')[1].trim()
-                  logger.info(`inpFile: ${inpFile}`)
-                  outputFiles.push(inpFile)
+                if (line) {
+                  // Only process non-empty lines
+                  logger.info(`inpFile: ${line}`)
+                  outputFiles.push(line)
                 }
               })
 
