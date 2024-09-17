@@ -233,6 +233,12 @@ const prepareBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob): Promise<voi
 
 const copyBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
   try {
+    await updateJobStatus(
+      DBjob,
+      'copy_results_to_cfs',
+      'Running',
+      'Copying results from pscratch to CFS has started.'
+    )
     await MQjob.log('start copy from pscratch to cfs')
     const copyID = await executeNerscScript(
       config.scripts.copyFromScratchToCFSScript,
@@ -240,13 +246,25 @@ const copyBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
     )
     const copyResult = await monitorTaskAtNERSC(copyID)
     logger.info(`copyResult: ${JSON.stringify(copyResult)}`)
-    // status = {
-    //   status: 'Success',
-    //   message: 'BilboMD Results copied back to CFS successfully.'
-    // }
+    await updateJobStatus(
+      DBjob,
+      'copy_results_to_cfs',
+      'Success',
+      'Copying results from pscratch to CFS successful.'
+    )
     await MQjob.log('end copy from pscratch to cfs')
   } catch (error) {
-    logger.error(`Error during copyBilboMDResults job: ${error}`)
+    let errorMessage = 'Unknown error'
+    if (error instanceof Error) {
+      errorMessage = error.message
+    }
+    await updateJobStatus(
+      DBjob,
+      'copy_results_to_cfs',
+      'Error',
+      `Failed to copy BilboMD results from pscratch to cfs: ${errorMessage}`
+    )
+    logger.error(`Error during copyBilboMDResults job: ${errorMessage}`)
   }
 }
 
