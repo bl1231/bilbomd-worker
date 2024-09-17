@@ -4,7 +4,8 @@
 # FROM nvcr.io/nvidia/cuda:12.5.1-devel-ubuntu24.04 AS builder
 # FROM nvcr.io/nvidia/cuda:12.2.2-devel-ubuntu22.04 AS builder
 # FROM nvcr.io/nvidia/cuda:12.0.0-devel-ubuntu22.04 AS builder
-FROM nvcr.io/nvidia/cuda:12.0.1-devel-ubuntu22.04 AS builder
+# FROM nvcr.io/nvidia/cuda:12.0.1-devel-ubuntu22.04 AS builder
+FROM nvidia/cuda:12.2.2-devel-ubuntu22.04 AS builder
 RUN apt-get update && \
     apt-get install -y cmake gcc gfortran g++ python3 \
     libpmix-bin libpmix-dev parallel wget bzip2 ncat \
