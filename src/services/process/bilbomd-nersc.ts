@@ -16,41 +16,74 @@ const processBilboMDJobNersc = async (MQjob: BullMQJob) => {
     await MQjob.updateProgress(1)
 
     const foundJob = await Job.findOne({ _id: MQjob.data.jobid }).populate('user').exec()
-
     if (!foundJob) {
       throw new Error(`No job found for: ${MQjob.data.jobid}`)
     }
     await MQjob.updateProgress(5)
 
     // Initialize
-    await initializeJob(MQjob, foundJob)
-    await MQjob.updateProgress(10)
+    try {
+      await initializeJob(MQjob, foundJob)
+      await MQjob.updateProgress(10)
+    } catch (error) {
+      logger.error(`Failed to initialize job: ${MQjob.data.uuid}`)
+      throw error
+    }
 
     // Prepare bilbomd.slurm file
-    await makeBilboMDSlurm(MQjob, foundJob)
-    await MQjob.updateProgress(15)
+    try {
+      await makeBilboMDSlurm(MQjob, foundJob)
+      await MQjob.updateProgress(15)
+    } catch (error) {
+      logger.error(`Failed to prepare bilbomd.slurm file: ${MQjob.data.uuid}`)
+      throw error
+    }
 
     // Submit bilbomd.slurm to the queueing system
-    const jobID = await submitBilboMDSlurm(MQjob, foundJob)
-    await MQjob.updateProgress(20)
+    let jobID: string
+    try {
+      jobID = await submitBilboMDSlurm(MQjob, foundJob)
+      await MQjob.updateProgress(20)
+    } catch (error) {
+      logger.error(`Failed to submit bilbomd.slurm: ${MQjob.data.uuid}`)
+      throw error
+    }
 
     // Watch the job
-    await monitorBilboMDJob(MQjob, foundJob, jobID)
-    await MQjob.updateProgress(90)
+    try {
+      await monitorBilboMDJob(MQjob, foundJob, jobID)
+      await MQjob.updateProgress(90)
+    } catch (error) {
+      logger.error(`Failed to monitor BilboMD job: ${MQjob.data.uuid}`)
+      throw error
+    }
 
     // Copy files from PSCRATCH to CFS
-    // Better to do this here? because it can take quite some time.
-    // PSCRATCH is not available from SPIN so will need to run a script.
-    await copyBilboMDResults(MQjob, foundJob)
-    await MQjob.updateProgress(95)
+    try {
+      await copyBilboMDResults(MQjob, foundJob)
+      await MQjob.updateProgress(95)
+    } catch (error) {
+      logger.error(`Failed to copy BilboMD results: ${MQjob.data.uuid}`)
+      throw error
+    }
 
     // Prepare results
-    await prepareBilboMDResults(MQjob, foundJob)
-    await MQjob.updateProgress(99)
+    try {
+      await prepareBilboMDResults(MQjob, foundJob)
+      await MQjob.updateProgress(99)
+    } catch (error) {
+      logger.error(`Failed to prepare BilboMD results: ${MQjob.data.uuid}`)
+      throw error
+    }
 
     // Cleanup & send email
-    await sendBilboMDEmail(MQjob, foundJob)
-    await MQjob.updateProgress(100)
+    try {
+      await sendBilboMDEmail(MQjob, foundJob)
+      await MQjob.updateProgress(100)
+    } catch (error) {
+      logger.error(`Failed to cleanup and send email: ${MQjob.data.uuid}`)
+      throw error
+    }
   } catch (error) {
     logger.error(`Failed to process job: ${MQjob.data.uuid}`)
     throw error
