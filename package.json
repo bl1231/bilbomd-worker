@@ -2,7 +2,7 @@
   "name": "bilbomd-worker",
   "version": "1.7.0",
   "description": "A worker app to process BilboMD jobs from BullMQ queue",
-  "main": "dist/index.js",
+  "main": "worker.js",
   "scripts": {
     "clean": "rimraf build/*",
     "copy-assets": "copyfiles --all --up 1 --exclude \"./**/*.{ts,tsx}\" \"./src/**/*\" ./build",

@@ -79,7 +79,7 @@ const monitorTaskAtNERSC = async (taskID: string): Promise<TaskStatusResponse> =
   const url = `${config.nerscBaseAPI}/tasks/${taskID}`
   // logger.info(`monitorTaskAtNERSC url: ${url}`)
 
-  let status = 'pending'
+  let status = 'PENDING'
   let statusResponse: TaskStatusResponse | undefined
 
   const makeRequest = async () => {
@@ -205,14 +205,14 @@ const monitorJobAtNERSC = async (
     // RUNNING
     // ...and presumably any other Slurm statuses of which I am unaware.
     switch (jobStatus) {
-      case jobStatus.startsWith('COMPLETED') ? 'COMPLETED' : '':
-      case jobStatus.startsWith('FAILED') ? 'FAILED' : '':
-      case jobStatus.startsWith('DEADLINE') ? 'DEADLINE' : '':
-      case jobStatus.startsWith('TIMEOUT') ? 'TIMEOUT' : '':
-      case jobStatus.startsWith('CANCELLED') ? 'CANCELLED' : '':
-      case jobStatus.startsWith('NODE_FAIL') ? 'NODE_FAIL' : '':
-      case jobStatus.startsWith('OUT_OF_MEMORY') ? 'OUT_OF_MEMORY' : '':
-      case jobStatus.startsWith('PREEMPTED') ? 'PREEMPTED' : '':
+      case jobStatus.includes('COMPLETED') ? 'COMPLETED' : '':
+      case jobStatus.includes('FAILED') ? 'FAILED' : '':
+      case jobStatus.includes('DEADLINE') ? 'DEADLINE' : '':
+      case jobStatus.includes('TIMEOUT') ? 'TIMEOUT' : '':
+      case jobStatus.includes('CANCELLED') ? 'CANCELLED' : '':
+      case jobStatus.includes('NODE_FAIL') ? 'NODE_FAIL' : '':
+      case jobStatus.includes('OUT_OF_MEMORY') ? 'OUT_OF_MEMORY' : '':
+      case jobStatus.includes('PREEMPTED') ? 'PREEMPTED' : '':
         continueMonitoring = false // Stop monitoring if any of these statuses are met
         // one final update of the status.txt file?
         await updateStatus(Job)
