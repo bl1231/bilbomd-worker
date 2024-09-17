@@ -828,8 +828,15 @@ const prepareResults = async (
     }
 
     // Additional AlphaFold-specific files
+    // These files are not present in MongoDB because we currently do not update
+    // MongoDB during a NERSC job.
     if (DBjob.__t === 'BilboMdAlphaFold') {
-      const alphafoldExtraFiles = ['af-pae.json', 'af-rank1.pdb']
+      const alphafoldExtraFiles = [
+        'af-pae.json',
+        'af-rank1.pdb',
+        'bilbomd_pdb2crd.psf',
+        'bilbomd_pdb2crd.crd'
+      ]
       alphafoldExtraFiles.forEach((file) => {
         filesToCopy.push({ file, label: file })
       })
@@ -951,11 +958,11 @@ const createReadmeFile = async (
       originalFiles = `
 - Original experimental SAXS data file: ${alphafoldJob.data_file}
 - FASTA file: ${alphafoldJob.fasta_file}
-- Generated PDB file: ${alphafoldJob.pdb_file}
-- Generated PAE file: ${alphafoldJob.pae_file}
-- Generated CRD file: ${alphafoldJob.crd_file}
-- Generated PSF file: ${alphafoldJob.psf_file}
-- Generated const.inp file: ${alphafoldJob.const_inp_file}
+- AlphaFold PDB file: af-rank1.pdb
+- AlphaFold PAE file: af-pae.json
+- Generated CRD file: bilbomd_pdb2crd.crd
+- Generated PSF file: bilbomd_pdb2crd.psf
+- Generated const.inp file: const.inp
 - Generated minimized PDB file: minimized_output.pdb
 - Generated minimized PDB DAT file: minimized_output.pdb.dat
 `
