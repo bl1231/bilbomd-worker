@@ -196,7 +196,13 @@ const monitorJobAtNERSC = async (
         continue // Force token refresh on the next iteration if token has expired
       } else {
         logger.error(`Error monitoring job at NERSC: ${error}`)
-        throw error
+        retryCount++ // Increment retry count on failed attempt
+        if (retryCount >= maxRetries) {
+          logger.error(`Max retries reached for job ${jobID}`)
+          throw new Error(`Max retries reached for job ${jobID}`)
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5000)) // Wait before retrying
+        continue // Retry the request
       }
     }
 
@@ -204,15 +210,15 @@ const monitorJobAtNERSC = async (
     // PENDING
     // RUNNING
     // ...and presumably any other Slurm statuses of which I am unaware.
-    switch (jobStatus) {
-      case jobStatus.includes('COMPLETED') ? 'COMPLETED' : '':
-      case jobStatus.includes('FAILED') ? 'FAILED' : '':
-      case jobStatus.includes('DEADLINE') ? 'DEADLINE' : '':
-      case jobStatus.includes('TIMEOUT') ? 'TIMEOUT' : '':
-      case jobStatus.includes('CANCELLED') ? 'CANCELLED' : '':
-      case jobStatus.includes('NODE_FAIL') ? 'NODE_FAIL' : '':
-      case jobStatus.includes('OUT_OF_MEMORY') ? 'OUT_OF_MEMORY' : '':
-      case jobStatus.includes('PREEMPTED') ? 'PREEMPTED' : '':
+    switch (true) {
+      case jobStatus.includes('COMPLETED'):
+      case jobStatus.includes('FAILED'):
+      case jobStatus.includes('DEADLINE'):
+      case jobStatus.includes('TIMEOUT'):
+      case jobStatus.includes('CANCELLED'):
+      case jobStatus.includes('NODE_FAIL'):
+      case jobStatus.includes('OUT_OF_MEMORY'):
+      case jobStatus.includes('PREEMPTED'):
         continueMonitoring = false // Stop monitoring if any of these statuses are met
         // one final update of the status.txt file?
         await updateStatus(Job)
