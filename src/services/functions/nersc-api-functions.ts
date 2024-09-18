@@ -185,7 +185,7 @@ const monitorJobAtNERSC = async (
         // Update the step status in MongoDB
         const status: IStepStatus = {
           status: 'Running',
-          message: `Slurm Status: ${jobStatus}`
+          message: jobStatus
         }
         await updateStepStatus(DBJob, 'nersc_job_status', status)
         statusResponse = {
