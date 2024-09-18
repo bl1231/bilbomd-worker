@@ -19,7 +19,7 @@ project="m4659"
 queue="regular"
 constraint="gpu"
 nodes="1"
-time="00:60:00"
+time="00:90:00"
 mailtype="end,fail"
 mailuser="sclassen@lbl.gov"
 
