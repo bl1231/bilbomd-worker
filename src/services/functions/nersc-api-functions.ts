@@ -166,7 +166,7 @@ const monitorJobAtNERSC = async (
   }
 
   const maxRetries = 10 // Maximum number of retries for failed attempts
-  const maxIterations = 1000 // Maximum number of total iterations
+  const maxIterations = 1440 // 1440 x 60s = 24 hours
   let retryCount = 0
   let iterationCount = 0
 
@@ -222,7 +222,7 @@ const monitorJobAtNERSC = async (
           logger.error(`Max retries reached for job ${jobID}`)
           throw new Error(`Max retries reached for job ${jobID}`)
         }
-        await new Promise((resolve) => setTimeout(resolve, 5000)) // Wait before retrying
+        await new Promise((resolve) => setTimeout(resolve, 60000)) // Wait before retrying
         continue // Retry the request
       }
     }
@@ -246,7 +246,7 @@ const monitorJobAtNERSC = async (
         break
       default:
         iterationCount++
-        await new Promise((resolve) => setTimeout(resolve, 5000)) // Continue polling otherwise
+        await new Promise((resolve) => setTimeout(resolve, 60000)) // Continue polling otherwise
         break
     }
   }
