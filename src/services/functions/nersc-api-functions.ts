@@ -8,10 +8,30 @@ import { IBilboMDSteps, IJob, IStepStatus } from '@bl1231/bilbomd-mongodb-schema
 import { ensureValidToken } from './nersc-api-token-functions'
 import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc'
 import { updateStepStatus } from './mongo-utils'
+import { Job as BullMQJob } from 'bullmq'
 
 const environment: string = process.env.NODE_ENV || 'development'
 
-type StepKey = keyof IBilboMDSteps
+const stepWeights: { [key: string]: number } = {
+  alphafold: 20,
+  pdb2crd: 5,
+  pae: 5,
+  autorg: 5,
+  minimize: 10,
+  initfoxs: 5,
+  heat: 10,
+  md: 30,
+  dcd2pdb: 10,
+  foxs: 10,
+  multifoxs: 10,
+  copy_results_to_cfs: 5,
+  results: 3,
+  email: 1,
+  nersc_prepare_slurm_batch: 5,
+  nersc_submit_slurm_batch: 5,
+  nersc_job_status: 5,
+  nersc_copy_results_to_cfs: 5
+}
 
 // Configure axios to retry on failure
 axiosRetry(axios, { retries: 11, retryDelay: axiosRetry.exponentialDelay })
@@ -131,7 +151,8 @@ const monitorTaskAtNERSC = async (taskID: string): Promise<TaskStatusResponse> =
 }
 
 const monitorJobAtNERSC = async (
-  Job: IJob,
+  MQJob: BullMQJob,
+  DBJob: IJob,
   jobID: string
 ): Promise<JobStatusResponse> => {
   let jobStatus = 'pending'
@@ -166,7 +187,7 @@ const monitorJobAtNERSC = async (
           status: 'Running',
           message: `Slurm Status: ${jobStatus}`
         }
-        await updateStepStatus(Job, 'nersc_job_status', status)
+        await updateStepStatus(DBJob, 'nersc_job_status', status)
         statusResponse = {
           api_status: response.data.status,
           api_error: response.data.error,
@@ -183,7 +204,7 @@ const monitorJobAtNERSC = async (
       )
 
       if (jobStatus === 'RUNNING') {
-        await updateStatus(Job)
+        await updateStatus(MQJob, DBJob)
       }
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 403) {
@@ -221,7 +242,7 @@ const monitorJobAtNERSC = async (
       case jobStatus.includes('PREEMPTED'):
         continueMonitoring = false // Stop monitoring if any of these statuses are met
         // one final update of the status.txt file?
-        await updateStatus(Job)
+        await updateStatus(MQJob, DBJob)
         break
       default:
         iterationCount++
@@ -303,36 +324,44 @@ const getSlurmStatusFile = async (UUID: string): Promise<string> => {
   }
 }
 
-const updateStatus = async (Job: IJob) => {
-  // logger.info(`updating status ${Job.title}`)
-  const UUID = Job.uuid
+const updateStatus = async (MQjob: BullMQJob, DBJob: IJob) => {
+  const UUID = DBJob.uuid
   const contents: string = await getSlurmStatusFile(UUID)
-
   const lines = contents.split('\n')
 
   lines.forEach((line) => {
     const [step, status] = line.split(':').map((part) => part.trim())
-    if (step in Job.steps) {
-      const key = step as StepKey // Assert that step is a valid key of IBilboMDSteps
-      Job.steps[key] = {
+    if (step in DBJob.steps) {
+      const key = step as keyof IBilboMDSteps // Assert that step is a valid key of IBilboMDSteps
+      DBJob.steps[key] = {
         status: status,
         message: status
       }
     }
   })
 
-  // Save the updated Job document
   try {
-    await Job.save()
-    // logger.info(
-    //   `Job ${Job._id} status updated successfully with details: ${JSON.stringify(
-    //     Job.steps
-    //   )}`
-    // )
+    await DBJob.save()
+    const progress = calculateProgress(DBJob.steps)
+    await MQjob.updateProgress(progress)
   } catch (error) {
-    logger.error(`Unable to save job status for ${Job._id}: ${error}`)
+    logger.error(`Unable to save job status for ${DBJob._id}: ${error}`)
     throw error
   }
+}
+
+const calculateProgress = (steps: IBilboMDSteps): number => {
+  const totalWeight = Object.values(stepWeights).reduce((acc, weight) => acc + weight, 0)
+  let completedWeight = 0
+
+  for (const [step, status] of Object.entries(steps)) {
+    if (status?.status === 'Success') {
+      completedWeight += stepWeights[step] || 0
+    }
+  }
+
+  const progress = (completedWeight / totalWeight) * 70 + 20 // Scale between 20% and 90%
+  return Math.min(progress, 90) // Ensure it doesn't exceed 90%
 }
 
 export {

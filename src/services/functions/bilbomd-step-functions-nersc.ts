@@ -161,7 +161,7 @@ const monitorBilboMDJob = async (
     await MQjob.log('start nersc watch job')
     await updateJobStatus(DBjob, 'nersc_job_status', 'Running', 'Watching BilboMD Job')
 
-    const jobResult = await monitorJobAtNERSC(DBjob, Pjob)
+    const jobResult = await monitorJobAtNERSC(MQjob, DBjob, Pjob)
     logger.info(`jobResult: ${JSON.stringify(jobResult)}`)
 
     await updateJobStatus(
