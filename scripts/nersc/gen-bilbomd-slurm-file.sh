@@ -52,7 +52,7 @@ fi
 # Define base directories
 BASE_DIR=${CFS}/${project}/bilbomd
 UPLOAD_DIR=${BASE_DIR}/${ENV_DIR}/uploads/${UUID}
-WORKDIR=${PSCRATCH}/bilbmod/${UUID}
+WORKDIR=${PSCRATCH}/bilbomd/${ENV_DIR}/${UUID}
 TEMPLATEDIR=${BASE_DIR}/${ENV_DIR}/templates
 
 echo "Upload directory: $UPLOAD_DIR"
@@ -60,8 +60,8 @@ echo "Work directory: $WORKDIR"
 echo "Template directory: $TEMPLATEDIR"
 
 # Docker images
-WORKER=bilbomd/bilbomd-perlmutter-worker:latest
-AF_WORKER=bilbomd/bilbomd-colabfold:0.0.6
+WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.18
+AF_WORKER=bilbomd/bilbomd-colabfold:0.0.8
 
 
 # -----------------------------------------------------------------------------
@@ -171,8 +171,8 @@ read_job_params() {
             echo "Error: Missing PAE file"
             return 1
         fi
-    elif [ "$job_type" = "BilboMdAF" ]; then
-        echo "Job Type: BilboMdAF"
+    elif [ "$job_type" = "BilboMdAlphaFold" ]; then
+        echo "Job Type: BilboMdAlphaFold"
         fasta_file=$(jq -r '.fasta_file' $WORKDIR/params.json)
         pdb_file="af-model-1.pdb"
         pae_file="af-pae.json"
@@ -308,14 +308,12 @@ template_md_input_files() {
 generate_pdb2crd_input_files() {
     local command="cd /bilbomd/work/ && python /app/scripts/pdb2crd.py $pdb_file . > pdb2crd_output.txt"
     docker run --rm --volume ${WORKDIR}:/bilbomd/work ${WORKER} /bin/bash -c "$command"
-
     if [[ -f "${WORKDIR}/pdb2crd_output.txt" ]]; then
         local output=$(cat "${WORKDIR}/pdb2crd_output.txt")
     else
         echo "Output file not found." >&2
         exit 1
     fi
-
     # Parse the output to get the names of the generated .inp files
     g_pdb2crd_inp_files=($(echo "$output"))
 
@@ -333,7 +331,7 @@ generate_pdb2crd_input_files_af() {
 # Convert AF PDB to CRD/PSF
 update_status pdb2crd Running
 echo "Generating pdb2crd input files..."
-srun --job-name af-pdb2crd podman-hpc run --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${AF_WORKER} /bin/bash -c "cd /bilbomd/work/ && python pdb2crd.py af-rank1.pdb . > pdb2crd_output.txt"
+srun --job-name af-pdb2crd podman-hpc run --rm --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${AF_WORKER} /bin/bash -c "cd /bilbomd/work/ && python /app/scripts/pdb2crd.py af-rank1.pdb . > pdb2crd_output.txt"
 
 # Parse the file "pdb2crd_output.txt"
 # This will also run CHARMM for each chain-specific *.inp file
@@ -657,7 +655,7 @@ generate_alphafold_commands() {
 # nvidia-smi
 update_status alphafold Running
 echo "Running AlphaFold..."
-srun --gpus=4 --job-name alphafold podman-hpc run --rm --gpu --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${AF_WORKER} /bin/bash -c "cd /bilbomd/work/ && colabfold_batch --num-models=3 --amber --use-gpu-relax --num-recycle=4 T1050.fasta alphafold"
+srun --gpus=4 --job-name alphafold podman-hpc run --rm --gpu --userns=keep-id -v \${WORKDIR}:/bilbomd/work -v \${UPLOAD_DIR}:/cfs ${AF_WORKER} /bin/bash -c "cd /bilbomd/work/ && colabfold_batch --num-models=3 --amber --use-gpu-relax --num-recycle=4 af-entities.fasta alphafold"
 AF_EXIT=\$?
 check_exit_code \$AF_EXIT alphafold
 
@@ -851,7 +849,7 @@ append_slurm_sections() {
         cat slurmheader minheat dynamics dcd2pdb foxssection multifoxssection endsection > bilbomd.slurm
     elif [ "$job_type" = "BilboMdAuto" ]; then
         cat slurmheader pdb2crd pae2const minheat dynamics dcd2pdb foxssection multifoxssection endsection > bilbomd.slurm
-    elif [ "$job_type" = "BilboMdAF" ]; then
+    elif [ "$job_type" = "BilboMdAlphaFold" ]; then
         cat slurmheader alphafold_cmd alphafoldmodel make_pdb2crd_inp_files meld_cmds pae2const minheat dynamics dcd2pdb foxssection multifoxssection endsection > bilbomd.slurm
     else
         echo "Error: Unrecognized job_type '$job_type'"
@@ -893,7 +891,7 @@ echo "----------------- ${UUID} -----------------"
 
 initialize_job
 
-if [ "$job_type" = "BilboMdAF" ]; then
+if [ "$job_type" = "BilboMdAlphaFold" ]; then
     generate_alphafold_commands
     generate_prep_af_data_commands
     generate_pdb2crd_input_files_af
@@ -909,7 +907,7 @@ generate_md_input_files
 generate_dcd2pdb_input_files
 
 
-if [ "$job_type" = "BilboMdAuto" ] || [ "$job_type" = "BilboMdAF" ]; then
+if [ "$job_type" = "BilboMdAuto" ] || [ "$job_type" = "BilboMdAlphaFold" ]; then
     generate_pae2const_commands
 fi
 
