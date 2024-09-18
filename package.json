@@ -28,7 +28,7 @@
     "jsonwebtoken": "^9.0.2",
     "module-alias": "^2.2.3",
     "moment-timezone": "^0.5.45",
-    "mongoose": "^8.6.2",
+    "mongoose": "^8.6.3",
     "nodemailer": "^6.9.15",
     "nodemailer-express-handlebars": "^6.1.2",
     "qs": "^6.13.0",
