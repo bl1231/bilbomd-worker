@@ -1,18 +1,13 @@
 import * as dotenv from 'dotenv'
 import express from 'express'
 import { connectDB } from './helpers/db'
-import { Job, Worker, WorkerOptions } from 'bullmq'
-import { WorkerJob } from './types/jobtypes'
+import { Worker, WorkerOptions } from 'bullmq'
 import { logger } from './helpers/loggers'
 import { config } from './config/config'
-import { ensureValidToken } from './services/functions/nersc-api-token-functions'
-import { processBilboMDCRDJob } from './services/process/bilbomd-crd'
-import { processBilboMDPDBJob } from './services/process/bilbomd-pdb'
-import { processBilboMDAutoJob } from './services/process/bilbomd-auto'
-import { processPdb2CrdJob } from './services/process/pdb-to-crd'
-import { processPdb2CrdJobNersc } from './services/process/pdb-to-crd-nersc'
-import { processBilboMDJobNersc } from './services/process/bilbomd-nersc'
-import { processDockerBuildJob } from './services/process/webhooks-nersc'
+import { createBilboMdWorker } from './workers/bilboMdWorker'
+import { createPdb2CrdWorker } from './workers/pdb2CrdWorker'
+import { createWebhooksWorker } from './workers/webhooksWorker'
+import { checkNERSC } from './workers/workerControl'
 
 dotenv.config()
 
@@ -28,144 +23,9 @@ if (environment === 'production') {
 
 connectDB()
 
-let bilboMdWorker: Worker
-let pdb2CrdWorker: Worker
-let webhooksWorker: Worker
-
-const checkNERSC = async () => {
-  try {
-    // Eventually could have various checks here.
-
-    // Perlmutter status
-    // const response = await someAPI.healthCheck()
-    // if (response.status !== 'ok') {
-    //   throw new Error('API is not healthy')
-    // }
-
-    // Valid client
-
-    // Able to get access token
-    const token: string = await ensureValidToken()
-    if (typeof token === 'string' && token.length > 10) {
-      logger.info(`Successfully obtained NERSC token: ${token.slice(0, 10)}...`)
-      return true
-    } else {
-      logger.warn(`Did not successfully obtain NERSC token: ${token}`)
-      return false
-    }
-  } catch (error) {
-    logger.error(`Failed to obtain NERSC token: ${error}`)
-    return false
-  }
-}
-
-const pauseProcessing = async () => {
-  if (bilboMdWorker) {
-    await bilboMdWorker.pause()
-    logger.info('BilboMD Worker paused due to invalid NERSC tokens')
-  }
-  if (pdb2CrdWorker) {
-    await pdb2CrdWorker.pause()
-    logger.info('PDB2CRD Worker paused due to invalid NERSC tokens')
-  }
-  if (webhooksWorker) {
-    await webhooksWorker.pause()
-    logger.info('PDB2CRD Worker paused due to invalid NERSC tokens')
-  }
-}
-
-const resumeProcessing = async () => {
-  if (bilboMdWorker) {
-    bilboMdWorker.resume()
-    logger.info('BilboMD Worker resumed')
-  }
-  if (pdb2CrdWorker) {
-    pdb2CrdWorker.resume()
-    logger.info('PDB2CRD Worker resumed')
-  }
-  if (webhooksWorker) {
-    webhooksWorker.resume()
-    logger.info('PDB2CRD Worker resumed')
-  }
-}
-
-const workerHandler = async (job: Job<WorkerJob>) => {
-  logger.info(`workerHandler: ${JSON.stringify(job.data)}`)
-  // NERSC check
-  if (config.runOnNERSC && !(await checkNERSC())) {
-    logger.error('NERSC token invalid. Pausing job processing.')
-    await pauseProcessing()
-    setTimeout(startWorkers, 10000) // Attempt to restart workers after a delay
-    return
-  }
-  try {
-    switch (job.data.type) {
-      case 'pdb':
-        logger.info(`Start BilboMD PDB job: ${job.name}`)
-        await (config.runOnNERSC
-          ? processBilboMDJobNersc(job)
-          : processBilboMDPDBJob(job))
-        logger.info(`Finish job: ${job.name}`)
-        break
-      case 'crd_psf':
-        logger.info(`Start BilboMD CRD job: ${job.name}`)
-        await (config.runOnNERSC
-          ? processBilboMDJobNersc(job)
-          : processBilboMDCRDJob(job))
-        logger.info(`Finish job: ${job.name}`)
-        break
-      case 'auto':
-        logger.info(`Start BilboMD Auto job: ${job.name}`)
-        await (config.runOnNERSC
-          ? processBilboMDJobNersc(job)
-          : processBilboMDAutoJob(job))
-        logger.info(`Finished job: ${job.name}`)
-        break
-      case 'alphafold':
-        logger.info(`Start BilboMD AlphaFold job: ${job.name}`)
-
-        // Ensure AlphaFold jobs only run on NERSC
-        if (!config.runOnNERSC) {
-          const errorMsg = `AlphaFold jobs can only be run on NERSC. Job: ${job.name}`
-          logger.error(errorMsg)
-          throw new Error(errorMsg) // Or handle gracefully?
-        }
-        await processBilboMDJobNersc(job) // AlphaFold job processing on NERSC
-        logger.info(`Finished job: ${job.name}`)
-        break
-      case 'Pdb2Crd':
-        logger.info(`Start Pdb2Crd job: ${job.name}`)
-        await (config.runOnNERSC ? processPdb2CrdJobNersc(job) : processPdb2CrdJob(job))
-        logger.info(`Finished job: ${job.name}`)
-        break
-    }
-  } catch (error) {
-    logger.error(`Error processing job ${job.id}: ${error}`)
-  }
-}
-
-const webhooksWorkerHandler = async (job: Job<WorkerJob>) => {
-  // NERSC check
-  if (config.runOnNERSC && !(await checkNERSC())) {
-    logger.error('NERSC token invalid. Pausing job processing.')
-    await pauseProcessing()
-    setTimeout(startWorkers, 10000)
-    return
-  }
-  try {
-    // logger.info(`webhooksWorkerHandler JOB: ${JSON.stringify(job)}`)
-    logger.info(`webhooksWorkerHandler JOB.DATA: ${JSON.stringify(job.data)}`)
-    switch (job.data.type) {
-      case 'docker-build':
-        logger.info(`Start Docker Build job: ${job.name}`)
-        await processDockerBuildJob(job)
-        logger.info(`Finish Docker Build job: ${job.name}`)
-        break
-    }
-  } catch (error) {
-    logger.error(`Error processing job ${job.id}: ${error}`)
-  }
-}
+let bilboMdWorker: Worker | null = null
+let pdb2CrdWorker: Worker | null = null
+let webhooksWorker: Worker | null = null
 
 const redisConn = {
   host: 'redis',
@@ -191,38 +51,71 @@ const webhooksWorkerOptions: WorkerOptions = {
 const startWorkers = async () => {
   const systemName = config.runOnNERSC ? 'NERSC' : 'Hyperion' // Set system name based on the config
   logger.info(`Attempting to start workers on ${systemName}...`)
-  // Setup periodic NERSC token validation
-  setInterval(async () => {
-    if (await checkNERSC()) {
-      if (
-        (bilboMdWorker && bilboMdWorker.isPaused()) ||
-        (pdb2CrdWorker && pdb2CrdWorker.isPaused()) ||
-        (webhooksWorker && webhooksWorker.isPaused())
-      ) {
-        await resumeProcessing()
+
+  // Create workers only if they are not already initialized
+  if (!bilboMdWorker || !pdb2CrdWorker || !webhooksWorker) {
+    // If running on NERSC, check credentials before starting workers
+    if (config.runOnNERSC) {
+      logger.info('Checking NERSC credentials...')
+      if (!(await checkNERSC())) {
+        logger.info(
+          'NERSC is not ready; workers will be started when credentials are valid'
+        )
+        return // Exit if credentials are not valid
       }
     }
-  }, 300000) // Check every 5 minutes
-  // If running on NERSC, check credentials before starting workers
-  if (config.runOnNERSC) {
-    logger.info('Checking NERSC credentials...')
-    if (!(await checkNERSC())) {
-      logger.info('NERSC is not ready, delaying worker start')
-      setTimeout(startWorkers, 10000) // Check again in 10 seconds
-      return // Exit if credentials are not valid
+
+    // Create workers
+    bilboMdWorker = createBilboMdWorker(workerOptions)
+    logger.info(`BilboMD Worker started on ${systemName}`)
+
+    pdb2CrdWorker = createPdb2CrdWorker(pdb2crdWorkerOptions)
+    logger.info(`PDB2CRD Worker started on ${systemName}`)
+
+    webhooksWorker = createWebhooksWorker(webhooksWorkerOptions)
+    logger.info(`Webhooks Worker started on ${systemName}`)
+  } else {
+    logger.info('Workers are already initialized')
+  }
+}
+
+// Define the workers array
+const workers = [
+  { worker: () => bilboMdWorker, name: 'BilboMD Worker' },
+  { worker: () => pdb2CrdWorker, name: 'PDB2CRD Worker' },
+  { worker: () => webhooksWorker, name: 'Webhooks Worker' }
+]
+
+// Setup periodic NERSC token validation
+setInterval(async () => {
+  if (await checkNERSC()) {
+    // Start workers if they are not initialized
+    if (!bilboMdWorker || !pdb2CrdWorker || !webhooksWorker) {
+      await startWorkers()
+    } else {
+      // Resume workers if they are paused
+      for (const { worker, name } of workers) {
+        const w = worker()
+        if (w && (await w.isPaused())) {
+          await w.resume()
+          logger.info(`${name} resumed`)
+        }
+      }
+    }
+  } else {
+    // If NERSC token is invalid, pause the workers
+    for (const { worker, name } of workers) {
+      const w = worker()
+      if (w && !(await w.isPaused())) {
+        await w.pause()
+        logger.info(`${name} paused due to invalid NERSC tokens`)
+      }
     }
   }
+}, 300000) // Check every 5 minutes
 
-  // Create workers
-  bilboMdWorker = new Worker('bilbomd', workerHandler, workerOptions)
-  logger.info(`BilboMD Worker started on ${systemName}`)
-
-  pdb2CrdWorker = new Worker('pdb2crd', workerHandler, pdb2crdWorkerOptions)
-  logger.info(`PDB2CRD Worker started on ${systemName}`)
-
-  webhooksWorker = new Worker('webhooks', webhooksWorkerHandler, webhooksWorkerOptions)
-  logger.info(`Webhooks Worker started on ${systemName}`)
-}
+// Start the workers initially
+startWorkers()
 
 const app = express()
 
@@ -241,5 +134,3 @@ logger.info('Starting the Express server...')
 app.listen(PORT, () => {
   logger.info(`Worker configuration server running on port ${PORT}`)
 })
-
-startWorkers()
