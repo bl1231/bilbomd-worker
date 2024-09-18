@@ -1,6 +1,6 @@
 {
   "name": "bilbomd-worker",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "A worker app to process BilboMD jobs from BullMQ queue",
   "main": "worker.js",
   "scripts": {
