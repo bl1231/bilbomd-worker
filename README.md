@@ -49,6 +49,8 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.8.0
+  - Add worker functions to process BilboMD AF (AlphaFold) jobs
 - 1.7.0
   - Remove `bilbomd-spin-worker`
   - Add an API endpoint to deliver config info
