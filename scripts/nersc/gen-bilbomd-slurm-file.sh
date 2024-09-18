@@ -60,7 +60,7 @@ echo "Work directory: $WORKDIR"
 echo "Template directory: $TEMPLATEDIR"
 
 # Docker images
-WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.18
+WORKER=bilbomd/bilbomd-perlmutter-worker:0.0.19
 AF_WORKER=bilbomd/bilbomd-colabfold:0.0.8
 
 
