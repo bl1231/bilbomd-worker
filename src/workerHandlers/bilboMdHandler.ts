@@ -5,8 +5,6 @@ import { processBilboMDAutoJob } from 'services/process/bilbomd-auto'
 import { processBilboMDCRDJob } from 'services/process/bilbomd-crd'
 import { processBilboMDJobNersc } from 'services/process/bilbomd-nersc'
 import { processBilboMDPDBJob } from 'services/process/bilbomd-pdb'
-import { processPdb2CrdJob } from 'services/process/pdb-to-crd'
-import { processPdb2CrdJobNersc } from 'services/process/pdb-to-crd-nersc'
 import { WorkerJob } from 'types/jobtypes'
 
 export const bilboMdHandler = async (job: Job<WorkerJob>) => {
@@ -44,11 +42,6 @@ export const bilboMdHandler = async (job: Job<WorkerJob>) => {
           throw new Error(errorMsg) // Or handle gracefully?
         }
         await processBilboMDJobNersc(job) // AlphaFold job processing on NERSC
-        logger.info(`Finished job: ${job.name}`)
-        break
-      case 'Pdb2Crd':
-        logger.info(`Start Pdb2Crd job: ${job.name}`)
-        await (config.runOnNERSC ? processPdb2CrdJobNersc(job) : processPdb2CrdJob(job))
         logger.info(`Finished job: ${job.name}`)
         break
     }

@@ -1,11 +1,11 @@
-import { bilboMdHandler } from '../workerHandlers/bilboMdHandler'
+import { pdb2CrdHandler } from 'workerHandlers/pdb2CrdHandler'
 import { Worker, WorkerOptions } from 'bullmq'
 import { logger } from '../helpers/loggers'
 
 let pdb2CrdActiveJobsCount = 0
 
 export const createPdb2CrdWorker = (options: WorkerOptions): Worker => {
-  const pdb2CrdWorker = new Worker('pdb2crd', bilboMdHandler, options)
+  const pdb2CrdWorker = new Worker('pdb2crd', pdb2CrdHandler, options)
   logger.info(`PDB2CRD Worker started`)
 
   pdb2CrdWorker.on('active', () => {
