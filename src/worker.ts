@@ -81,9 +81,9 @@ const startWorkers = async () => {
 
 // Define the workers array
 const workers = [
-  { worker: () => bilboMdWorker, name: 'BilboMD Worker' },
-  { worker: () => pdb2CrdWorker, name: 'PDB2CRD Worker' },
-  { worker: () => webhooksWorker, name: 'Webhooks Worker' }
+  { getWorker: () => bilboMdWorker, name: 'BilboMD Worker' },
+  { getWorker: () => pdb2CrdWorker, name: 'PDB2CRD Worker' },
+  { getWorker: () => webhooksWorker, name: 'Webhooks Worker' }
 ]
 
 // Setup periodic NERSC token validation
@@ -94,20 +94,20 @@ setInterval(async () => {
       await startWorkers()
     } else {
       // Resume workers if they are paused
-      for (const { worker, name } of workers) {
-        const w = worker()
-        if (w && (await w.isPaused())) {
-          await w.resume()
+      for (const { getWorker, name } of workers) {
+        const workerInstance = getWorker()
+        if (workerInstance && (await workerInstance.isPaused())) {
+          await workerInstance.resume()
           logger.info(`${name} resumed`)
         }
       }
     }
   } else {
     // If NERSC token is invalid, pause the workers
-    for (const { worker, name } of workers) {
-      const w = worker()
-      if (w && !(await w.isPaused())) {
-        await w.pause()
+    for (const { getWorker, name } of workers) {
+      const workerInstance = getWorker()
+      if (workerInstance && !(await workerInstance.isPaused())) {
+        await workerInstance.pause()
         logger.info(`${name} paused due to invalid NERSC tokens`)
       }
     }
