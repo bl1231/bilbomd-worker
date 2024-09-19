@@ -438,14 +438,42 @@ def define_rigid_bodies(
 
 def write_const_file(rigid_body_list: list, output_file):
     """
-    Write const.inp file
+    Write const.inp file with lines limited to 70 characters.
     """
     dock_count = 0
     rigid_body_count = 0
-    # print(f"rigid body list: {rigid_body_list}")
+
+    def write_selections(file, prefix, selections, suffix, max_line_length=70):
+        """
+        Write selections to file, ensuring that no line exceeds max_line_length.
+        """
+        current_line = prefix
+        first_sel = True
+        for sel in selections:
+            sel_text = (' .or. ' if not first_sel else '') + sel
+            if len(current_line) + len(sel_text) > max_line_length:
+                file.write(current_line + '\n')
+                current_line = '    ' + sel  # Indent continued lines
+            else:
+                current_line += sel_text
+            first_sel = False
+        current_line += ' ' + suffix
+        file.write(current_line + '\n')
+
+    def write_define_line(file, name, start_residue, end_residue, segment, max_line_length=70):
+        """
+        Write the define line to file, ensuring no line exceeds max_line_length.
+        """
+        line1 = f"define {name} sele "
+        line2 = f"( resid {start_residue}:{end_residue} .and. segid {segment} ) end\n"
+        if len(line1 + line2.rstrip('\n')) <= max_line_length:
+            file.write(line1 + line2)
+        else:
+            file.write(line1.strip() + '\n')
+            file.write('    ' + line2)
+
     with open(file=output_file, mode="w", encoding="utf8") as const_file:
         for rigid_body in rigid_body_list:
-            # print(f"rigid_body: {rigid_body}")
             rigid_body_count += 1
             p = 0
             n = 0
@@ -455,31 +483,25 @@ def write_const_file(rigid_body_list: list, output_file):
                 segment = rigid_domain[2]
                 if rigid_body_count == 1:
                     p += 1
-                    const_file.write(
-                        f"define fixed{p} sele ( resid {start_residue}:{end_residue}"
-                        f" .and. segid {segment} ) end\n"
-                    )
+                    name = f"fixed{p}"
+                    write_define_line(const_file, name, start_residue, end_residue, segment)
                     if p == len(rigid_body):
-                        const_file.write("cons fix sele ")
-                        for number in range(1, p):
-                            const_file.write(f"fixed{number} .or. ")
-                        const_file.write(f"fixed{p} end \n")
+                        selections = [f"fixed{number}" for number in range(1, p+1)]
+                        write_selections(const_file, "cons fix sele ", selections, "end")
                         const_file.write("\n")
                 elif rigid_body_count > 1:
                     n += 1
-                    const_file.write(
-                        f"define rigid{n} sele ( resid {start_residue}:{end_residue}"
-                        f" .and. segid {segment} ) end\n"
-                    )
+                    name = f"rigid{n}"
+                    write_define_line(const_file, name, start_residue, end_residue, segment)
                     if n == len(rigid_body):
                         dock_count += 1
-                        const_file.write(f"shape desc dock{dock_count} rigid sele ")
-                        for number in range(1, n):
-                            const_file.write(f"rigid{number} .or. ")
-                        const_file.write(f"rigid{n} end \n")
+                        selections = [f"rigid{number}" for number in range(1, n+1)]
+                        prefix = f"shape desc dock{dock_count} rigid sele "
+                        write_selections(const_file, prefix, selections, "end")
                         const_file.write("\n")
         const_file.write("return \n")
         const_file.write("\n")
+
 
 
 if __name__ == "__main__":
