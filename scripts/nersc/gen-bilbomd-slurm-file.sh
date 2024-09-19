@@ -19,7 +19,7 @@ project="m4659"
 queue="regular"
 constraint="gpu"
 nodes="1"
-time="00:60:00"
+# walltime="00:90:00"
 mailtype="end,fail"
 mailuser="sclassen@lbl.gov"
 
@@ -123,6 +123,12 @@ read_job_params() {
         return 1
     fi
 
+    # Set walltime based on job_type
+    if [ "$job_type" = "BilboMdAlphaFold" ]; then
+        walltime="00:90:00"
+    else
+        walltime="00:60:00"
+    fi
 
     if [ "$job_type" = "BilboMdPDB" ]; then
         # Job type specific for BilboMdPDB
@@ -273,7 +279,7 @@ initialize_job() {
     echo "project: $project"
     echo "constraint: $constraint"
     echo "nodes: $nodes"
-    echo "time: $time"
+    echo "walltime: $walltime"
     echo ""
     create_working_dir
     copy_input_data
@@ -481,7 +487,7 @@ generate_bilbomd_slurm_header() {
 #!/bin/bash -l
 #SBATCH --qos=${queue}
 #SBATCH --nodes=${nodes}
-#SBATCH --time=${time}
+#SBATCH --time=${walltime}
 #SBATCH --licenses=cfs,scratch
 #SBATCH --constraint=${constraint}
 #SBATCH --account=${project}
