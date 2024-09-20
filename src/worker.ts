@@ -86,33 +86,35 @@ const workers = [
   { getWorker: () => webhooksWorker, name: 'Webhooks Worker' }
 ]
 
-// Setup periodic NERSC token validation
-setInterval(async () => {
-  if (await checkNERSC()) {
-    // Start workers if they are not initialized
-    if (!bilboMdWorker || !pdb2CrdWorker || !webhooksWorker) {
-      await startWorkers()
+if (config.runOnNERSC) {
+  // Setup periodic NERSC token validation
+  setInterval(async () => {
+    if (await checkNERSC()) {
+      // Start workers if they are not initialized
+      if (!bilboMdWorker || !pdb2CrdWorker || !webhooksWorker) {
+        await startWorkers()
+      } else {
+        // Resume workers if they are paused
+        for (const { getWorker, name } of workers) {
+          const workerInstance = getWorker()
+          if (workerInstance && (await workerInstance.isPaused())) {
+            await workerInstance.resume()
+            logger.info(`${name} resumed`)
+          }
+        }
+      }
     } else {
-      // Resume workers if they are paused
+      // If NERSC token is invalid, pause the workers
       for (const { getWorker, name } of workers) {
         const workerInstance = getWorker()
-        if (workerInstance && (await workerInstance.isPaused())) {
-          await workerInstance.resume()
-          logger.info(`${name} resumed`)
+        if (workerInstance && !(await workerInstance.isPaused())) {
+          await workerInstance.pause()
+          logger.info(`${name} paused due to invalid NERSC tokens`)
         }
       }
     }
-  } else {
-    // If NERSC token is invalid, pause the workers
-    for (const { getWorker, name } of workers) {
-      const workerInstance = getWorker()
-      if (workerInstance && !(await workerInstance.isPaused())) {
-        await workerInstance.pause()
-        logger.info(`${name} paused due to invalid NERSC tokens`)
-      }
-    }
-  }
-}, 300000) // Check every 5 minutes
+  }, 300000) // Check every 300 seconds i.e. 5 minutes
+}
 
 // Start the workers initially
 startWorkers()
