@@ -1,4 +1,4 @@
-import { webhooksHandler } from 'workerHandlers/webhooksHandler'
+import { webhooksHandler } from '../workerHandlers/webhooksHandler'
 import { Worker, WorkerOptions } from 'bullmq'
 import { logger } from '../helpers/loggers'
 

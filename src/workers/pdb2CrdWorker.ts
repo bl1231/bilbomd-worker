@@ -1,4 +1,4 @@
-import { pdb2CrdHandler } from 'workerHandlers/pdb2CrdHandler'
+import { pdb2CrdHandler } from '../workerHandlers/pdb2CrdHandler'
 import { Worker, WorkerOptions } from 'bullmq'
 import { logger } from '../helpers/loggers'
 
