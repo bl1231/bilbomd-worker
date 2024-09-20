@@ -6,7 +6,8 @@ import {
   IBilboMDPDBJob,
   IBilboMDCRDJob,
   IBilboMDAutoJob,
-  IBilboMDAlphaFoldJob
+  IBilboMDAlphaFoldJob,
+  IBilboMDSteps
 } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../../helpers/loggers'
 import { updateStepStatus } from './mongo-utils'
@@ -31,7 +32,7 @@ interface INerscTaskResult {
       }
 }
 
-// Define type guard functions
+// Define some useful type guard functions
 function isBilboMDCRDJob(job: IJob): job is IBilboMDCRDJob {
   return (job as IBilboMDCRDJob).crd_file !== undefined
 }
@@ -41,22 +42,23 @@ function isBilboMDPDBJob(job: IJob): job is IBilboMDPDBJob {
 }
 
 function isBilboMDAutoJob(job: IJob): job is IBilboMDAutoJob {
-  return (job as IBilboMDAutoJob).conformational_sampling !== undefined
+  return (job as IBilboMDAutoJob).pae_file !== undefined
 }
 
 function isBilboMDAlphaFoldJob(job: IJob): job is IBilboMDAlphaFoldJob {
-  return (job as IBilboMDAutoJob).conformational_sampling !== undefined
+  return (job as IBilboMDAlphaFoldJob).alphafold_entities !== undefined
 }
 
-const makeBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
+const makeBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
+  const stepName = 'nersc_prepare_slurm_batch'
   try {
     await MQjob.log('start nersc prepare slurm batch')
-
-    let status: IStepStatus = {
-      status: 'Running',
-      message: 'Preparation of Slurm batch file has started.'
-    }
-    await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+    await updateJobStatus(
+      DBjob,
+      stepName,
+      'Running',
+      'Preparation of Slurm batch file has started.'
+    )
 
     const prepTaskID = await executeNerscScript(
       config.scripts.prepareSlurmScript,
@@ -81,110 +83,122 @@ const makeBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
       }
 
       if (resultData && resultData.status === 'ok') {
-        status = {
-          status: 'Success',
-          message: 'Slurm batch file prepared successfully.'
-        }
-        await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+        await updateJobStatus(
+          DBjob,
+          stepName,
+          'Success',
+          'Slurm batch file prepared successfully.'
+        )
       } else {
         let errorMessage = `Task failed with status: ${prepResult.status}`
         if (resultData && resultData.error) {
           errorMessage += `, error: ${resultData.error}`
         }
-        status = {
-          status: 'Error',
-          message: errorMessage
-        }
-        await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+        await updateJobStatus(DBjob, stepName, 'Error', errorMessage)
         throw new Error(errorMessage)
       }
     } else {
       const errorMessage = `Unexpected task status: ${prepResult.status}`
-      status = {
-        status: 'Error',
-        message: errorMessage
-      }
-      await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+      await updateJobStatus(DBjob, stepName, 'Error', errorMessage)
       throw new Error(errorMessage)
     }
 
     await MQjob.log('end nersc prepare slurm batch')
   } catch (error) {
-    const errorMessage = `Failed to prepare Slurm batch file: ${error}`
-    const status: IStepStatus = {
-      status: 'Error',
-      message: errorMessage
+    let errorMessage = 'Unknown error'
+    if (error instanceof Error) {
+      errorMessage = error.message
     }
-    await updateStepStatus(DBjob, 'nersc_prepare_slurm_batch', status)
+    await updateJobStatus(
+      DBjob,
+      stepName,
+      'Error',
+      `Failed to prepare Slurm batch file: ${errorMessage}`
+    )
     logger.error(`Error during preparation of Slurm batch: ${errorMessage}`)
   }
 }
 
-const submitBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob) => {
+const submitBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob): Promise<string> => {
+  const stepName = 'nersc_submit_slurm_batch'
   try {
     await MQjob.log('start nersc submit slurm batch')
-    let status: IStepStatus = {
-      status: 'Running',
-      message: 'Submitting Slurm batch file'
-    }
-    await updateStepStatus(DBjob, 'nersc_submit_slurm_batch', status)
+    await updateJobStatus(DBjob, stepName, 'Running', 'Submitting Slurm batch file')
+
     const submitTaskID = await submitJobToNersc(DBjob)
     const submitResult = await monitorTaskAtNERSC(submitTaskID)
     logger.info(`submitResult: ${JSON.stringify(submitResult)}`)
+
     const submitResultObject = JSON.parse(submitResult.result)
     const jobID = submitResultObject.jobid
     logger.info(`JOBID: ${jobID}`)
-    status = {
-      status: 'Success',
-      message: `NERSC JobID ${jobID}`
-    }
-    await updateStepStatus(DBjob, 'nersc_submit_slurm_batch', status)
+
+    await updateJobStatus(DBjob, stepName, 'Success', `NERSC JobID ${jobID}`)
     await MQjob.log('end nersc submit slurm batch')
     return jobID
   } catch (error) {
-    const status: IStepStatus = {
-      status: 'Error',
-      message: `Failed to submit Slurm batch file: ${error}`
+    let errorMessage = 'Unknown error'
+    if (error instanceof Error) {
+      errorMessage = error.message
     }
-    await updateStepStatus(DBjob, 'nersc_submit_slurm_batch', status)
-    logger.error(`Error during submission of Slurm batch: ${error}`)
+    await updateJobStatus(
+      DBjob,
+      stepName,
+      'Error',
+      `Failed to submit Slurm batch file: ${errorMessage}`
+    )
+    logger.error(`Error during submission of Slurm batch: ${errorMessage}`)
+    throw new Error(`Failed to submit Slurm batch file: ${errorMessage}`)
   }
 }
 
-const monitorBilboMDJob = async (MQjob: BullMQJob, DBjob: IJob, Pjob: string) => {
+const monitorBilboMDJob = async (
+  MQjob: BullMQJob,
+  DBjob: IJob,
+  Pjob: string
+): Promise<void> => {
   try {
     await MQjob.log('start nersc watch job')
-    let status: IStepStatus = {
-      status: 'Running',
-      message: 'Watching BilboMD Job'
-    }
-    await updateStepStatus(DBjob, 'nersc_job_status', status)
-    const jobResult = await monitorJobAtNERSC(DBjob, Pjob)
+    await updateJobStatus(DBjob, 'nersc_job_status', 'Running', 'Watching BilboMD Job')
+
+    const jobResult = await monitorJobAtNERSC(MQjob, DBjob, Pjob)
     logger.info(`jobResult: ${JSON.stringify(jobResult)}`)
-    status = {
-      status: 'Success',
-      message: 'BilboMD job on Perlmutter has finished successfully.'
-    }
-    await updateStepStatus(DBjob, 'nersc_job_status', status)
+
+    await updateJobStatus(
+      DBjob,
+      'nersc_job_status',
+      'Success',
+      'BilboMD job on Perlmutter has finished successfully.'
+    )
     await MQjob.log('end nersc watch job')
   } catch (error) {
-    const status: IStepStatus = {
-      status: 'Error',
-      message: `Failed to monitor BilboMD job: ${error}`
+    let errorMessage = 'Unknown error'
+    let errorStack = ''
+
+    if (error instanceof Error) {
+      errorMessage = error.message
+      errorStack = error.stack || ''
     }
-    await updateStepStatus(DBjob, 'nersc_job_status', status)
-    logger.error(`Error during monitoring of BilboMD job: ${error}`)
+
+    await updateJobStatus(
+      DBjob,
+      'nersc_job_status',
+      'Error',
+      `Failed to monitor BilboMD job: ${errorMessage}`
+    )
+    logger.error(`Error during monitoring of BilboMD job: ${errorStack}`)
   }
 }
 
-const prepareBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
+const prepareBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
   try {
-    // await MQjob.log('start results')
-    let status: IStepStatus = {
-      status: 'Running',
-      message: 'Gathering BilboMD job results has started.'
-    }
-    await updateStepStatus(DBjob, 'results', status)
+    await updateJobStatus(
+      DBjob,
+      'results',
+      'Running',
+      'Gathering BilboMD job results has started.'
+    )
+
     // Ensure DBjob is one of the acceptable types before calling prepareResults
     if (
       isBilboMDCRDJob(DBjob) ||
@@ -193,27 +207,38 @@ const prepareBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
       isBilboMDAlphaFoldJob(DBjob)
     ) {
       await prepareResults(MQjob, DBjob)
-      status = {
-        status: 'Success',
-        message: 'BilboMD job results gathered successfully.'
-      }
-      await updateStepStatus(DBjob, 'results', status)
-      // await MQjob.log('end results')
+      await updateJobStatus(
+        DBjob,
+        'results',
+        'Success',
+        'BilboMD job results gathered successfully.'
+      )
     } else {
       throw new Error('Invalid job type')
     }
   } catch (error) {
-    const status: IStepStatus = {
-      status: 'Error',
-      message: `Failed to gather BilboMD results: ${error}`
+    let errorMessage = 'Unknown error'
+    if (error instanceof Error) {
+      errorMessage = error.message
     }
-    await updateStepStatus(DBjob, 'nersc_job_status', status)
-    logger.error(`Error during monitoring of BilboMD job: ${error}`)
+    await updateJobStatus(
+      DBjob,
+      'results',
+      'Error',
+      `Failed to gather BilboMD results: ${errorMessage}`
+    )
+    logger.error(`Error during prepareBilboMDResults job: ${errorMessage}`)
   }
 }
 
 const copyBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
   try {
+    await updateJobStatus(
+      DBjob,
+      'copy_results_to_cfs',
+      'Running',
+      'Copying results from pscratch to CFS has started.'
+    )
     await MQjob.log('start copy from pscratch to cfs')
     const copyID = await executeNerscScript(
       config.scripts.copyFromScratchToCFSScript,
@@ -221,37 +246,66 @@ const copyBilboMDResults = async (MQjob: BullMQJob, DBjob: IJob) => {
     )
     const copyResult = await monitorTaskAtNERSC(copyID)
     logger.info(`copyResult: ${JSON.stringify(copyResult)}`)
-    // status = {
-    //   status: 'Success',
-    //   message: 'BilboMD Results copied back to CFS successfully.'
-    // }
+    await updateJobStatus(
+      DBjob,
+      'copy_results_to_cfs',
+      'Success',
+      'Copying results from pscratch to CFS successful.'
+    )
     await MQjob.log('end copy from pscratch to cfs')
   } catch (error) {
-    logger.error(`Error during monitoring of BilboMD job: ${error}`)
+    let errorMessage = 'Unknown error'
+    if (error instanceof Error) {
+      errorMessage = error.message
+    }
+    await updateJobStatus(
+      DBjob,
+      'copy_results_to_cfs',
+      'Error',
+      `Failed to copy BilboMD results from pscratch to cfs: ${errorMessage}`
+    )
+    logger.error(`Error during copyBilboMDResults job: ${errorMessage}`)
   }
 }
 
-const sendBilboMDEmail = async (MQjob: BullMQJob, DBjob: IJob) => {
+const sendBilboMDEmail = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
   try {
-    let status: IStepStatus = {
-      status: 'Running',
-      message: 'Cleaning up & sending email has started.'
-    }
-    await updateStepStatus(DBjob, 'email', status)
+    await updateJobStatus(
+      DBjob,
+      'email',
+      'Running',
+      'Cleaning up & sending email has started.'
+    )
     await cleanupJob(MQjob, DBjob)
-    status = {
-      status: 'Success',
-      message: 'Cleaning up & sending email successful.'
-    }
-    await updateStepStatus(DBjob, 'email', status)
+    await updateJobStatus(
+      DBjob,
+      'email',
+      'Success',
+      'Cleaning up & sending email successful.'
+    )
   } catch (error) {
-    const status: IStepStatus = {
-      status: 'Error',
-      message: `Failed to send email: ${error}`
+    let errorMessage = 'Unknown error'
+    if (error instanceof Error) {
+      errorMessage = error.message
     }
-    await updateStepStatus(DBjob, 'nersc_job_status', status)
-    logger.error(`Error during monitoring of BilboMD job: ${error}`)
+    const statusMessage = `Failed to send email: ${errorMessage}`
+    await updateJobStatus(DBjob, 'email', 'Error', statusMessage)
+    await updateJobStatus(DBjob, 'nersc_job_status', 'Error', statusMessage)
+    logger.error(`Error during sendBilboMDEmail job: ${errorMessage}`)
   }
+}
+
+const updateJobStatus = async (
+  job: IJob,
+  stepName: keyof IBilboMDSteps,
+  status: string,
+  message: string
+): Promise<void> => {
+  const stepStatus: IStepStatus = {
+    status,
+    message
+  }
+  await updateStepStatus(job, stepName, stepStatus)
 }
 
 export {
