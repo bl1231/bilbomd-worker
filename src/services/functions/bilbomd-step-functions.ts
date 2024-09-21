@@ -13,7 +13,8 @@ import {
   IBilboMDPDBJob,
   IBilboMDCRDJob,
   IBilboMDAutoJob,
-  IBilboMDAlphaFoldJob
+  IBilboMDAlphaFoldJob,
+  IBilboMDSANSJob
 } from '@bl1231/bilbomd-mongodb-schema'
 import { sendJobCompleteEmail } from '../../helpers/mailer'
 import { exec } from 'node:child_process'
@@ -376,7 +377,10 @@ const spawnPaeToConst = async (params: PaeParams): Promise<string> => {
   })
 }
 
-const runPdb2Crd = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void> => {
+const runPdb2Crd = async (
+  MQjob: BullMQJob,
+  DBjob: IBilboMDPDBJob | IBilboMDSANSJob
+): Promise<void> => {
   try {
     let status: IStepStatus = {
       status: 'Running',
@@ -1054,5 +1058,8 @@ export {
   runMolecularDynamics,
   runFoxs,
   runMultiFoxs,
-  prepareResults
+  prepareResults,
+  handleError,
+  generateDCD2PDBInpFile,
+  spawnCharmm
 }

@@ -34,7 +34,7 @@ type CharmmMDParams = CharmmParams & {
 
 type CharmmDCD2PDBParams = CharmmParams & {
   inp_basename: string
-  foxs_rg: string
+  foxs_rg?: string
   in_dcd: string
   run: string
 }
