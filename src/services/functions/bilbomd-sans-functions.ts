@@ -32,6 +32,27 @@ interface NewAnalysisParams {
 //   run: string
 // }
 
+// Define the structure of the configuration JSON
+interface GAInput {
+  number_iterations: number
+  number_generations: number
+  ensemble_size: number
+  ensemble_split: number
+  crossover_probability: number
+  mutation_probability: number
+  fitting_algorithm: string
+  cutoff_weight: number
+  fitness_function: string
+  parallel: boolean
+}
+
+interface Config {
+  directories: string[]
+  experiment: string
+  max_ensemble_size: number
+  GA_inputs: GAInput[]
+}
+
 const DATA_VOL = process.env.DATA_VOL ?? '/bilbomd/uploads'
 const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
 const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
@@ -132,11 +153,11 @@ const spawnPepsiSANS = async (analysisDir: string): Promise<void> => {
   }
 }
 
-async function combineCSVFiles(
+const combineCSVFiles = async (
   pepsiSANSRunDirs: string[],
   outDir: string,
   outputFileName: string
-): Promise<void> {
+): Promise<void> => {
   const combinedCSVContent: string[] = []
 
   for (const dir of pepsiSANSRunDirs) {
@@ -154,6 +175,63 @@ async function combineCSVFiles(
 
   const outputFilePath = path.join(outDir, outputFileName)
   await fs.writeFile(outputFilePath, combinedCSVContent.join('\n'), 'utf-8')
+}
+
+const writeConfigFile = async (
+  pepsiSANSRunDirs: string[],
+  experiment: string,
+  outDir: string,
+  outputFileName: string
+): Promise<void> => {
+  const config: Config = {
+    directories: pepsiSANSRunDirs,
+    experiment: experiment,
+    max_ensemble_size: 4,
+    GA_inputs: [
+      {
+        number_iterations: 5,
+        number_generations: 5,
+        ensemble_size: 2,
+        ensemble_split: 0.85,
+        crossover_probability: 0.5,
+        mutation_probability: 0.15,
+        fitting_algorithm: 'Differential Evolution',
+        cutoff_weight: 1e-6,
+        fitness_function: 'inverse_absolute',
+        parallel: true
+      },
+      {
+        number_iterations: 5,
+        number_generations: 5,
+        ensemble_size: 3,
+        ensemble_split: 0.85,
+        crossover_probability: 0.5,
+        mutation_probability: 0.15,
+        fitting_algorithm: 'Differential Evolution',
+        cutoff_weight: 1e-6,
+        fitness_function: 'inverse_absolute',
+        parallel: true
+      },
+      {
+        number_iterations: 5,
+        number_generations: 5,
+        ensemble_size: 4,
+        ensemble_split: 0.85,
+        crossover_probability: 0.5,
+        mutation_probability: 0.15,
+        fitting_algorithm: 'Differential Evolution',
+        cutoff_weight: 1e-6,
+        fitness_function: 'inverse_absolute',
+        parallel: true
+      }
+    ]
+  }
+
+  // Define the output file path
+  const outputFilePath = path.join(outDir, outputFileName)
+
+  // Convert the configuration object to JSON and write it to the file
+  await fs.writeFile(outputFilePath, JSON.stringify(config, null, 2), 'utf-8')
 }
 
 const runPepsiSANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<void> => {
@@ -226,6 +304,14 @@ const runPepsiSANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<v
 
     // Combine all CSV files into a single CSV file
     await combineCSVFiles(pepsiSANSRunDirs, analysisParams.out_dir, 'combined.csv')
+
+    // Write a gasans_config.json file
+    await writeConfigFile(
+      pepsiSANSRunDirs,
+      DBjob.data_file,
+      analysisParams.out_dir,
+      'gasans_config.json'
+    )
 
     status = {
       status: 'Success',
