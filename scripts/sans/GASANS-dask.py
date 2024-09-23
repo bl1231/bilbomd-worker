@@ -3,15 +3,20 @@ Module for the Genetic Algorithm for Ensemble Optimization
 """
 
 import os
+import sys
 import time
+import logging
 from pathlib import Path
+import json
 import numpy as np
 import pandas as pd
 import lmfit as lmf
 import scipy.interpolate as scpint
 import dask.distributed as distributed
-from read_json_input import _read_json_input
 
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 def reduced_chi2(expected, model, sigma_exp, ddof=1):
     return (np.power((model - expected) / sigma_exp, 2)).sum() / (
@@ -325,7 +330,7 @@ class GAEnsembleOpt:
         ##print(self.pars.valuesdict(), mfit_array[0]['params'])
         self.gen_paramfit = pd.DataFrame(
             index=list(mfit_array[0]["params"].keys()), columns=np.arange(0, self.n_ens)
-        ).fillna(0.0)
+        ).infer_objects(copy=False)
 
         for data_index in list(mfit_array.keys()):
             self.gen_rchi2[self.curr_gen, data_index] = mfit_array[data_index]["chi2"]
@@ -773,7 +778,7 @@ class GAEnsembleOpt:
         return None
 
 
-def _read_SANSFiles(sans_dir: Path, sans_struct, qmin=0.0, qmax=0.5, nq=501):
+def _read_SANSFiles(sans_dir: Path, sans_struct, qmin=0.0, qmax=0.5, nq=101):
     """
     Read in the sans files
     This may be part of the GA object soon? Why have
@@ -782,12 +787,14 @@ def _read_SANSFiles(sans_dir: Path, sans_struct, qmin=0.0, qmax=0.5, nq=501):
     scatteringdf = pd.DataFrame(
         index=np.linspace(qmin, qmax, nq), columns=sans_struct.index
     )
-
+    
     for nn, file in sans_struct.iterrows():
         # print(file['SCATTERINGFILE'])
+        # print(f"-----------------> {sans_dir}/{file['SCATTERINGFILE']}")
         sansdf = pd.read_csv(
             f"{sans_dir}/{file['SCATTERINGFILE']}",
-            delim_whitespace=True,
+            sep=r"\s+",
+            engine="python",
             usecols=[0, 1],
             skiprows=6,
             header=None,
@@ -803,7 +810,7 @@ def _read_experiment_data(
     dataloc,
 ):
 
-    expdata_df = pd.read_csv(dataloc, delim_whitespace=True, comment="#", header=None)
+    expdata_df = pd.read_csv(dataloc, comment="#", header=None, sep=r'\s+', engine='python')
     if expdata_df.shape[1] == 3:
         expdata_df.columns = ["Q", "I(Q)", "Error"]
     elif expdata_df.shape[1] == 4:
@@ -816,16 +823,55 @@ def _read_experiment_data(
     return expdata_df
 
 
-if __name__ == "__main__":
 
-    ## Read Config File
-    config_file1 = Path("./config_test.json")
-    if config_file1.exists():
-        print(f"config file, {config_file1}, exists. Reading config file")
-        config_filelist, config_ga_input = _read_json_input(config_file1)
+
+def _read_json_input(config_file="./config.json"):
+    """
+    Function to read a json file for the inputs of the genetic algorithm:
+    mapping function to change dict keys to 
+    Should include:
+    experimental data to read in 
+    directory of the files if not in working directory
+    scattering data file: PDBFILENAME SCATTERINGFILENAME [...Structural Parameters...]
+    Genetic Algorithm:
+    1. number of iterations (n_iter) 
+    2. number of generations (n_gen) 
+    3. Ensemble Size or list of ensemble sizes (ens_size) 
+    4. fraction of structures to use in the ensembles (ens_split) 
+    5. crossover probability (co_prob) 
+    6. mutation probabaility (mut_prob)  
+    7. cutoff weight for validation (self.cut_weight)
+    8. Evaluation of Fitness (standard or inv_absolute)
+    9. Run evaluation step in parallel (parallel) (if parallel = False: Nedler-Mead instead of DiffEv)
+    10. what type of algorithm to use the weights (default is Differential Evolution )
+    
+    """
+    
+    with open(config_file ,mode='r') as cfile:
+        cfile_params = json.load(cfile)
+    
+    ga_input_list = []
+    ga_param_ndx = 2
+    cfile_keys = list(cfile_params.keys())
+    for nens, ens_size in enumerate(range(2, cfile_params['max_ensemble_size']+1, 1)):
+        
+        ga_input_list.append(cfile_params[cfile_keys[ga_param_ndx+nens]])
+
+
+    return cfile_params['files'], ga_input_list
+
+def load_config(file_path: Path):
+    if file_path.exists():
+        logger.info(f"Config file {file_path} exists. Reading config file")
+        return _read_json_input(file_path)
     else:
-        print(f"config file, {config_file1}, does not exist")
-
+        logger.error(f"Config file {file_path} does not exist!!")
+        sys.exit(1)
+    
+if __name__ == "__main__":
+    ## Read Config File
+    config_file1 = Path("./gasas_config.json")
+    config_filelist, config_ga_input = load_config(config_file1)
     path2sans = Path(config_filelist["scatter_dir"])
 
     ## Need to make this arbirary read to also remove comments
@@ -835,6 +881,9 @@ if __name__ == "__main__":
 
     ScatStructureDF = pd.read_csv(config_filelist["structurefile"])
     print(ScatStructureDF.head())
+    # Print the number of lines (rows) in the DataFrame
+    num_lines = ScatStructureDF.shape[0]
+    print(f"Number of Pepsi-SANS dat files: {num_lines}")
 
     ## Changed to local path or like MultiFOXS a txt file of paths to scattering intensities
     ##
@@ -851,19 +900,17 @@ if __name__ == "__main__":
             ensemble_scatteringdf,
             experiment_datadf.iloc[1:exp_qmax_ndx],
             **enssize_config,
-            #                        #ens_size=2, n_gen=5, n_iter=5, ens_split=1.0,
-            #                        #mut_prob=0.1,elitism=False, invabsx2=True, parallel=True,
+            #ens_size=2, n_gen=5, n_iter=5, ens_split=1.0,
+            #mut_prob=0.1,elitism=False, invabsx2=True, parallel=True,
         )
 
         with distributed.LocalCluster(
             n_workers=int(0.4 * os.cpu_count()),
             processes=True,
             threads_per_worker=1,
-        ) as cluster, distributed.Client(cluster) as client:
-            GARes.evolve(dask_client=client)
-
-        # print(GA2_HDX.time_log)
-        # print(GA2_HDX.cbest_rchi2)
+        ) as cluster:
+            with distributed.Client(cluster) as client:
+                GARes.evolve(dask_client=client)
 
         GARes._write_bestmodel()
         GARes._write_parameterfile("gasans_summary_EnsSize{}.csv", ScatStructureDF)
