@@ -14,7 +14,7 @@ interface NewAnalysisParams {
   out_dir: string
   rg_min: number
   rg_max: number
-  analysis_rg: string
+  pepsisans_rg: string
   conf_sample: number
 }
 
@@ -27,7 +27,7 @@ interface NewAnalysisParams {
 //   in_psf_file: string
 //   in_crd_file: string
 //   inp_basename: string
-//   analysis_rg: string
+//   pepsisans_rg: string
 //   in_dcd: string
 //   run: string
 // }
@@ -74,35 +74,109 @@ const spawnCharmm = (params: CharmmParams): Promise<void> => {
   })
 }
 
-// Placeholder for your new analysis program's spawn function
 const spawnPepsiSANS = async (analysisDir: string): Promise<void> => {
   logger.info(`Running Pepsi-SANS in ${analysisDir}`)
+
+  // Read the directory and get the list of .pdb files
+  const files = await fs.readdir(analysisDir)
+  const pdbFiles = files.filter((file) => file.endsWith('.pdb'))
+
+  // Create a CSV array
+  // const csvLines: string[] = ['PDBNAME','SCATTERINGFILE','Rg','RMSD']
+  const csvLines: string[] = ['PDBNAME, SCATTERINGFILE']
+
+  // Process each .pdb file
+  const tasks = pdbFiles.map(async (file) => {
+    const inputPath = path.join(analysisDir, file)
+    const outputFile = file.replace(/\.pdb$/, '.dat')
+    const outputPath = path.join(analysisDir, outputFile)
+
+    // Create a new promise for running Pepsi-SANS
+    const runPepsiSANS = new Promise<void>((resolve, reject) => {
+      const pepsiSANSProcess = spawn('Pepsi-SANS', [inputPath, '-o', outputPath])
+
+      pepsiSANSProcess.on('error', (error) => {
+        reject(`Failed to start Pepsi-SANS: ${error.message}`)
+      })
+
+      pepsiSANSProcess.on('close', (code) => {
+        if (code === 0) {
+          // Successfully completed
+          csvLines.push(`${file},${outputFile}`)
+          resolve()
+        } else {
+          reject(`Pepsi-SANS process exited with code ${code}`)
+        }
+      })
+    })
+
+    // Await the completion of Pepsi-SANS process
+    await runPepsiSANS
+  })
+
+  try {
+    // Run all Pepsi-SANS processes in parallel
+    await Promise.all(tasks)
+
+    // Get the directory name for the CSV file
+    const dirName = path.basename(analysisDir)
+    const csvFileName = `pepsisans_${dirName}.csv`
+
+    // Write the CSV file
+    const csvContent = csvLines.join('\n')
+    await fs.writeFile(path.join(analysisDir, csvFileName), csvContent)
+
+    logger.info(`Pepsi-SANS processing complete. ${csvFileName} file created.`)
+  } catch (error) {
+    logger.error(`An error occurred: ${error}`)
+  }
 }
 
-const runNewAnalysis = async (
-  MQjob: BullMQJob,
-  DBjob: IBilboMDSANSJob
-): Promise<void> => {
+async function combineCSVFiles(
+  pepsiSANSRunDirs: string[],
+  outDir: string,
+  outputFileName: string
+): Promise<void> {
+  const combinedCSVContent: string[] = []
+
+  for (const dir of pepsiSANSRunDirs) {
+    const files = await fs.readdir(dir)
+    for (const file of files) {
+      if (file.endsWith('.csv')) {
+        const filePath = path.join(dir, file)
+        const fileContent = await fs.readFile(filePath, 'utf-8')
+        const lines = fileContent.split('\n')
+        // Strip the header (first line) and add the rest to combined content
+        combinedCSVContent.push(...lines.slice(1))
+      }
+    }
+  }
+
+  const outputFilePath = path.join(outDir, outputFileName)
+  await fs.writeFile(outputFilePath, combinedCSVContent.join('\n'), 'utf-8')
+}
+
+const runPepsiSANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
 
   const analysisParams: NewAnalysisParams = {
     out_dir: outputDir,
     rg_min: DBjob.rg_min,
     rg_max: DBjob.rg_max,
-    analysis_rg: 'analysis_rg.out',
+    pepsisans_rg: 'pepsisans_rg.out',
     conf_sample: DBjob.conformational_sampling
   }
 
   const DCD2PDBParams: CharmmDCD2PDBParams = {
     out_dir: outputDir,
-    charmm_template: 'dcd2pdb',
+    charmm_template: 'dcd2pdb-sans',
     charmm_topo_dir: TOPO_FILES,
     charmm_inp_file: '',
     charmm_out_file: '',
-    in_psf_file: DBjob.psf_file,
+    in_psf_file: 'bilbomd_pdb2crd.psf',
     in_crd_file: '',
     inp_basename: '',
-    analysis_rg: 'analysis_rg.out',
+    pepsisans_rg: 'pepsisans_rg.out',
     in_dcd: '',
     run: ''
   }
@@ -114,9 +188,9 @@ const runNewAnalysis = async (
     }
     await updateStepStatus(DBjob, 'dcd2pdb', status)
 
-    const analysisDir = path.join(analysisParams.out_dir, 'dcd2pdb')
+    const analysisDir = path.join(analysisParams.out_dir, 'pepsisans')
     await makeDir(analysisDir)
-    const analysisRgFile = path.join(analysisParams.out_dir, analysisParams.analysis_rg)
+    const analysisRgFile = path.join(analysisParams.out_dir, analysisParams.pepsisans_rg)
     await makeFile(analysisRgFile)
 
     const step = Math.max(
@@ -124,13 +198,16 @@ const runNewAnalysis = async (
       1
     )
 
+    const pepsiSANSRunDirs: string[] = []
+
     for (let rg = analysisParams.rg_min; rg <= analysisParams.rg_max; rg += step) {
       for (let run = 1; run <= analysisParams.conf_sample; run += 1) {
         const runAllCharmm: Promise<void>[] = []
-        const runAllAnalysis: Promise<void>[] = []
-        const analysisRunDir = path.join(analysisDir, `rg${rg}_run${run}`)
+        const runAllPepsiSANS: Promise<void>[] = []
+        const pepsiSANSRunDir = path.join(analysisDir, `rg${rg}_run${run}`)
+        pepsiSANSRunDirs.push(pepsiSANSRunDir)
 
-        await makeDir(analysisRunDir)
+        await makeDir(pepsiSANSRunDir)
 
         DCD2PDBParams.charmm_inp_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.inp`
         DCD2PDBParams.charmm_out_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.out`
@@ -141,11 +218,15 @@ const runNewAnalysis = async (
         runAllCharmm.push(spawnCharmm(DCD2PDBParams))
         await Promise.all(runAllCharmm)
 
-        // Run the new analysis program instead of FoXS
-        runAllAnalysis.push(spawnPepsiSANS(analysisRunDir))
-        await Promise.all(runAllAnalysis)
+        // Run Pepsi-SANS on every PDB file
+        runAllPepsiSANS.push(spawnPepsiSANS(pepsiSANSRunDir))
+        await Promise.all(runAllPepsiSANS)
       }
     }
+
+    // Combine all CSV files into a single CSV file
+    await combineCSVFiles(pepsiSANSRunDirs, analysisParams.out_dir, 'combined.csv')
+
     status = {
       status: 'Success',
       message: 'New Analysis has completed.'
@@ -156,4 +237,4 @@ const runNewAnalysis = async (
   }
 }
 
-export { runNewAnalysis }
+export { runPepsiSANS }
