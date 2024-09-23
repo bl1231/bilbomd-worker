@@ -6,6 +6,7 @@ import {
   runHeat,
   runMolecularDynamics
 } from '../functions/bilbomd-step-functions'
+import { runPepsiSANS } from '../functions/bilbomd-sans-functions'
 import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc'
 import { initializeJob, cleanupJob } from '../functions/job-utils'
 
@@ -55,16 +56,16 @@ const processBilboMDSANSJob = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(60)
 
   // Calculate Pepsi-SANS profiles
-  // await MQjob.log('start foxs')
-  // await runFoxs(MQjob, foundJob)
-  // await MQjob.log('end foxs')
-  // await MQjob.updateProgress(80)
+  await MQjob.log('start pepsi-sans')
+  await runPepsiSANS(MQjob, foundJob)
+  await MQjob.log('end pepsi-sans')
+  await MQjob.updateProgress(80)
 
-  // MultiFoXS
-  // await MQjob.log('start multifoxs')
+  // GA-SAS analysis
+  await MQjob.log('start ga-sas')
   // await runMultiFoxs(MQjob, foundJob)
-  // await MQjob.log('end multifoxs')
-  // await MQjob.updateProgress(95)
+  await MQjob.log('end ga-sas')
+  await MQjob.updateProgress(95)
 
   // Prepare results
   await MQjob.log('start results')
