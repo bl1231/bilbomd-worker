@@ -116,7 +116,7 @@ const generateDCD2PDBInpFile = async (
   rg: number,
   run: number
 ) => {
-  params.charmm_template = 'dcd2pdb'
+  // params.charmm_template = 'dcd2pdb'
   // params.in_pdb = 'heat_output.pdb'
   params.in_dcd = `dynamics_rg${rg}_run${run}.dcd`
   await generateInputFile(params)
