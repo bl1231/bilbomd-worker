@@ -59,7 +59,7 @@ ENV PATH="/miniforge3/bin/:${PATH}"
 
 # Update conda
 RUN conda update -y -n base -c defaults conda && \
-    conda install -y cython swig doxygen && \
+    conda install -y cython swig doxygen pandas dask && \
     conda clean -afy
 
 # Copy environment.yml and install dependencies
@@ -98,8 +98,26 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
-# Build stage 7 - worker app for deployment on SPIN
-FROM bilbomd-worker-step6 AS bilbomd-worker
+# Build stage 7 - SANS Stuff
+FROM bilbomd-worker-step6 AS bilbomd-worker-step7
+RUN apt-get update && \
+    apt-get install -y parallel && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# pip install lmfit
+RUN pip install lmfit
+
+WORKDIR /tmp
+COPY pepsisans/Pepsi-SANS-Linux.zip .
+RUN unzip Pepsi-SANS-Linux.zip && \
+    mv Pepsi-SANS /usr/local/bin && \
+    rm Pepsi-SANS-Linux.zip
+
+COPY scripts/sans /usr/local/sans
+
+# -----------------------------------------------------------------------------
+# Build stage 8 - worker app
+FROM bilbomd-worker-step7 AS bilbomd-worker
 ARG USER_ID
 ARG GROUP_ID
 ARG GITHUB_TOKEN
