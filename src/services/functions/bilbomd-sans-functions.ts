@@ -97,6 +97,8 @@ const spawnCharmm = (params: CharmmParams): Promise<void> => {
 
 const spawnPepsiSANS = async (analysisDir: string): Promise<void> => {
   logger.info(`Running Pepsi-SANS in ${analysisDir}`)
+  // /bilbomd/uploads/fbcbfcba-e530-46d5-bfdd-4bdc2fcacdee/pepsisans/rg44_run1
+  const runDir = path.basename(analysisDir)
 
   // Read the directory and get the list of .pdb files
   const files = await fs.readdir(analysisDir)
@@ -104,7 +106,7 @@ const spawnPepsiSANS = async (analysisDir: string): Promise<void> => {
 
   // Create a CSV array
   // const csvLines: string[] = ['PDBNAME','SCATTERINGFILE','Rg','RMSD']
-  const csvLines: string[] = ['PDBNAME, SCATTERINGFILE']
+  const csvLines: string[] = ['PDBNAME,SCATTERINGFILE,DAT_DIRECTORY,']
 
   // Process each .pdb file
   const tasks = pdbFiles.map(async (file) => {
@@ -123,7 +125,7 @@ const spawnPepsiSANS = async (analysisDir: string): Promise<void> => {
       pepsiSANSProcess.on('close', (code) => {
         if (code === 0) {
           // Successfully completed
-          csvLines.push(`${file},${outputFile}`)
+          csvLines.push(`${file},${outputFile},${runDir}`)
           resolve()
         } else {
           reject(`Pepsi-SANS process exited with code ${code}`)
@@ -277,13 +279,16 @@ const runPepsiSANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<v
     )
 
     const pepsiSANSRunDirs: string[] = []
+    const pepsiSANSRunDirsForConfigJson: string[] = []
 
     for (let rg = analysisParams.rg_min; rg <= analysisParams.rg_max; rg += step) {
       for (let run = 1; run <= analysisParams.conf_sample; run += 1) {
         const runAllCharmm: Promise<void>[] = []
         const runAllPepsiSANS: Promise<void>[] = []
         const pepsiSANSRunDir = path.join(analysisDir, `rg${rg}_run${run}`)
+        const pepsiSANSRunDirForConfigJson = path.join('pepsisans', `rg${rg}_run${run}`)
         pepsiSANSRunDirs.push(pepsiSANSRunDir)
+        pepsiSANSRunDirsForConfigJson.push(pepsiSANSRunDirForConfigJson)
 
         await makeDir(pepsiSANSRunDir)
 
@@ -307,7 +312,7 @@ const runPepsiSANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<v
 
     // Write a gasans_config.json file
     await writeConfigFile(
-      pepsiSANSRunDirs,
+      pepsiSANSRunDirsForConfigJson,
       DBjob.data_file,
       analysisParams.out_dir,
       'gasans_config.json'
