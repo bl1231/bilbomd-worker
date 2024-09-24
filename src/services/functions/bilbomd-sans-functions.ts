@@ -106,7 +106,7 @@ const spawnPepsiSANS = async (analysisDir: string): Promise<void> => {
 
   // Create a CSV array
   // const csvLines: string[] = ['PDBNAME','SCATTERINGFILE','Rg','RMSD']
-  const csvLines: string[] = ['PDBNAME,SCATTERINGFILE,DAT_DIRECTORY,']
+  const csvLines: string[] = ['PDBNAME,SCATTERINGFILE,DAT_DIRECTORY']
 
   // Process each .pdb file
   const tasks = pdbFiles.map(async (file) => {
