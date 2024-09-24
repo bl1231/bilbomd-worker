@@ -216,7 +216,8 @@ class GAEnsembleOpt:
             self.pool_size -= self.ens_size
 
         # self.ens_indices = np.zeros((self.n_ens,self.ens_size))
-        print(self.data.shape[1], self.pool_size)
+        logger.info("Data Shape: %d Pool Size: %d", self.data.shape[1], self.pool_size)
+
         self.mut_indices = np.zeros((self.data.shape[1] - self.pool_size, 1))
 
         ## class attribute for the ensemble fitting
@@ -296,8 +297,6 @@ class GAEnsembleOpt:
         """
         Fit each of the parents to the experimental data
         Evaluate the fitness from the fits
-
-        For Loop can be parallelized with multiprocess?
         """
         eval_time_start = time.time()
         ensemble_scattering_parents = np.rollaxis(
@@ -306,11 +305,6 @@ class GAEnsembleOpt:
 
         mfit_array = {}
         if self.parallel:
-            # with distributed.LocalCluster(n_workers=self.cpus,
-            #                  processes=True,
-            #                  threads_per_worker=1,
-            #                 ) as cluster, distributed.Client(cluster) as client:
-
             fitmap = client.map(
                 fitness,
                 ensemble_scattering_parents,
@@ -324,16 +318,24 @@ class GAEnsembleOpt:
                 mfit_array.update({nfit: fit.result()})
         else:
             for nfit, ens_data in enumerate(ensemble_scattering_parents):
-                # print(datindex)
                 mfit_array.update(self.fitness(ens_data, self.experiment))
 
         self.time_log["evaluation"] = time.time() - eval_time_start
-        ##print(self.pars.valuesdict(), mfit_array[0]['params'])
         self.gen_paramfit = pd.DataFrame(
             index=list(mfit_array[0]["params"].keys()), columns=np.arange(0, self.n_ens)
         ).infer_objects(copy=False)
 
+        logger.info("self.gen_rchi2 shape: %s", self.gen_rchi2.shape)
+
         for data_index in list(mfit_array.keys()):
+            if data_index >= self.gen_rchi2.shape[1]:
+                logger.error(
+                    "Index %d is out of bounds for array with shape %s",
+                    data_index,
+                    self.gen_rchi2.shape,
+                )
+                continue
+
             self.gen_rchi2[self.curr_gen, data_index] = mfit_array[data_index]["chi2"]
             self.gen_aic[self.curr_gen, data_index] = mfit_array[data_index]["aic"]
             self.gen_paramfit.loc[list(mfit_array[0]["params"].keys()), data_index] = (
@@ -344,12 +346,12 @@ class GAEnsembleOpt:
             ]
 
         if self.method == "prob":
-            if not self.invabsx2:  ## if invabsx2 is False, use the standard inversion
+            if not self.invabsx2:
                 x2weight = np.apply_along_axis(
                     invert_x2, 1, self.gen_rchi2[self.curr_gen, :].reshape(-1, 1)
                 )
                 self.gen_fitness[self.curr_gen, :] = x2weight.flatten()
-            else:  ## else use the absolute value so the X^2 converges to 1 (may be helpful in data with high error)
+            else:
                 x2weight = np.apply_along_axis(
                     invert_absx2, 1, self.gen_rchi2[self.curr_gen, :].reshape(-1, 1)
                 )
@@ -795,17 +797,21 @@ class GAEnsembleOpt:
 
 def _read_sans_files(sans_struct: pd.DataFrame) -> pd.DataFrame:
     """
-    Read in the SANS files using the provided structure DataFrame.
+    Read in the Pepsi-SANS calculated dat files using the provided structure DataFrame.
     """
     # Initialize an empty dictionary to accumulate data
-    qmin, qmax, nq = 0.0, 0.5, 101
-    q_values = np.linspace(qmin, qmax, nq)
-    data_dict = {"q": q_values}
+    # hard coding 501 for now. This assumes -ns 501 used in teh Pepsi-SANS calculations.
+    qmin, qmax, nq = 0.0, 0.5, 501
 
-    for file in sans_struct.itertuples(index=False):
+    scatteringdf = pd.DataFrame(
+        index=np.linspace(qmin, qmax, nq), columns=sans_struct.index
+    )
+
+    # Iterate through each row in the DataFrame
+    for nn, file in sans_struct.iterrows():
         file_path = Path("pepsisans") / file.DAT_DIRECTORY / file.SCATTERINGFILE
         if not file_path.exists():
-            logger.error("SANS file %s does not exist!", file_path)
+            logger.error("Pepsi-SANS dat file %s does not exist!", file_path)
             continue
 
         try:
@@ -818,17 +824,14 @@ def _read_sans_files(sans_struct: pd.DataFrame) -> pd.DataFrame:
                 header=None,
                 names=["q", "I"],
             )
-            pdb_name = getattr(file, "PDBNAME", None)
-            if pdb_name:
-                # Use `data_dict` to accumulate data
-                data_dict[pdb_name] = sansdf["I"].values
-            else:
-                logger.error("PDBNAME not found in the file row.")
-        except Exception as e:
-            logger.error("Failed to read %s: %s", file_path, e)
+            scatteringdf.loc[:, nn] = sansdf["I"].values
 
-    # Create DataFrame once all columns are accumulated
-    scatteringdf = pd.DataFrame(data_dict)
+        except (
+            pd.errors.EmptyDataError,
+            pd.errors.ParserError,
+            FileNotFoundError,
+        ) as e:
+            logger.error("Failed to read %s: %s", file_path, e)
 
     return scatteringdf
 
@@ -873,50 +876,43 @@ def load_config(file_path: Path):
         sys.exit(1)
 
 
-def aggregate_scat_structure(dirs) -> pd.DataFrame:
+def aggregate_scat_structure(combined_csv_file: str) -> pd.DataFrame:
     """
-    Aggregate the scattering structure files into a single DataFrame.
+    Aggregate the scattering structure from a single CSV file into a DataFrame.
     """
-    all_scat_dfs = []
-    for directory in dirs:
-        dir_path = Path(directory)
-        # Extract the directory name to construct the CSV filename
-        dirname = dir_path.name
-        structure_file = dir_path / f"pepsisans_{dirname}.csv"
+    csv_path = Path(combined_csv_file)
 
-        if not structure_file.exists():
-            logger.error("Structure file %s does not exist!", structure_file)
-            continue
+    if not csv_path.exists():
+        logger.error("CSV file %s does not exist!", csv_path)
+        return pd.DataFrame()  # Return an empty DataFrame if the file does not exist
 
-        logger.info("Reading %s", structure_file)
-        scat_df = pd.read_csv(structure_file)
-        all_scat_dfs.append(scat_df)
+    logger.info("Reading %s", csv_path)
+    combined_scatter_df = pd.read_csv(csv_path)
 
-    # Concatenate all DataFrames vertically
-    combined_scatter_df = (
-        pd.concat(all_scat_dfs, ignore_index=True)
-        .drop_duplicates()
-        .reset_index(drop=True)
-    )
+    # Ensure the columns are stripped of any leading/trailing whitespace
     combined_scatter_df.columns = combined_scatter_df.columns.str.strip()
+
     logger.info("Combined DataFrame columns: %s", combined_scatter_df.columns)
     logger.info("Combined DataFrame sample rows head:\n%s", combined_scatter_df.head())
     logger.info("Combined DataFrame sample rows tail:\n%s", combined_scatter_df.tail())
+
     return combined_scatter_df
 
 
 if __name__ == "__main__":
     config_file = Path("./gasans_config.json")
     config = load_config(config_file)
-    directories = [Path(d) for d in config["directories"]]
+    # directories = [Path(d) for d in config["directories"]]
+    pepsisans_combined = config["structurefile"]
     experiment_file = config["experiment"]
     ga_inputs = config["GA_inputs"]
 
     experiment_datadf = _read_experiment_data(experiment_file)
+    # Ask about these static values
     QMIN = 0.08
     QMAX = 0.35
 
-    combined_scat_df = aggregate_scat_structure(directories)
+    combined_scat_df = aggregate_scat_structure(pepsisans_combined)
     num_lines = combined_scat_df.shape[0]
     logger.info("Number of Pepsi-SANS dat files: %d", num_lines)
 

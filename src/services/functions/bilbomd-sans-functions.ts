@@ -47,7 +47,7 @@ interface GAInput {
 }
 
 interface Config {
-  directories: string[]
+  structurefile: string
   experiment: string
   max_ensemble_size: number
   GA_inputs: GAInput[]
@@ -104,8 +104,7 @@ const spawnPepsiSANS = async (analysisDir: string): Promise<void> => {
   const files = await fs.readdir(analysisDir)
   const pdbFiles = files.filter((file) => file.endsWith('.pdb'))
 
-  // Create a CSV array
-  // const csvLines: string[] = ['PDBNAME','SCATTERINGFILE','Rg','RMSD']
+  // Create a header line for the CSV file
   const csvLines: string[] = ['PDBNAME,SCATTERINGFILE,DAT_DIRECTORY']
 
   // Process each .pdb file
@@ -113,10 +112,33 @@ const spawnPepsiSANS = async (analysisDir: string): Promise<void> => {
     const inputPath = path.join(analysisDir, file)
     const outputFile = file.replace(/\.pdb$/, '.dat')
     const outputPath = path.join(analysisDir, outputFile)
+    // [--deut <Molecule deuteration>]
+    // [--d2o <Buffer deuteration>]
+    // [--deuterated <Deuterateed chains' IDs>]
+    // [-o <output file>]
+    // [-n <expansion order>]
+    // [-ms <max angle>]
+    const pepsiSANSOpts = [
+      '-ms',
+      '0.5',
+      '-ns',
+      '501',
+      '--d2o',
+      '0.75',
+      '--deuterated',
+      'B',
+      '--deut',
+      '0.51'
+    ]
 
     // Create a new promise for running Pepsi-SANS
     const runPepsiSANS = new Promise<void>((resolve, reject) => {
-      const pepsiSANSProcess = spawn('Pepsi-SANS', [inputPath, '-o', outputPath])
+      const pepsiSANSProcess = spawn('Pepsi-SANS', [
+        inputPath,
+        '-o',
+        outputPath,
+        ...pepsiSANSOpts
+      ])
 
       pepsiSANSProcess.on('error', (error) => {
         reject(`Failed to start Pepsi-SANS: ${error.message}`)
@@ -180,13 +202,13 @@ const combineCSVFiles = async (
 }
 
 const writeConfigFile = async (
-  pepsiSANSRunDirs: string[],
+  pepsiSANScombinedCsv: string,
   experiment: string,
   outDir: string,
   outputFileName: string
 ): Promise<void> => {
   const config: Config = {
-    directories: pepsiSANSRunDirs,
+    structurefile: pepsiSANScombinedCsv,
     experiment: experiment,
     max_ensemble_size: 4,
     GA_inputs: [
@@ -307,12 +329,12 @@ const runPepsiSANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<v
       }
     }
 
-    // Combine all CSV files into a single CSV file
+    // Combine all CSV files into a single CSV file.
     await combineCSVFiles(pepsiSANSRunDirs, analysisParams.out_dir, 'combined.csv')
 
     // Write a gasans_config.json file
     await writeConfigFile(
-      pepsiSANSRunDirsForConfigJson,
+      'pepsisans_combined.csv',
       DBjob.data_file,
       analysisParams.out_dir,
       'gasans_config.json'
