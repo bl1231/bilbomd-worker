@@ -627,9 +627,15 @@ class GAEnsembleOpt:
         ## check 3: ##
 
     def check_iterconvergence(self):
+        """
+        check if the iteration has converged
+        """
         pass
 
     def wipe_generation(self):
+        """
+        Wipe the generation and start a new one
+        """
         pass
 
     def evolve(self, dask_client):
@@ -778,30 +784,33 @@ class GAEnsembleOpt:
         return None
 
 
-def _read_SANSFiles(sans_dir: Path, sans_struct, qmin=0.0, qmax=0.5, nq=101):
+def _read_sans_files(sans_struct: pd.DataFrame) -> pd.DataFrame:
     """
-    Read in the sans files
-    This may be part of the GA object soon? Why have
+    Read in the SANS files using the provided structure DataFrame.
     """
+    # Initialize an empty DataFrame with q values
+    qmin, qmax, nq = 0.0, 0.5, 101
+    scatteringdf = pd.DataFrame(index=np.linspace(qmin, qmax, nq))
 
-    scatteringdf = pd.DataFrame(
-        index=np.linspace(qmin, qmax, nq), columns=sans_struct.index
-    )
-    
-    for nn, file in sans_struct.iterrows():
-        # print(file['SCATTERINGFILE'])
-        # print(f"-----------------> {sans_dir}/{file['SCATTERINGFILE']}")
-        sansdf = pd.read_csv(
-            f"{sans_dir}/{file['SCATTERINGFILE']}",
-            sep=r"\s+",
-            engine="python",
-            usecols=[0, 1],
-            skiprows=6,
-            header=None,
-            names=["q", "I"],
-        )
+    for file in sans_struct.itertuples(index=False):
+        file_path = Path(file.DAT_DIRECTORY) / file.SCATTERINGFILE
+        if not file_path.exists():
+            logger.error("SANS file %s does not exist!", file_path)
+            continue
 
-        scatteringdf.loc[:, nn] = sansdf["I"].values
+        try:
+            sansdf = pd.read_csv(
+                file_path,
+                sep=r"\s+",
+                engine="python",
+                usecols=[0, 1],
+                skiprows=6,
+                header=None,
+                names=["q", "I"]
+            )
+            scatteringdf[file['PDBNAME']] = sansdf["I"].values
+        except (pd.errors.ParserError, FileNotFoundError, IOError) as e:
+            logger.error("Failed to read %s: %s", file_path, e)
 
     return scatteringdf
 
@@ -823,79 +832,76 @@ def _read_experiment_data(
     return expdata_df
 
 
-
-
-def _read_json_input(config_file="./config.json"):
+def _read_json_input(config_file_json: Path):
     """
-    Function to read a json file for the inputs of the genetic algorithm:
-    mapping function to change dict keys to 
-    Should include:
-    experimental data to read in 
-    directory of the files if not in working directory
-    scattering data file: PDBFILENAME SCATTERINGFILENAME [...Structural Parameters...]
-    Genetic Algorithm:
-    1. number of iterations (n_iter) 
-    2. number of generations (n_gen) 
-    3. Ensemble Size or list of ensemble sizes (ens_size) 
-    4. fraction of structures to use in the ensembles (ens_split) 
-    5. crossover probability (co_prob) 
-    6. mutation probabaility (mut_prob)  
-    7. cutoff weight for validation (self.cut_weight)
-    8. Evaluation of Fitness (standard or inv_absolute)
-    9. Run evaluation step in parallel (parallel) (if parallel = False: Nedler-Mead instead of DiffEv)
-    10. what type of algorithm to use the weights (default is Differential Evolution )
-    
+    Read the JSON configuration file and return it as a dictionary.
     """
-    
-    with open(config_file ,mode='r') as cfile:
+    with open(config_file_json, mode='r', encoding='utf-8') as cfile:
         cfile_params = json.load(cfile)
-    
-    ga_input_list = []
-    ga_param_ndx = 2
-    cfile_keys = list(cfile_params.keys())
-    for nens, ens_size in enumerate(range(2, cfile_params['max_ensemble_size']+1, 1)):
-        
-        ga_input_list.append(cfile_params[cfile_keys[ga_param_ndx+nens]])
+    return cfile_params
 
-
-    return cfile_params['files'], ga_input_list
 
 def load_config(file_path: Path):
+    """
+    Load the experiment configuration JSON file.
+    """
     if file_path.exists():
-        logger.info(f"Config file {file_path} exists. Reading config file")
+        logger.info("Config file %s exists. Reading config file", file_path)
         return _read_json_input(file_path)
     else:
-        logger.error(f"Config file {file_path} does not exist!!")
+        logger.error("Config file %s does not exist!!", file_path)
         sys.exit(1)
-    
+
+def aggregate_scat_structure(dirs) -> pd.DataFrame:
+    """
+    Aggregate the scattering structure files into a single DataFrame.
+    """
+    all_scat_dfs = []
+    for directory in dirs:
+        dir_path = Path(directory)
+        # Extract the directory name to construct the CSV filename
+        dirname = dir_path.name
+        structure_file = dir_path / f"pepsisans_{dirname}.csv"
+
+        if not structure_file.exists():
+            logger.error("Structure file %s does not exist!", structure_file)
+            continue
+
+        logger.info("Reading %s", structure_file)
+        scat_df = pd.read_csv(structure_file)
+        all_scat_dfs.append(scat_df)
+
+    # Concatenate all DataFrames vertically
+    combined_scatter_df = pd.concat(all_scat_dfs, ignore_index=True).drop_duplicates().reset_index(drop=True)
+    combined_scatter_df.columns = combined_scatter_df.columns.str.strip()
+    logger.info("Combined DataFrame columns: %s", combined_scatter_df.columns)
+    logger.info("Combined DataFrame sample rows head:\n%s", combined_scatter_df.head())
+    logger.info("Combined DataFrame sample rows tail:\n%s", combined_scatter_df.tail())
+    return combined_scatter_df
+
 if __name__ == "__main__":
-    ## Read Config File
-    config_file1 = Path("./gasas_config.json")
-    config_filelist, config_ga_input = load_config(config_file1)
-    path2sans = Path(config_filelist["scatter_dir"])
+    config_file = Path("./gasans_config.json")
+    config = load_config(config_file)
+    # directories = config["directories"]
+    directories = [Path(d) for d in config["directories"]]
+    experiment_file = config["experiment"]
+    ga_inputs = config["GA_inputs"]
 
     ## Need to make this arbirary read to also remove comments
-    experiment_datadf = _read_experiment_data(config_filelist["experiment"])
-    qmin = 0.08
-    qmax = 0.35
+    experiment_datadf = _read_experiment_data(experiment_file)
+    QMIN = 0.08
+    QMAX = 0.35
 
-    ScatStructureDF = pd.read_csv(config_filelist["structurefile"])
-    print(ScatStructureDF.head())
-    # Print the number of lines (rows) in the DataFrame
-    num_lines = ScatStructureDF.shape[0]
-    print(f"Number of Pepsi-SANS dat files: {num_lines}")
+    # ScatStructureDF = pd.read_csv(config_filelist["structurefile"])
+    combined_scat_df = aggregate_scat_structure(directories)
+    num_lines = combined_scat_df.shape[0]
+    logger.info("Number of Pepsi-SANS dat files: %d", num_lines)
 
-    ## Changed to local path or like MultiFOXS a txt file of paths to scattering intensities
-    ##
-    ensemble_scatteringdf = _read_SANSFiles(
-        config_filelist["scatter_dir"], ScatStructureDF
-    )
+    ensemble_scatteringdf = _read_sans_files(combined_scat_df)
 
-    exp_qmax_ndx = np.where(experiment_datadf["Q"] < qmax)[0][-1]
-    for enssize_config in config_ga_input:
-        print(
-            f"Running Genetic Algorithm for Ensemble Size:{enssize_config['ensemble_size']}"
-        )
+    exp_qmax_ndx = np.where(experiment_datadf["Q"] < QMAX)[0][-1]
+    for enssize_config in ga_inputs:
+        logger.info("Running Genetic Algorithm for Ensemble Size: %d", enssize_config['ensemble_size'])
         GARes = GAEnsembleOpt(
             ensemble_scatteringdf,
             experiment_datadf.iloc[1:exp_qmax_ndx],
@@ -913,4 +919,4 @@ if __name__ == "__main__":
                 GARes.evolve(dask_client=client)
 
         GARes._write_bestmodel()
-        GARes._write_parameterfile("gasans_summary_EnsSize{}.csv", ScatStructureDF)
+        GARes._write_parameterfile("gasans_summary_EnsSize{}.csv", combined_scat_df)
