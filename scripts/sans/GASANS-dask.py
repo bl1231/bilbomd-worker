@@ -797,12 +797,12 @@ def _read_sans_files(sans_struct: pd.DataFrame) -> pd.DataFrame:
     """
     Read in the SANS files using the provided structure DataFrame.
     """
-    # Initialize an empty DataFrame with q values
+    # Initialize an empty dictionary to accumulate data
     qmin, qmax, nq = 0.0, 0.5, 101
-    scatteringdf = pd.DataFrame(index=np.linspace(qmin, qmax, nq))
+    q_values = np.linspace(qmin, qmax, nq)
+    data_dict = {"q": q_values}
 
     for file in sans_struct.itertuples(index=False):
-        # file_path = Path(file.DAT_DIRECTORY) / file.SCATTERINGFILE
         file_path = Path("pepsisans") / file.DAT_DIRECTORY / file.SCATTERINGFILE
         if not file_path.exists():
             logger.error("SANS file %s does not exist!", file_path)
@@ -818,9 +818,17 @@ def _read_sans_files(sans_struct: pd.DataFrame) -> pd.DataFrame:
                 header=None,
                 names=["q", "I"],
             )
-            scatteringdf[file["PDBNAME"]] = sansdf["I"].values
-        except (pd.errors.ParserError, FileNotFoundError, IOError) as e:
+            pdb_name = getattr(file, "PDBNAME", None)
+            if pdb_name:
+                # Use `data_dict` to accumulate data
+                data_dict[pdb_name] = sansdf["I"].values
+            else:
+                logger.error("PDBNAME not found in the file row.")
+        except Exception as e:
             logger.error("Failed to read %s: %s", file_path, e)
+
+    # Create DataFrame once all columns are accumulated
+    scatteringdf = pd.DataFrame(data_dict)
 
     return scatteringdf
 
