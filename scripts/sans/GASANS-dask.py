@@ -15,8 +15,9 @@ import scipy.interpolate as scpint
 import dask.distributed as distributed
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 logging.basicConfig(level=logging.INFO)
+
 
 def reduced_chi2(expected, model, sigma_exp, ddof=1):
     return (np.power((model - expected) / sigma_exp, 2)).sum() / (
@@ -639,8 +640,10 @@ class GAEnsembleOpt:
         pass
 
     def evolve(self, dask_client):
+        """
+        Evolve the ensemble
+        """
 
-        ##evaluate the
         self.curr_iter = 0
         for it in np.arange(0, self.n_iter, 1):
 
@@ -693,6 +696,9 @@ class GAEnsembleOpt:
             self.gen_converged = False
 
     def evaluate_bestfit(self):
+        """
+        Evaluate the best fit from the ensemble
+        """
         bestpars = gen_modelparams(self.ens_size, self.cbest_rchi2["fit_pars"])
         best_model = _residual_lmf(
             bestpars, self.data[self.cbest_rchi2["ensemble"][0]].values.T
@@ -700,6 +706,9 @@ class GAEnsembleOpt:
         return best_model
 
     def _write_bestmodel(self, foutname: Path = Path("./"), err=True):
+        """
+        Write out the best fit model to a file
+        """
         # print(self.data.index.values.shape, self.evaluate_bestfit().shape)
         bmdf = pd.DataFrame(
             columns=["q", "intensity"],
@@ -793,7 +802,8 @@ def _read_sans_files(sans_struct: pd.DataFrame) -> pd.DataFrame:
     scatteringdf = pd.DataFrame(index=np.linspace(qmin, qmax, nq))
 
     for file in sans_struct.itertuples(index=False):
-        file_path = Path(file.DAT_DIRECTORY) / file.SCATTERINGFILE
+        # file_path = Path(file.DAT_DIRECTORY) / file.SCATTERINGFILE
+        file_path = Path("pepsisans") / file.DAT_DIRECTORY / file.SCATTERINGFILE
         if not file_path.exists():
             logger.error("SANS file %s does not exist!", file_path)
             continue
@@ -806,9 +816,9 @@ def _read_sans_files(sans_struct: pd.DataFrame) -> pd.DataFrame:
                 usecols=[0, 1],
                 skiprows=6,
                 header=None,
-                names=["q", "I"]
+                names=["q", "I"],
             )
-            scatteringdf[file['PDBNAME']] = sansdf["I"].values
+            scatteringdf[file["PDBNAME"]] = sansdf["I"].values
         except (pd.errors.ParserError, FileNotFoundError, IOError) as e:
             logger.error("Failed to read %s: %s", file_path, e)
 
@@ -819,7 +829,9 @@ def _read_experiment_data(
     dataloc,
 ):
 
-    expdata_df = pd.read_csv(dataloc, comment="#", header=None, sep=r'\s+', engine='python')
+    expdata_df = pd.read_csv(
+        dataloc, comment="#", header=None, sep=r"\s+", engine="python"
+    )
     if expdata_df.shape[1] == 3:
         expdata_df.columns = ["Q", "I(Q)", "Error"]
     elif expdata_df.shape[1] == 4:
@@ -836,7 +848,7 @@ def _read_json_input(config_file_json: Path):
     """
     Read the JSON configuration file and return it as a dictionary.
     """
-    with open(config_file_json, mode='r', encoding='utf-8') as cfile:
+    with open(config_file_json, mode="r", encoding="utf-8") as cfile:
         cfile_params = json.load(cfile)
     return cfile_params
 
@@ -851,6 +863,7 @@ def load_config(file_path: Path):
     else:
         logger.error("Config file %s does not exist!!", file_path)
         sys.exit(1)
+
 
 def aggregate_scat_structure(dirs) -> pd.DataFrame:
     """
@@ -872,27 +885,29 @@ def aggregate_scat_structure(dirs) -> pd.DataFrame:
         all_scat_dfs.append(scat_df)
 
     # Concatenate all DataFrames vertically
-    combined_scatter_df = pd.concat(all_scat_dfs, ignore_index=True).drop_duplicates().reset_index(drop=True)
+    combined_scatter_df = (
+        pd.concat(all_scat_dfs, ignore_index=True)
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
     combined_scatter_df.columns = combined_scatter_df.columns.str.strip()
     logger.info("Combined DataFrame columns: %s", combined_scatter_df.columns)
     logger.info("Combined DataFrame sample rows head:\n%s", combined_scatter_df.head())
     logger.info("Combined DataFrame sample rows tail:\n%s", combined_scatter_df.tail())
     return combined_scatter_df
 
+
 if __name__ == "__main__":
     config_file = Path("./gasans_config.json")
     config = load_config(config_file)
-    # directories = config["directories"]
     directories = [Path(d) for d in config["directories"]]
     experiment_file = config["experiment"]
     ga_inputs = config["GA_inputs"]
 
-    ## Need to make this arbirary read to also remove comments
     experiment_datadf = _read_experiment_data(experiment_file)
     QMIN = 0.08
     QMAX = 0.35
 
-    # ScatStructureDF = pd.read_csv(config_filelist["structurefile"])
     combined_scat_df = aggregate_scat_structure(directories)
     num_lines = combined_scat_df.shape[0]
     logger.info("Number of Pepsi-SANS dat files: %d", num_lines)
@@ -901,13 +916,15 @@ if __name__ == "__main__":
 
     exp_qmax_ndx = np.where(experiment_datadf["Q"] < QMAX)[0][-1]
     for enssize_config in ga_inputs:
-        logger.info("Running Genetic Algorithm for Ensemble Size: %d", enssize_config['ensemble_size'])
+        logger.info(
+            "Running Genetic Algorithm for Ensemble Size: %d",
+            enssize_config["ensemble_size"],
+        )
+        logger.info("Ensemble Size Configuration: %s", enssize_config)
         GARes = GAEnsembleOpt(
             ensemble_scatteringdf,
             experiment_datadf.iloc[1:exp_qmax_ndx],
             **enssize_config,
-            #ens_size=2, n_gen=5, n_iter=5, ens_split=1.0,
-            #mut_prob=0.1,elitism=False, invabsx2=True, parallel=True,
         )
 
         with distributed.LocalCluster(
