@@ -23,3 +23,5 @@ dependencies:
   - mmcif_pdbx
   - svglib
   - pyopencl
+  - pandas
+  - dask
