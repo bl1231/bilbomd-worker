@@ -18,6 +18,20 @@ interface NewAnalysisParams {
   conf_sample: number
 }
 
+// interface CharmmDCD2PDBParams {
+//   out_dir: string
+//   charmm_template: string
+//   charmm_topo_dir: string
+//   charmm_inp_file: string
+//   charmm_out_file: string
+//   in_psf_file: string
+//   in_crd_file: string
+//   inp_basename: string
+//   pepsisans_rg: string
+//   in_dcd: string
+//   run: string
+// }
+
 // Define the structure of the configuration JSON
 interface GAInput {
   number_iterations: number
@@ -43,9 +57,9 @@ const DATA_VOL = process.env.DATA_VOL ?? '/bilbomd/uploads'
 const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
 const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
 
-// const makeFile = async (file: string) => {
-//   await fs.ensureFile(file)
-// }
+const makeFile = async (file: string) => {
+  await fs.ensureFile(file)
+}
 
 const makeDir = async (directory: string) => {
   await fs.ensureDir(directory)
@@ -250,10 +264,16 @@ const runPepsiSANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<v
   }
 
   try {
+    let status: IStepStatus = {
+      status: 'Running',
+      message: 'New Analysis has started.'
+    }
+    await updateStepStatus(DBjob, 'dcd2pdb', status)
+
     const analysisDir = path.join(analysisParams.out_dir, 'pepsisans')
     await makeDir(analysisDir)
-    // const analysisRgFile = path.join(analysisParams.out_dir, analysisParams.pepsisans_rg)
-    // await makeFile(analysisRgFile)
+    const analysisRgFile = path.join(analysisParams.out_dir, analysisParams.pepsisans_rg)
+    await makeFile(analysisRgFile)
 
     const step = Math.max(
       Math.round((analysisParams.rg_max - analysisParams.rg_min) / 5),
@@ -261,114 +281,42 @@ const runPepsiSANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<v
     )
 
     const pepsiSANSRunDirs: string[] = []
-    // const pepsiSANSRunDirsForConfigJson: string[] = []
+    const pepsiSANSRunDirsForConfigJson: string[] = []
 
     for (let rg = analysisParams.rg_min; rg <= analysisParams.rg_max; rg += step) {
       for (let run = 1; run <= analysisParams.conf_sample; run += 1) {
         const runAllCharmm: Promise<void>[] = []
         const runAllPepsiSANS: Promise<void>[] = []
         const pepsiSANSRunDir = path.join(analysisDir, `rg${rg}_run${run}`)
-        // const pepsiSANSRunDirForConfigJson = path.join('pepsisans', `rg${rg}_run${run}`)
-
+        const pepsiSANSRunDirForConfigJson = path.join('pepsisans', `rg${rg}_run${run}`)
         pepsiSANSRunDirs.push(pepsiSANSRunDir)
-        // pepsiSANSRunDirsForConfigJson.push(pepsiSANSRunDirForConfigJson)
+        pepsiSANSRunDirsForConfigJson.push(pepsiSANSRunDirForConfigJson)
 
         await makeDir(pepsiSANSRunDir)
 
-        // Set up DCD2PDBParams for CHARMM
         DCD2PDBParams.charmm_inp_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.inp`
         DCD2PDBParams.charmm_out_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.out`
         DCD2PDBParams.inp_basename = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}`
         DCD2PDBParams.run = `rg${rg}_run${run}`
 
-        try {
-          // Update status before starting CHARMM DCD-to-PDB conversion
-          let status: IStepStatus = {
-            status: 'Running',
-            message: `Starting DCD to PDB conversion for rg${rg}_run${run}`
-          }
-          await updateStepStatus(DBjob, 'dcd2pdb', status)
-
-          await generateDCD2PDBInpFile(DCD2PDBParams, rg, run)
-
-          // Add CHARMM process to the queue and handle status updates
-          runAllCharmm.push(
-            spawnCharmm(DCD2PDBParams)
-              .then(async () => {
-                // Success status for DCD-to-PDB
-                status = {
-                  status: 'Success',
-                  message: `Successfully converted DCD to PDB for rg${rg}_run${run}`
-                }
-                await updateStepStatus(DBjob, 'dcd2pdb', status)
-              })
-              .catch(async (error) => {
-                // Error status for DCD-to-PDB
-                status = {
-                  status: 'Error',
-                  message: `Failed DCD to PDB conversion for rg${rg}_run${run}: ${error.message}`
-                }
-                await updateStepStatus(DBjob, 'dcd2pdb', status)
-                throw error // Ensure it propagates for further handling
-              })
-          )
-
-          // Wait for all CHARMM processes to finish
-          await Promise.all(runAllCharmm)
-        } catch (error) {
-          await handleError(error, MQjob, DBjob, 'dcd2pdb')
-          throw error
-        }
-
-        try {
-          // Update status before starting Pepsi-SANS
-          let status: IStepStatus = {
-            status: 'Running',
-            message: `Starting Pepsi-SANS for rg${rg}_run${run}`
-          }
-          await updateStepStatus(DBjob, 'pepsisans', status)
-
-          // Run Pepsi-SANS on each PDB file and handle status updates
-          // Construct Pepsi-SANS arguments from the DBJob properties
-          const pepsiSANSArgs = [
-            '--d2o',
-            DBjob.d2o_fraction.toString(),
-            '--deut',
-            '0.0',
-            '--deuterated',
-            'P',
-            '-ms',
-            '0.5',
-            '-ns',
-            '501'
-          ]
-          runAllPepsiSANS.push(
-            spawnPepsiSANS(pepsiSANSRunDir, pepsiSANSArgs)
-              .then(async () => {
-                // Success status for Pepsi-SANS
-                status = {
-                  status: 'Success',
-                  message: `Successfully completed Pepsi-SANS for rg${rg}_run${run}`
-                }
-                await updateStepStatus(DBjob, 'pepsisans', status)
-              })
-              .catch(async (error) => {
-                // Error status for Pepsi-SANS
-                status = {
-                  status: 'Error',
-                  message: `Failed Pepsi-SANS for rg${rg}_run${run}: ${error.message}`
-                }
-                await updateStepStatus(DBjob, 'pepsisans', status)
-                throw error // Ensure it propagates for further handling
-              })
-          )
-
-          // Wait for all Pepsi-SANS processes to finish
-          await Promise.all(runAllPepsiSANS)
-        } catch (error) {
-          await handleError(error, MQjob, DBjob, 'pepsisans')
-          throw error
-        }
+        await generateDCD2PDBInpFile(DCD2PDBParams, rg, run)
+        runAllCharmm.push(spawnCharmm(DCD2PDBParams))
+        await Promise.all(runAllCharmm)
+        const pepsiSANSArgs = [
+          '--d2o',
+          DBjob.d2o_fraction.toString(),
+          '--deut',
+          '0.0',
+          '--deuterated',
+          'P',
+          '-ms',
+          '0.5',
+          '-ns',
+          '501'
+        ]
+        // Run Pepsi-SANS on every PDB file
+        runAllPepsiSANS.push(spawnPepsiSANS(pepsiSANSRunDir, pepsiSANSArgs))
+        await Promise.all(runAllPepsiSANS)
       }
     }
 
@@ -382,6 +330,12 @@ const runPepsiSANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<v
       analysisParams.out_dir,
       'gasans_config.json'
     )
+
+    status = {
+      status: 'Success',
+      message: 'New Analysis has completed.'
+    }
+    await updateStepStatus(DBjob, 'dcd2pdb', status)
   } catch (error) {
     await handleError(error, MQjob, DBjob, 'dcd2pdb')
   }
