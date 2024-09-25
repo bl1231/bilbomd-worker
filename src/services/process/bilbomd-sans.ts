@@ -37,12 +37,6 @@ const processBilboMDSANSJob = async (MQjob: BullMQJob) => {
   await MQjob.log('end minimize')
   await MQjob.updateProgress(25)
 
-  // FoXS calculations on minimization_output.pdb
-  // await MQjob.log('start initfoxs')
-  // await runSingleFoXS(foundJob)
-  // await MQjob.log('end initfoxs')
-  // await MQjob.updateProgress(30)
-
   // CHARMM heating
   await MQjob.log('start heat')
   await runHeat(MQjob, foundJob)
@@ -61,10 +55,10 @@ const processBilboMDSANSJob = async (MQjob: BullMQJob) => {
   await MQjob.log('end pepsi-sans')
   await MQjob.updateProgress(80)
 
-  // GA-SAS analysis
-  await MQjob.log('start ga-sas')
+  // GA-SANS analysis
+  await MQjob.log('start ga-sans')
   // await runMultiFoxs(MQjob, foundJob)
-  await MQjob.log('end ga-sas')
+  await MQjob.log('end ga-sans')
   await MQjob.updateProgress(95)
 
   // Prepare results
