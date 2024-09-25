@@ -1,6 +1,6 @@
 # -----------------------------------------------------------------------------
 # Build stage 1 - grab NodeJS v20 and update container.
-FROM ubuntu:22.04 AS worker-step1
+FROM ubuntu:22.04 AS install-dependencies
 
 # Update package lists, install build tools, dependencies, and clean up
 RUN apt-get update && \
@@ -10,12 +10,12 @@ RUN apt-get update && \
 
 # -----------------------------------------------------------------------------
 # Build stage 2 - CHARMM
-FROM worker-step1 AS build_charmm
+FROM install-dependencies AS build_charmm
 ARG CHARMM_VER=c48b2
 
 # Copy or Download CHARMM source code, extract, and remove the tarball
-# COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
-RUN wget https://bl1231.als.lbl.gov/pickup/charmm/${CHARMM_VER}.tar.gz -O /usr/local/src/${CHARMM_VER}.tar.gz
+COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
+# RUN wget https://bl1231.als.lbl.gov/pickup/charmm/${CHARMM_VER}.tar.gz -O /usr/local/src/${CHARMM_VER}.tar.gz
 RUN mkdir -p /usr/local/src && \
     tar -zxvf /usr/local/src/${CHARMM_VER}.tar.gz -C /usr/local/src && \
     rm /usr/local/src/${CHARMM_VER}.tar.gz
@@ -30,12 +30,12 @@ RUN make -j$(nproc) -C build/cmake install
 # -----------------------------------------------------------------------------
 # Build stage 3 - Copy CHARMM binary
 #   I'm not sure if this needs to be a separate step.
-FROM build_charmm AS worker-step2
+FROM build_charmm AS copy-charmm-binary
 COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 
 # -----------------------------------------------------------------------------
 # Build stage ## - Install NodeJS
-FROM worker-step2 AS install-node
+FROM copy-charmm-binary AS install-node
 ARG NODE_MAJOR=20
 RUN apt-get update && \
     apt-get install -y gpg curl && \
@@ -47,7 +47,7 @@ RUN apt-get update && \
 
 # -----------------------------------------------------------------------------
 # Build stage 4 - Miniconda3
-FROM install-node AS build-conda
+FROM install-node AS install-conda
 
 # Download and install Miniforge3
 RUN wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" && \
@@ -59,8 +59,7 @@ ENV PATH="/miniforge3/bin/:${PATH}"
 
 # Update conda
 RUN conda update -y -n base -c defaults conda && \
-    conda install -y cython swig doxygen pandas dask && \
-    conda clean -afy
+    conda install -y cython swig doxygen
 
 # Copy environment.yml and install dependencies
 COPY environment.yml /tmp/environment.yml
@@ -70,14 +69,14 @@ RUN conda env update -f /tmp/environment.yml && \
 
 # -----------------------------------------------------------------------------
 # Build stage 5 - BioXTAS
-FROM build-conda AS bilbomd-worker-step5
+FROM install-conda AS install-bioxtas-raw
 
 # Copy the BioXTAS GitHiub master zip file
 WORKDIR /tmp
-# COPY bioxtas/bioxtasraw-master.zip .
 
 # Download the BioXTAS RAW master zip file using wget
-RUN wget https://github.com/jbhopkins/bioxtasraw/archive/refs/heads/master.zip -O bioxtasraw-master.zip
+COPY bioxtas/bioxtasraw-master.zip .
+# RUN wget https://github.com/jbhopkins/bioxtasraw/archive/refs/heads/master.zip -O bioxtasraw-master.zip
 RUN unzip bioxtasraw-master.zip && rm bioxtasraw-master.zip
 
 # Install BioXTAS RAW into local Python environment
@@ -88,7 +87,7 @@ RUN python setup.py build_ext --inplace && \
 
 # -----------------------------------------------------------------------------
 # Build stage 6 - IMP
-FROM bilbomd-worker-step5 AS bilbomd-worker-step6
+FROM install-bioxtas-raw AS install-imp
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends software-properties-common && \
@@ -99,7 +98,7 @@ RUN apt-get update && \
 
 # -----------------------------------------------------------------------------
 # Build stage 7 - SANS Stuff
-FROM bilbomd-worker-step6 AS bilbomd-worker-step7
+FROM install-imp AS install-sans-tools
 RUN apt-get update && \
     apt-get install -y parallel && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -117,7 +116,7 @@ COPY scripts/sans /usr/local/sans
 
 # -----------------------------------------------------------------------------
 # Build stage 8 - worker app
-FROM bilbomd-worker-step7 AS bilbomd-worker
+FROM install-sans-tools AS bilbomd-worker
 ARG USER_ID
 ARG GROUP_ID
 ARG GITHUB_TOKEN
