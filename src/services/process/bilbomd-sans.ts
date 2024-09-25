@@ -6,7 +6,11 @@ import {
   runHeat,
   runMolecularDynamics
 } from '../functions/bilbomd-step-functions'
-import { runPepsiSANS } from '../functions/bilbomd-sans-functions'
+import {
+  extractPDBFilesFromDCD,
+  remediatePDBFiles,
+  runPepsiSANSOnPDBFiles
+} from '../functions/bilbomd-sans-functions'
 import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc'
 import { initializeJob, cleanupJob } from '../functions/job-utils'
 
@@ -49,10 +53,22 @@ const processBilboMDSANSJob = async (MQjob: BullMQJob) => {
   await MQjob.log('end md')
   await MQjob.updateProgress(60)
 
+  // Extract PDBs from DCDs
+  await MQjob.log('start dcd2pdb')
+  await extractPDBFilesFromDCD(foundJob)
+  await MQjob.log('end dcd2pdb')
+  await MQjob.updateProgress(70)
+
+  // Remediate PDB files
+  await MQjob.log('start remediate')
+  await remediatePDBFiles(foundJob)
+  await MQjob.log('end remediate')
+  await MQjob.updateProgress(80)
+
   // Calculate Pepsi-SANS profiles
-  await MQjob.log('start pepsi-sans')
-  await runPepsiSANS(MQjob, foundJob)
-  await MQjob.log('end pepsi-sans')
+  await MQjob.log('start pepsisans')
+  await runPepsiSANSOnPDBFiles(foundJob)
+  await MQjob.log('end pepsisans')
   await MQjob.updateProgress(80)
 
   // GA-SANS analysis
