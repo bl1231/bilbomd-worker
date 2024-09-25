@@ -1,36 +1,36 @@
 import path from 'path'
 import fs from 'fs-extra'
 import { logger } from '../../helpers/loggers'
-import { Job as BullMQJob } from 'bullmq'
-import { IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
+// import { Job as BullMQJob } from 'bullmq'
+// import { IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
 import { IBilboMDSANSJob } from '@bl1231/bilbomd-mongodb-schema'
-import { updateStepStatus } from './mongo-utils'
-import { handleError, generateDCD2PDBInpFile } from './bilbomd-step-functions'
+// import { updateStepStatus } from './mongo-utils'
+import { generateDCD2PDBInpFile } from './bilbomd-step-functions'
 import { spawn, ChildProcess } from 'node:child_process'
-import { CharmmParams, CharmmDCD2PDBParams } from '../../types/index'
+import { CharmmParams } from '../../types/index'
 
 // Define the types and interfaces if not already defined
-interface NewAnalysisParams {
-  out_dir: string
-  rg_min: number
-  rg_max: number
-  pepsisans_rg: string
-  conf_sample: number
-}
-
-// interface CharmmDCD2PDBParams {
+// interface NewAnalysisParams {
 //   out_dir: string
-//   charmm_template: string
-//   charmm_topo_dir: string
-//   charmm_inp_file: string
-//   charmm_out_file: string
-//   in_psf_file: string
-//   in_crd_file: string
-//   inp_basename: string
+//   rg_min: number
+//   rg_max: number
 //   pepsisans_rg: string
-//   in_dcd: string
-//   run: string
+//   conf_sample: number
 // }
+
+interface CharmmDCD2PDBParams {
+  out_dir: string
+  charmm_template: string
+  charmm_topo_dir: string
+  charmm_inp_file: string
+  charmm_out_file: string
+  in_psf_file: string
+  in_crd_file: string
+  inp_basename: string
+  pepsisans_rg: string
+  in_dcd: string
+  run: string
+}
 
 // Define the structure of the configuration JSON
 interface GAInput {
@@ -64,6 +64,33 @@ const makeFile = async (file: string) => {
 const makeDir = async (directory: string) => {
   await fs.ensureDir(directory)
   logger.info(`Create Dir: ${directory}`)
+}
+
+const writeSegidToChainid = async (inputFile: string): Promise<void> => {
+  try {
+    const fileContent = await fs.promises.readFile(inputFile, 'utf-8')
+    const lines = fileContent.split('\n')
+    const modifiedLines = lines.map((line) => {
+      // Check if the line is an ATOM or HETATM line
+      if (/^(ATOM|HETATM)/.test(line)) {
+        // Extract the segid (columns 73-76)
+        const segid = line.substring(72, 76).trim()
+        const lastChar = segid.slice(-1)
+
+        // Replace the chainid (column 22) with the last character of the segid
+        return line.substring(0, 21) + lastChar + line.substring(22)
+      } else {
+        // If not an ATOM or HETATM line, return the line as is
+        return line
+      }
+    })
+
+    // Join the modified lines and overwrite the original file
+    await fs.promises.writeFile(inputFile, modifiedLines.join('\n'), 'utf-8')
+    logger.info(`Processed PDB file saved as ${inputFile}`)
+  } catch (error) {
+    logger.error('Error processing the PDB file:', error)
+  }
 }
 
 const spawnCharmm = (params: CharmmParams): Promise<void> => {
@@ -114,24 +141,6 @@ const spawnPepsiSANS = async (
     const inputPath = path.join(analysisDir, file)
     const outputFile = file.replace(/\.pdb$/, '.dat')
     const outputPath = path.join(analysisDir, outputFile)
-    // [--deut <Molecule deuteration>]
-    // [--d2o <Buffer deuteration>]
-    // [--deuterated <Deuterateed chains' IDs>]
-    // [-o <output file>]
-    // [-n <expansion order>]
-    // [-ms <max angle>]
-    // const pepsiSANSOpts = [
-    //   '-ms',
-    //   '0.5',
-    //   '-ns',
-    //   '501',
-    //   '--d2o',
-    //   '0.75',
-    //   '--deuterated',
-    //   'B',
-    //   '--deut',
-    //   '0.51'
-    // ]
 
     // Create a new promise for running Pepsi-SANS
     const runPepsiSANS = new Promise<void>((resolve, reject) => {
@@ -260,17 +269,8 @@ const writeConfigFile = async (
   await fs.writeFile(outputFilePath, JSON.stringify(config, null, 2), 'utf-8')
 }
 
-const runPepsiSANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<void> => {
+const extractPDBFilesFromDCD = async (DBjob: IBilboMDSANSJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
-
-  const analysisParams: NewAnalysisParams = {
-    out_dir: outputDir,
-    rg_min: DBjob.rg_min,
-    rg_max: DBjob.rg_max,
-    pepsisans_rg: 'pepsisans_rg.out',
-    conf_sample: DBjob.conformational_sampling
-  }
-
   const DCD2PDBParams: CharmmDCD2PDBParams = {
     out_dir: outputDir,
     charmm_template: 'dcd2pdb-sans',
@@ -285,84 +285,99 @@ const runPepsiSANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<v
     run: ''
   }
 
-  try {
-    let status: IStepStatus = {
-      status: 'Running',
-      message: 'New Analysis has started.'
+  // Create the output directory for the PDB files
+  const analysisDir = path.join(outputDir, 'pepsisans')
+  await makeDir(analysisDir)
+  // Create the output file for the Rg values from CHARMM
+  const pepsisansRgFile = path.join(outputDir, DCD2PDBParams.pepsisans_rg)
+  await makeFile(pepsisansRgFile)
+
+  const step = Math.max(Math.round((DBjob.rg_max - DBjob.rg_min) / 5), 1)
+
+  for (let rg = DBjob.rg_min; rg <= DBjob.rg_max; rg += step) {
+    for (let run = 1; run <= DBjob.conformational_sampling; run++) {
+      const pepsiSANSRunDir = path.join(analysisDir, `rg${rg}_run${run}`)
+      await makeDir(pepsiSANSRunDir)
+
+      DCD2PDBParams.charmm_inp_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.inp`
+      DCD2PDBParams.charmm_out_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.out`
+      DCD2PDBParams.inp_basename = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}`
+      DCD2PDBParams.run = `rg${rg}_run${run}`
+
+      await generateDCD2PDBInpFile(DCD2PDBParams, rg, run)
+      await spawnCharmm(DCD2PDBParams) // Run CHARMM to extract PDB
     }
-    await updateStepStatus(DBjob, 'dcd2pdb', status)
-
-    const analysisDir = path.join(analysisParams.out_dir, 'pepsisans')
-    await makeDir(analysisDir)
-    const analysisRgFile = path.join(analysisParams.out_dir, analysisParams.pepsisans_rg)
-    await makeFile(analysisRgFile)
-
-    const step = Math.max(
-      Math.round((analysisParams.rg_max - analysisParams.rg_min) / 5),
-      1
-    )
-
-    const pepsiSANSRunDirs: string[] = []
-    const pepsiSANSRunDirsForConfigJson: string[] = []
-
-    for (let rg = analysisParams.rg_min; rg <= analysisParams.rg_max; rg += step) {
-      for (let run = 1; run <= analysisParams.conf_sample; run += 1) {
-        const runAllCharmm: Promise<void>[] = []
-        const runAllPepsiSANS: Promise<void>[] = []
-        const pepsiSANSRunDir = path.join(analysisDir, `rg${rg}_run${run}`)
-        const pepsiSANSRunDirForConfigJson = path.join('pepsisans', `rg${rg}_run${run}`)
-        pepsiSANSRunDirs.push(pepsiSANSRunDir)
-        pepsiSANSRunDirsForConfigJson.push(pepsiSANSRunDirForConfigJson)
-
-        await makeDir(pepsiSANSRunDir)
-
-        DCD2PDBParams.charmm_inp_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.inp`
-        DCD2PDBParams.charmm_out_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.out`
-        DCD2PDBParams.inp_basename = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}`
-        DCD2PDBParams.run = `rg${rg}_run${run}`
-
-        await generateDCD2PDBInpFile(DCD2PDBParams, rg, run)
-        runAllCharmm.push(spawnCharmm(DCD2PDBParams))
-        await Promise.all(runAllCharmm)
-        // Need to make sure ChainIDs are correct before passing to Pepsi-SANS
-
-        const pepsiSANSOpts = [
-          '-ms',
-          '0.5',
-          '-ns',
-          '501',
-          '--d2o',
-          DBjob.d2o_fraction.toString(),
-          '--deuterated',
-          'B',
-          '--deut',
-          '0.51'
-        ]
-        // Run Pepsi-SANS on every PDB file
-        runAllPepsiSANS.push(spawnPepsiSANS(pepsiSANSRunDir, pepsiSANSOpts))
-        await Promise.all(runAllPepsiSANS)
-      }
-    }
-
-    // Combine all CSV files into a single CSV file.
-    await combineCSVFiles(pepsiSANSRunDirs, analysisParams.out_dir, 'combined.csv')
-
-    // Write a gasans_config.json file
-    await writeConfigFile(
-      'pepsisans_combined.csv',
-      DBjob.data_file,
-      analysisParams.out_dir,
-      'gasans_config.json'
-    )
-
-    status = {
-      status: 'Success',
-      message: 'New Analysis has completed.'
-    }
-    await updateStepStatus(DBjob, 'dcd2pdb', status)
-  } catch (error) {
-    await handleError(error, MQjob, DBjob, 'dcd2pdb')
   }
+
+  logger.info('PDB extraction completed.')
 }
 
-export { runPepsiSANS }
+const remediatePDBFiles = async (DBjob: IBilboMDSANSJob): Promise<void> => {
+  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const analysisDir = path.join(outputDir, 'pepsisans')
+
+  // Read all subdirectories in analysisDir
+  const pepsiSANSRunDirs = fs.readdirSync(analysisDir).filter((file) => {
+    return fs.statSync(path.join(analysisDir, file)).isDirectory()
+  })
+
+  for (const dir of pepsiSANSRunDirs) {
+    const pepsiSANSRunDir = path.join(analysisDir, dir)
+
+    // Read all PDB files in the current directory
+    const pdbFiles = fs.readdirSync(pepsiSANSRunDir).filter((file) => {
+      return file.endsWith('.pdb')
+    })
+
+    for (const pdbFile of pdbFiles) {
+      const pdbFilePath = path.join(pepsiSANSRunDir, pdbFile)
+      await writeSegidToChainid(pdbFilePath)
+    }
+  }
+
+  logger.info('All PDB files have been remediated.')
+}
+
+const runPepsiSANSOnPDBFiles = async (DBjob: IBilboMDSANSJob): Promise<void> => {
+  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const analysisDir = path.join(outputDir, 'pepsisans')
+
+  // Read all subdirectories in analysisDir
+  const pepsiSANSRunDirs = fs.readdirSync(analysisDir).filter((file) => {
+    return fs.statSync(path.join(analysisDir, file)).isDirectory()
+  })
+
+  for (const dir of pepsiSANSRunDirs) {
+    const pepsiSANSRunDir = path.join(analysisDir, dir)
+
+    const pepsiSANSOpts = [
+      '-ms',
+      '0.5',
+      '-ns',
+      '501',
+      '--d2o',
+      DBjob.d2o_fraction.toString(),
+      '--deuterated',
+      'A',
+      '--deut',
+      '0.0'
+    ]
+
+    await spawnPepsiSANS(pepsiSANSRunDir, pepsiSANSOpts) // Run Pepsi-SANS for each PDB
+  }
+
+  // Combine all CSV files into a single CSV file.
+  await combineCSVFiles(pepsiSANSRunDirs, outputDir, 'pepsisans_combined.csv')
+
+  // Write a gasans_config.json file
+  await writeConfigFile(
+    'pepsisans_combined.csv',
+    DBjob.data_file,
+    outputDir,
+    'gasans_config.json'
+  )
+
+  logger.info('Pepsi-SANS analysis completed.')
+}
+
+export { extractPDBFilesFromDCD, remediatePDBFiles, runPepsiSANSOnPDBFiles }
