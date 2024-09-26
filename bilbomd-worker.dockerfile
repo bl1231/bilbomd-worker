@@ -57,10 +57,6 @@ RUN wget "https://github.com/conda-forge/miniforge/releases/latest/download/Mini
 # Add Conda to PATH
 ENV PATH="/miniforge3/bin/:${PATH}"
 
-# Update conda
-RUN conda update -y -n base -c defaults conda && \
-    conda install -y cython swig doxygen
-
 # Copy environment.yml and install dependencies
 COPY environment.yml /tmp/environment.yml
 RUN conda env update -f /tmp/environment.yml && \
