@@ -9,9 +9,11 @@ import {
 import {
   extractPDBFilesFromDCD,
   remediatePDBFiles,
-  runPepsiSANSOnPDBFiles
+  runPepsiSANSOnPDBFiles,
+  runGASANS,
+  prepareBilboMDSANSResults
 } from '../functions/bilbomd-sans-functions'
-import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc'
+// import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc'
 import { initializeJob, cleanupJob } from '../functions/job-utils'
 
 const processBilboMDSANSJob = async (MQjob: BullMQJob) => {
@@ -39,31 +41,31 @@ const processBilboMDSANSJob = async (MQjob: BullMQJob) => {
   await MQjob.log('start minimize')
   await runMinimize(MQjob, foundJob)
   await MQjob.log('end minimize')
-  await MQjob.updateProgress(25)
+  await MQjob.updateProgress(20)
 
   // CHARMM heating
   await MQjob.log('start heat')
   await runHeat(MQjob, foundJob)
   await MQjob.log('end heat')
-  await MQjob.updateProgress(40)
+  await MQjob.updateProgress(30)
 
   // CHARMM molecular dynamics
   await MQjob.log('start md')
   await runMolecularDynamics(MQjob, foundJob)
   await MQjob.log('end md')
-  await MQjob.updateProgress(60)
+  await MQjob.updateProgress(50)
 
   // Extract PDBs from DCDs
   await MQjob.log('start dcd2pdb')
   await extractPDBFilesFromDCD(foundJob)
   await MQjob.log('end dcd2pdb')
-  await MQjob.updateProgress(70)
+  await MQjob.updateProgress(60)
 
   // Remediate PDB files
   await MQjob.log('start remediate')
   await remediatePDBFiles(foundJob)
   await MQjob.log('end remediate')
-  await MQjob.updateProgress(80)
+  await MQjob.updateProgress(70)
 
   // Calculate Pepsi-SANS profiles
   await MQjob.log('start pepsisans')
@@ -73,13 +75,13 @@ const processBilboMDSANSJob = async (MQjob: BullMQJob) => {
 
   // GA-SANS analysis
   await MQjob.log('start ga-sans')
-  // await runMultiFoxs(MQjob, foundJob)
+  await runGASANS(foundJob)
   await MQjob.log('end ga-sans')
-  await MQjob.updateProgress(95)
+  await MQjob.updateProgress(90)
 
   // Prepare results
   await MQjob.log('start results')
-  await prepareBilboMDResults(MQjob, foundJob)
+  await prepareBilboMDSANSResults(foundJob)
   await MQjob.log('end results')
   await MQjob.updateProgress(99)
 
