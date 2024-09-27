@@ -16,7 +16,7 @@ import dask.distributed as distributed
 
 
 logger = logging.getLogger()
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 
 def reduced_chi2(expected, model, sigma_exp, ddof=1):
@@ -396,8 +396,13 @@ class GAEnsembleOpt:
         ### race condition met and start a new iteration.
         unique_sol, unq_solut_ndx = np.unique(vu_parents, axis=0, return_index=True)
         if len(unq_solut_ndx) == 0.0:
-            print(
-                f"No valid solutions found given the bounds. This occured at iteration {self.curr_gen} and generation {self.curr_gen}."
+            # print(
+            #     f"No valid solutions found given the bounds. This occured at iteration {self.curr_gen} and generation {self.curr_gen}."
+            # )
+            logger.info(
+                "No valid solutions found given the bounds. This occured at iteration %s and generation %s.",
+                self.curr_iter,
+                self.curr_gen,
             )
             logger.info("Moving onto the next iteration")
             self.check_genconvergence = True
@@ -416,8 +421,14 @@ class GAEnsembleOpt:
         )[0]
         vufitmax = unq_solut_ndx[fitmax_index]
         ##{ 'chi2':0,'fitness', 'ensemble':[0]*self.n_gen, 'gen_found':0, 'fit_pars':{}}
-
-        if vu_fitness.max() > self.cbest_rchi2["fitness"]:
+        logger.debug("1---------------> vu_fitness.shape %s", vu_fitness.shape)
+        logger.debug("1---------------> vu_fitness.min() %s", vu_fitness.min())
+        logger.debug("1---------------> vu_fitness.max() %s", vu_fitness.max())
+        #
+        # ValueError: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()
+        #
+        # if vu_fitness.max() > self.cbest_rchi2["fitness"]:
+        if np.any(vu_fitness.max() > self.cbest_rchi2["fitness"]):
 
             print(
                 f"Fitness updated from {self.cbest_rchi2['fitness']} to {vu_fitness[unq_solut_ndx].max()}"
@@ -445,7 +456,14 @@ class GAEnsembleOpt:
             self.fitness_saturation += 1
 
         ## Update the best over the iteration
-        if vu_fitness.max() > self.citbest_rchi2["fitness"]:
+        logger.debug("2---------------> vu_fitness.shape %s", vu_fitness.shape)
+        logger.debug("2---------------> vu_fitness.min() %s", vu_fitness.min())
+        logger.debug("2---------------> vu_fitness.max() %s", vu_fitness.max())
+        #
+        # ValueError: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()
+        #
+        # if vu_fitness.max() > self.citbest_rchi2["fitness"]:
+        if np.any(vu_fitness.max() > self.citbest_rchi2["fitness"]):
 
             # print(f"Fitness updated from {self.citbest_rchi2['fitness']['fitness']} to {vu_fitness[unq_solut_ndx].max()}")
 
