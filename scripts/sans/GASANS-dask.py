@@ -72,9 +72,9 @@ def _residual_lmf(pars, I, data=None, sigma=None):
     )
 
     # print(model.shape)
-    if np.all(data) == None:
+    if data is None:
         return model
-    if np.all(sigma) == None:
+    if sigma is None:
         return data - model
     else:
         return (data - model) / sigma
@@ -399,7 +399,7 @@ class GAEnsembleOpt:
             print(
                 f"No valid solutions found given the bounds. This occured at iteration {self.curr_gen} and generation {self.curr_gen}."
             )
-            print(f"Moving onto the next iteration")
+            logger.info("Moving onto the next iteration")
             self.check_genconvergence = True
             return None
 
@@ -504,7 +504,7 @@ class GAEnsembleOpt:
                 # print(parents_check)
                 nonunq_ensembles = np.where(~unique_ensembles)[0]
                 # print("parent is non unique")
-                print(parents_check[nonunq_ensembles])
+                logger.info(parents_check[nonunq_ensembles])
 
                 # for nq_ndx in nonunq_ensembles:
 
@@ -564,7 +564,8 @@ class GAEnsembleOpt:
             ## pool is either saturated or a optimal set of conformations has been found
             ## else crossover
             if p1_check or p2_check:
-                print("crossed parents are not unique: continuing")
+                # print("crossed parents are not unique: continuing")
+                logger.info("crossed parents are not unique: continuing")
                 continue
             else:
                 ## crossover
@@ -593,7 +594,7 @@ class GAEnsembleOpt:
                     child_copy[elem] = np.random.choice(self.mut_indices.shape[0], 1)[0]
                     child_check = (np.unique(child_copy).shape[0]) != child.shape[0]
                     if child_check:
-                        print("child is not unique: continuing")
+                        logger.info("child is not unique: continuing")
                         continue
                     else:
                         children_copy[nch] = child_copy
@@ -607,7 +608,7 @@ class GAEnsembleOpt:
 
         ## check 1: maximal generations
         if self.curr_gen == self.n_gen:
-            print(
+            logger.info(
                 "Reached the maximal number of generations: Moving On to the next Iteration"
             )
             self.gen_converged = True
@@ -676,7 +677,7 @@ class GAEnsembleOpt:
                 if self.curr_gen > 0:
                     self.parents = self.children
 
-                print(f"Current Generation: {self.curr_gen}")
+                logger.info("Current Generation: %s ", self.curr_gen)
                 ## evaluate parents
                 self.evaluate(dask_client)
                 self.validate_and_update()
@@ -848,8 +849,9 @@ def _read_experiment_data(
     elif expdata_df.shape[1] == 4:
         expdata_df.columns = ["Q", "I(Q)", "Error", "dQ"]
     else:
-        print(
-            f"Experimental Data not in 3 or 4 column format to read. The shape of the read data is {expdata_df.shape}"
+        logger.error(
+            "Experimental Data not in 3 or 4 column format to read. The shape of the read data is %d",
+            expdata_df.shape,
         )
         raise SystemExit("")
     return expdata_df
