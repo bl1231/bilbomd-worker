@@ -1,15 +1,14 @@
 # -----------------------------------------------------------------------------
-# Build stage 1 - grab NodeJS v20 and update container.
+# Setup the base image
 FROM ubuntu:22.04 AS install-dependencies
 
-# Update package lists, install build tools, dependencies, and clean up
 RUN apt-get update && \
     apt-get install -y cmake gcc gfortran g++ wget libgl1-mesa-dev \
     build-essential libarchive13 zip python3-launchpadlib && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
-# Build stage 2 - CHARMM
+# Build CHARMM
 FROM install-dependencies AS build_charmm
 ARG CHARMM_VER=c48b2
 
@@ -20,21 +19,17 @@ RUN mkdir -p /usr/local/src && \
     tar -zxvf /usr/local/src/${CHARMM_VER}.tar.gz -C /usr/local/src && \
     rm /usr/local/src/${CHARMM_VER}.tar.gz
 
-# Configure CHARMM
 WORKDIR /usr/local/src/charmm
 RUN ./configure
-
-# Build CHARMM
 RUN make -j$(nproc) -C build/cmake install
 
 # -----------------------------------------------------------------------------
-# Build stage 3 - Copy CHARMM binary
-#   I'm not sure if this needs to be a separate step.
+# Copy CHARMM binary
 FROM build_charmm AS copy-charmm-binary
 COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 
 # -----------------------------------------------------------------------------
-# Build stage ## - Install NodeJS
+# Install NodeJS
 FROM copy-charmm-binary AS install-node
 ARG NODE_MAJOR=20
 RUN apt-get update && \
@@ -57,22 +52,34 @@ RUN wget "https://github.com/conda-forge/miniforge/releases/latest/download/Mini
 # Add Conda to PATH
 ENV PATH="/miniforge3/bin/:${PATH}"
 
+# Update conda
+# RUN conda update -y -n base -c defaults conda && \
+#     conda install -y cython swig doxygen && \
+#     conda clean -afy
+
 # Copy environment.yml and install dependencies
-COPY environment.yml /tmp/environment.yml
-RUN conda env update -f /tmp/environment.yml && \
-    rm /tmp/environment.yml && \
-    conda clean -afy
+# COPY environment.yml /tmp/environment.yml
+# RUN conda env update -f /tmp/environment.yml && \
+#     rm /tmp/environment.yml && \
+#     conda clean -afy
+
+# I was having trouble installing all of these dependencies in one go so
+# lets try this for now.
+RUN conda install --yes --name base -c conda-forge numpy scipy matplotlib
+RUN conda install --yes --name base -c conda-forge pillow numba h5py cython reportlab
+RUN conda install --yes --name base -c conda-forge dbus-python fabio pyfai hdf5plugin
+RUN conda install --yes --name base -c conda-forge mmcif_pdbx svglib
 
 # -----------------------------------------------------------------------------
-# Build stage 5 - BioXTAS
+# Install BioXTAS
 FROM install-conda AS install-bioxtas-raw
 
 # Copy the BioXTAS GitHiub master zip file
 WORKDIR /tmp
 
-# Download the BioXTAS RAW master zip file using wget
-COPY bioxtas/bioxtasraw-master.zip .
+# Download or Copy the BioXTAS RAW master zip file using wget
 # RUN wget https://github.com/jbhopkins/bioxtasraw/archive/refs/heads/master.zip -O bioxtasraw-master.zip
+COPY bioxtas/bioxtasraw-master.zip .
 RUN unzip bioxtasraw-master.zip && rm bioxtasraw-master.zip
 
 # Install BioXTAS RAW into local Python environment
@@ -82,7 +89,7 @@ RUN python setup.py build_ext --inplace && \
     rm -rf /tmp/bioxtasraw-master
 
 # -----------------------------------------------------------------------------
-# Build stage 6 - IMP
+# Install IMP (foxs & multi_foxs)
 FROM install-bioxtas-raw AS install-imp
 
 RUN apt-get update && \
@@ -93,16 +100,22 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
-# Build stage 7 - SANS Stuff
+# Install SANS Stuff
 FROM install-imp AS install-sans-tools
 RUN apt-get update && \
     apt-get install -y parallel && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install ga-sans dependencies
+RUN conda install --yes --name base -c conda-forge pandas dask
+
 # pip install lmfit
 RUN pip install lmfit
 
 WORKDIR /tmp
+
+# Pepsi-SANS version 3.0 (statically linked with libstdc++ and libgcc, GLIBC 2.4)
+# Must run on amd64 x86_64 architecture
 COPY pepsisans/Pepsi-SANS-Linux.zip .
 RUN unzip Pepsi-SANS-Linux.zip && \
     mv Pepsi-SANS /usr/local/bin && \
@@ -111,7 +124,7 @@ RUN unzip Pepsi-SANS-Linux.zip && \
 COPY scripts/sans /usr/local/sans
 
 # -----------------------------------------------------------------------------
-# Build stage 8 - worker app
+# Install bilbomd-worker app
 FROM install-sans-tools AS bilbomd-worker
 ARG USER_ID
 ARG GROUP_ID
