@@ -16,7 +16,7 @@ import dask.distributed as distributed
 
 
 logger = logging.getLogger()
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 def reduced_chi2(expected, model, sigma_exp, ddof=1):
@@ -222,6 +222,7 @@ class GAEnsembleOpt:
 
         ## class attribute for the ensemble fitting
         self.cut_weight = cutoff_weight
+        self.n_valid_unique_solutions = 0
 
         ## class attributes for the ga algorithm
         self.parents = np.zeros((self.n_ens, self.ens_size))  # set of indices ...
@@ -264,7 +265,7 @@ class GAEnsembleOpt:
             "fit_pars": {},
         }  ## current best aic
         self.citbest_rchi2 = self.pbest_rchi2
-        self.itbest_rchi2 = [dict() for n in range(self.n_iter)]
+        self.itbest_rchi2 = [{} for n in range(self.n_iter)]
 
         ## average time to calculate the , total time spent doing the fitness calculation,
         ## time spent evaluating, time for validation, time updating for parents, crossovers, mutation
@@ -284,6 +285,9 @@ class GAEnsembleOpt:
         ## Fraction of CPUs we want to use? Maybe better to use a localcluster outside of the
 
         self.parallel = parallel
+
+        ## Initialize curr_iter
+        self.curr_iter = 0
 
     def randomcol_indices(self):
         """
@@ -405,7 +409,7 @@ class GAEnsembleOpt:
                 self.curr_gen,
             )
             logger.info("Moving onto the next iteration")
-            self.check_genconvergence = True
+            self.check_genconvergence_flag = True
             return None
 
         else:
@@ -612,7 +616,7 @@ class GAEnsembleOpt:
                     child_copy[elem] = np.random.choice(self.mut_indices.shape[0], 1)[0]
                     child_check = (np.unique(child_copy).shape[0]) != child.shape[0]
                     if child_check:
-                        logger.info("child is not unique: continuing")
+                        logger.info("child %s is not unique: continuing", chindx)
                         continue
                     else:
                         children_copy[nch] = child_copy
@@ -623,6 +627,9 @@ class GAEnsembleOpt:
         self.time_log["mutation"] = time.time() - mutate_time_start
 
     def check_genconvergence(self, citer):
+        """
+        check if the generation has converged
+        """
 
         ## check 1: maximal generations
         if self.curr_gen == self.n_gen:
@@ -669,6 +676,7 @@ class GAEnsembleOpt:
         for it in np.arange(0, self.n_iter, 1):
 
             self.curr_iter = it
+            logger.debug("Current Iteration: %s", it)
             self.citbest_rchi2 = {
                 "chi2": 0,
                 "aic": 0,
@@ -682,7 +690,7 @@ class GAEnsembleOpt:
             self.parents = self.indices[rcols]  ## parents, evovling
 
             ## How to check if the
-            check_indices = [not (m in self.parents.flatten()) for m in self.indices]
+            # check_indices = [not (m in self.parents.flatten()) for m in self.indices]
             self.mut_indices = self.indices
 
             self.curr_gen = 0
@@ -746,8 +754,6 @@ class GAEnsembleOpt:
             columns=None,
         )
 
-        return None
-
     def _write_parameterfile(
         self, pfile_name, structuredf, pfile_path: Path = Path(".")
     ):
@@ -807,11 +813,23 @@ class GAEnsembleOpt:
                     self.itbest_rchi2[ni]["ensemble"][0], 2:
                 ].values.flatten()
 
+        # Debug statement to check for non-scalar values in 'chi2' column
+        problematic_rows = gasans_summary_df[
+            ~gasans_summary_df["chi2"].apply(np.isscalar)
+        ]
+        if not problematic_rows.empty:
+            logger.debug("Non-scalar chi2 values found in the following rows:")
+            logger.debug(problematic_rows)
+
+        # Convert any non-scalar values in 'chi2' column (e.g., list/array) to scalar (e.g., mean)
+        gasans_summary_df["chi2"] = gasans_summary_df["chi2"].apply(
+            lambda x: np.mean(x) if isinstance(x, (list, np.ndarray)) else x
+        )
+
+        # Now sort and write to CSV
         gasans_summary_df.sort_values("chi2").to_csv(
             "{}/{}".format(pfile_path, pfile_name.format(self.ens_size))
         )
-
-        return None
 
 
 def _read_sans_files(sans_struct: pd.DataFrame) -> pd.DataFrame:
@@ -889,11 +907,10 @@ def load_config(file_path: Path):
     Load the experiment configuration JSON file.
     """
     if file_path.exists():
-        logger.info("Config file %s exists. Reading config file", file_path)
+        logger.info("Found config file %s. Reading config file", file_path)
         return _read_json_input(file_path)
-    else:
-        logger.error("Config file %s does not exist!!", file_path)
-        sys.exit(1)
+    logger.error("Config file %s does not exist!!", file_path)
+    sys.exit(1)
 
 
 def aggregate_scat_structure(combined_csv_file: str) -> pd.DataFrame:
