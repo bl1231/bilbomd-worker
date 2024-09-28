@@ -661,20 +661,21 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
     // Extract PDB coordinates from DCD
     const foxsAnalysisDirectories = await extractPDBFromDCD(
       DBjob,
+      MQjob,
       foxsParams,
       DCD2PDBParams
     )
 
     // Run FoXS calculations
-    await runFoXSCalculations(DBjob, foxsAnalysisDirectories)
+    await runFoXSCalculations(DBjob, MQjob, foxsAnalysisDirectories)
   } catch (error) {
-    logger.error(`Error in runFoxs: ${error}`)
-    // Handle any unhandled errors from the sub-functions
+    handleError(error, MQjob, DBjob, 'foxs')
   }
 }
 
 const extractPDBFromDCD = async (
   DBjob: IBilboMDCRDJob,
+  MQjob: BullMQJob,
   foxsParams: FoxsParams,
   DCD2PDBParams: CharmmDCD2PDBParams
 ): Promise<string[]> => {
@@ -682,18 +683,18 @@ const extractPDBFromDCD = async (
     status: 'Running',
     message: 'Extracting PDB coordinates from DCD trajectory has started.'
   }
-  await updateStepStatus(DBjob, 'dcd2pdb', status)
-
-  const foxsDir = path.join(foxsParams.out_dir, 'foxs')
-  await makeDir(foxsDir)
-  const foxsRgFile = path.join(foxsParams.out_dir, foxsParams.foxs_rg)
-  await makeFile(foxsRgFile)
-
-  const step = Math.max(Math.round((foxsParams.rg_max - foxsParams.rg_min) / 5), 1)
-  const allCharmmDcd2PdbJobs: Promise<void>[] = []
-  const foxsAnalysisDirectories: string[] = []
-
   try {
+    await updateStepStatus(DBjob, 'dcd2pdb', status)
+
+    const foxsDir = path.join(foxsParams.out_dir, 'foxs')
+    await makeDir(foxsDir)
+    const foxsRgFile = path.join(foxsParams.out_dir, foxsParams.foxs_rg)
+    await makeFile(foxsRgFile)
+
+    const step = Math.max(Math.round((foxsParams.rg_max - foxsParams.rg_min) / 5), 1)
+    const allCharmmDcd2PdbJobs: Promise<void>[] = []
+    const foxsAnalysisDirectories: string[] = []
+
     for (let rg = foxsParams.rg_min; rg <= foxsParams.rg_max; rg += step) {
       for (let run = 1; run <= foxsParams.conf_sample; run += 1) {
         const foxsRunDir = path.join(foxsDir, `rg${rg}_run${run}`)
@@ -723,16 +724,17 @@ const extractPDBFromDCD = async (
     }
     await updateStepStatus(DBjob, 'dcd2pdb', status)
 
+    // return the list of directories for FoXS calculations
     return foxsAnalysisDirectories
   } catch (error) {
-    logger.error(`Error in extractPDBFromDCD: ${error}`)
-    // await handleError(error, null, DBjob, 'dcd2pdb')
-    throw error
+    await handleError(error, MQjob, DBjob, 'dcd2pdb')
+    throw new Error(`Error in extractPDBFromDCD: ${error}`)
   }
 }
 
 const runFoXSCalculations = async (
   DBjob: IBilboMDCRDJob,
+  MQjob: BullMQJob,
   foxsAnalysisDirectories: string[]
 ): Promise<void> => {
   let status: IStepStatus = {
@@ -759,108 +761,9 @@ const runFoXSCalculations = async (
     }
     await updateStepStatus(DBjob, 'foxs', status)
   } catch (error) {
-    logger.error(`Error in runFoXSCalculations: ${error}`)
-    // await handleError(error, null, DBjob, 'foxs')
-    throw error
+    await handleError(error, MQjob, DBjob, 'foxs')
   }
 }
-
-// const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
-//   const outputDir = path.join(DATA_VOL, DBjob.uuid)
-
-//   const foxsParams: FoxsParams = {
-//     out_dir: outputDir,
-//     rg_min: DBjob.rg_min,
-//     rg_max: DBjob.rg_max,
-//     foxs_rg: 'foxs_rg.out',
-//     conf_sample: DBjob.conformational_sampling
-//   }
-
-//   const DCD2PDBParams: CharmmDCD2PDBParams = {
-//     out_dir: outputDir,
-//     charmm_template: 'dcd2pdb',
-//     charmm_topo_dir: TOPO_FILES,
-//     charmm_inp_file: '',
-//     charmm_out_file: '',
-//     in_psf_file: DBjob.psf_file,
-//     in_crd_file: '',
-//     inp_basename: '',
-//     foxs_rg: 'foxs_rg.out',
-//     in_dcd: '',
-//     run: ''
-//   }
-
-//   try {
-//     //update the dcd2pdb status
-//     let status: IStepStatus = {
-//       status: 'Running',
-//       message: 'Extracting PDB coordinates from DCD trajectory has started.'
-//     }
-//     await updateStepStatus(DBjob, 'dcd2pdb', status)
-
-//     const foxsDir = path.join(foxsParams.out_dir, 'foxs')
-//     await makeDir(foxsDir)
-//     const foxsRgFile = path.join(foxsParams.out_dir, foxsParams.foxs_rg)
-//     await makeFile(foxsRgFile)
-
-//     const step = Math.max(Math.round((foxsParams.rg_max - foxsParams.rg_min) / 5), 1)
-
-//     // Initialize arrays to collect all Charmm jobs and FoXS jobs
-//     const allCharmmDcd2PdbJobs: Promise<void>[] = []
-//     const foxsAnalysisDirectories: string[] = []
-
-//     for (let rg = foxsParams.rg_min; rg <= foxsParams.rg_max; rg += step) {
-//       for (let run = 1; run <= foxsParams.conf_sample; run += 1) {
-//         const foxsRunDir = path.join(foxsDir, `rg${rg}_run${run}`)
-//         await makeDir(foxsRunDir)
-//         foxsAnalysisDirectories.push(foxsRunDir)
-
-//         DCD2PDBParams.charmm_inp_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.inp`
-//         DCD2PDBParams.charmm_out_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.out`
-//         DCD2PDBParams.inp_basename = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}`
-//         DCD2PDBParams.run = `rg${rg}_run${run}`
-
-//         await generateDCD2PDBInpFile(DCD2PDBParams, rg, run)
-//         allCharmmDcd2PdbJobs.push(spawnCharmm(DCD2PDBParams))
-//       }
-//     }
-
-//     // Wait for all CHARMM jobs to complete
-//     await Promise.all(allCharmmDcd2PdbJobs)
-
-//     // Update the dcd2pdb status
-//     status = {
-//       status: 'Success',
-//       message: 'Extracting PDB coordinates from DCD trajectory has completed.'
-//     }
-//     await updateStepStatus(DBjob, 'dcd2pdb', status)
-
-//     // Update the foxs status
-//     status = {
-//       status: 'Running',
-//       message: 'FoXS Calculations have started.'
-//     }
-//     await updateStepStatus(DBjob, 'foxs', status)
-
-//     // Now iterate over the created directories and run FoXS on them
-//     const allFoxsJobs: Promise<void>[] = []
-//     for (const foxsRunDir of foxsAnalysisDirectories) {
-//       allFoxsJobs.push(spawnFoXS(foxsRunDir))
-//     }
-
-//     // Wait for all FoXS jobs to complete
-//     await Promise.all(allFoxsJobs)
-
-//     // Once everything is complete, update the foxs status
-//     status = {
-//       status: 'Success',
-//       message: 'FoXS Calculations have completed.'
-//     }
-//     await updateStepStatus(DBjob, 'foxs', status)
-//   } catch (error) {
-//     await handleError(error, MQjob, DBjob, 'foxs')
-//   }
-// }
 
 const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void> => {
   const outputDir = path.join(DATA_VOL, DBjob.uuid)
