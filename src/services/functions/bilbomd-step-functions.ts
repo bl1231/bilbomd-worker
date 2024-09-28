@@ -300,12 +300,12 @@ const spawnMultiFoxs = (params: MultiFoxsParams): Promise<void> => {
   })
 }
 
-const spawnCharmm = (params: CharmmParams): Promise<string> => {
+const spawnCharmm = (params: CharmmParams): Promise<void> => {
   const { charmm_inp_file: inputFile, charmm_out_file: outputFile, out_dir } = params
   const charmmArgs = ['-o', outputFile, '-i', inputFile]
   const charmmOpts = { cwd: out_dir }
 
-  return new Promise<string>((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const charmm: ChildProcess = spawn(CHARMM_BIN, charmmArgs, charmmOpts)
     let charmmOutput = '' // Create an empty string to capture stdout
 
@@ -320,7 +320,7 @@ const spawnCharmm = (params: CharmmParams): Promise<string> => {
     charmm.on('close', (code: number) => {
       if (code === 0) {
         logger.info(`CHARMM success: ${inputFile} exit code: ${code}`)
-        resolve('CHARMM execution succeeded')
+        resolve()
       } else {
         logger.info(`CHARMM error: ${inputFile} exit code: ${code}`)
         reject(new Error(charmmOutput))
@@ -658,11 +658,13 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
   }
 
   try {
+    //update the dcd2pdb status
     let status: IStepStatus = {
       status: 'Running',
-      message: 'FoXS Calculations have started.'
+      message: 'Extracting PDB coordinates from DCD trajectory has started.'
     }
-    await updateStepStatus(DBjob, 'foxs', status)
+    await updateStepStatus(DBjob, 'dcd2pdb', status)
+
     const foxsDir = path.join(foxsParams.out_dir, 'foxs')
     await makeDir(foxsDir)
     const foxsRgFile = path.join(foxsParams.out_dir, foxsParams.foxs_rg)
@@ -670,13 +672,15 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
 
     const step = Math.max(Math.round((foxsParams.rg_max - foxsParams.rg_min) / 5), 1)
 
+    // Initialize arrays to collect all Charmm jobs and FoXS jobs
+    const allCharmmDcd2PdbJobs: Promise<void>[] = []
+    const foxsAnalysisDirectories: string[] = []
+
     for (let rg = foxsParams.rg_min; rg <= foxsParams.rg_max; rg += step) {
       for (let run = 1; run <= foxsParams.conf_sample; run += 1) {
-        const runAllCharmm = []
-        const runAllFoxs = []
         const foxsRunDir = path.join(foxsDir, `rg${rg}_run${run}`)
-
         await makeDir(foxsRunDir)
+        foxsAnalysisDirectories.push(foxsRunDir)
 
         DCD2PDBParams.charmm_inp_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.inp`
         DCD2PDBParams.charmm_out_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.out`
@@ -684,14 +688,37 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
         DCD2PDBParams.run = `rg${rg}_run${run}`
 
         await generateDCD2PDBInpFile(DCD2PDBParams, rg, run)
-        runAllCharmm.push(spawnCharmm(DCD2PDBParams))
-        await Promise.all(runAllCharmm)
-
-        // then run FoXS on every PDB in foxsRunDir
-        runAllFoxs.push(spawnFoXS(foxsRunDir))
-        await Promise.all(runAllFoxs)
+        allCharmmDcd2PdbJobs.push(spawnCharmm(DCD2PDBParams))
       }
     }
+
+    // Wait for all CHARMM jobs to complete
+    await Promise.all(allCharmmDcd2PdbJobs)
+
+    // Update the dcd2pdb status
+    status = {
+      status: 'Success',
+      message: 'Extracting PDB coordinates from DCD trajectory has completed.'
+    }
+    await updateStepStatus(DBjob, 'dcd2pdb', status)
+
+    // Update the foxs status
+    status = {
+      status: 'Running',
+      message: 'FoXS Calculations have started.'
+    }
+    await updateStepStatus(DBjob, 'foxs', status)
+
+    // Now iterate over the created directories and run FoXS on them
+    const allFoxsJobs: Promise<void>[] = []
+    for (const foxsRunDir of foxsAnalysisDirectories) {
+      allFoxsJobs.push(spawnFoXS(foxsRunDir))
+    }
+
+    // Wait for all FoXS jobs to complete
+    await Promise.all(allFoxsJobs)
+
+    // Once everything is complete, update the foxs status
     status = {
       status: 'Success',
       message: 'FoXS Calculations have completed.'
