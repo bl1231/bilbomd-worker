@@ -68,7 +68,7 @@ ENV PATH="/miniforge3/bin/:${PATH}"
 RUN conda install --yes --name base -c conda-forge numpy scipy matplotlib
 RUN conda install --yes --name base -c conda-forge pillow numba h5py cython reportlab
 RUN conda install --yes --name base -c conda-forge dbus-python fabio pyfai hdf5plugin
-RUN conda install --yes --name base -c conda-forge mmcif_pdbx svglib
+RUN conda install --yes --name base -c conda-forge mmcif_pdbx svglib python-igraph
 
 # -----------------------------------------------------------------------------
 # Install BioXTAS
