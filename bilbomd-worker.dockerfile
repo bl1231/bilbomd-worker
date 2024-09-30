@@ -13,8 +13,8 @@ FROM install-dependencies AS build_charmm
 ARG CHARMM_VER=c48b2
 
 # Copy or Download CHARMM source code, extract, and remove the tarball
-COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
-# RUN wget https://bl1231.als.lbl.gov/pickup/charmm/${CHARMM_VER}.tar.gz -O /usr/local/src/${CHARMM_VER}.tar.gz
+# COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
+RUN wget https://bl1231.als.lbl.gov/pickup/charmm/${CHARMM_VER}.tar.gz -O /usr/local/src/${CHARMM_VER}.tar.gz
 RUN mkdir -p /usr/local/src && \
     tar -zxvf /usr/local/src/${CHARMM_VER}.tar.gz -C /usr/local/src && \
     rm /usr/local/src/${CHARMM_VER}.tar.gz
@@ -78,8 +78,8 @@ FROM install-conda AS install-bioxtas-raw
 WORKDIR /tmp
 
 # Download or Copy the BioXTAS RAW master zip file using wget
-# RUN wget https://github.com/jbhopkins/bioxtasraw/archive/refs/heads/master.zip -O bioxtasraw-master.zip
-COPY bioxtas/bioxtasraw-master.zip .
+RUN wget https://github.com/jbhopkins/bioxtasraw/archive/refs/heads/master.zip -O bioxtasraw-master.zip
+# COPY bioxtas/bioxtasraw-master.zip .
 RUN unzip bioxtasraw-master.zip && rm bioxtasraw-master.zip
 
 # Install BioXTAS RAW into local Python environment
