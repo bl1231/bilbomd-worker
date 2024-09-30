@@ -706,11 +706,9 @@ const extractPDBFromDCD = async (
         DCD2PDBParams.inp_basename = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}`
         DCD2PDBParams.run = `rg${rg}_run${run}`
 
-        allCharmmDcd2PdbJobs.push(
-          generateDCD2PDBInpFile(DCD2PDBParams, rg, run).then(() =>
-            spawnCharmm(DCD2PDBParams)
-          )
-        )
+        await generateDCD2PDBInpFile(DCD2PDBParams, rg, run)
+
+        allCharmmDcd2PdbJobs.push(spawnCharmm(DCD2PDBParams))
       }
     }
 
@@ -741,11 +739,11 @@ const runFoXSCalculations = async (
     status: 'Running',
     message: 'FoXS Calculations have started.'
   }
-  await updateStepStatus(DBjob, 'foxs', status)
-
-  const allFoxsJobs: Promise<void>[] = []
 
   try {
+    await updateStepStatus(DBjob, 'foxs', status)
+    const allFoxsJobs: Promise<void>[] = []
+
     // Iterate over the created directories and run FoXS on them
     for (const foxsRunDir of foxsAnalysisDirectories) {
       allFoxsJobs.push(spawnFoXS(foxsRunDir))
