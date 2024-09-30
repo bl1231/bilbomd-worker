@@ -116,8 +116,9 @@ WORKDIR /tmp
 
 # Pepsi-SANS version 3.0 (statically linked with libstdc++ and libgcc, GLIBC 2.4)
 # Must run on amd64 x86_64 architecture
-COPY pepsisans/Pepsi-SANS-Linux.zip .
-RUN unzip Pepsi-SANS-Linux.zip && \
+# COPY pepsisans/Pepsi-SANS-Linux.zip .
+RUN wget "https://bl1231.als.lbl.gov/pickup/pepsisans/Pepsi-SANS-Linux.zip" && \
+    unzip Pepsi-SANS-Linux.zip && \
     mv Pepsi-SANS /usr/local/bin && \
     rm Pepsi-SANS-Linux.zip
 
