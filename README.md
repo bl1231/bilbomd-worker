@@ -49,6 +49,9 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.9.0
+  - Add BilboMD SANS capabilities
+  - Refactor BullMQ worker code to make it more modular
 - 1.8.1
   - Increase monitorJobAtNERSC polling to 24 hours at 1 min intervals
 - 1.8.0
