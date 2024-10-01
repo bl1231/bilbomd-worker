@@ -4,6 +4,7 @@ import { config } from '../../config/config'
 import { spawn, ChildProcess } from 'node:child_process'
 import { promisify } from 'util'
 import fs from 'fs-extra'
+import os from 'os'
 import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
@@ -450,7 +451,8 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   const logFile = path.join(outputDir, 'autoRg.log')
   const errorFile = path.join(outputDir, 'autoRg_error.log')
   const autoRg_script = '/app/scripts/autorg.py'
-  const args = [autoRg_script, DBjob.data_file]
+  const tempOutputFile = path.join(os.tmpdir(), `autoRg_${Date.now()}.json`)
+  const args = [autoRg_script, DBjob.data_file, tempOutputFile]
 
   const logStream = fs.createWriteStream(logFile)
   const errorStream = fs.createWriteStream(errorFile)
@@ -463,11 +465,9 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
 
   return new Promise<void>((resolve, reject) => {
     const autoRg = spawn('python', args, { cwd: outputDir })
-    let autoRg_json = ''
 
     autoRg.stdout?.on('data', (data) => {
       logStream.write(data.toString())
-      autoRg_json += data.toString()
     })
 
     autoRg.stderr?.on('data', (data) => {
@@ -475,51 +475,49 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
     })
 
     autoRg.on('error', (error) => {
-      logger.error(`spawnMultiFoxs error: ${error}`)
+      logger.error(`runAutoRg error: ${error}`)
       errorStream.end() // Ensure error stream is closed on process error
       logStream.end() // Ensure log stream is closed on process error
       reject(error)
     })
 
-    autoRg.on('exit', (code) => {
-      Promise.all([
-        new Promise((resolveStream) => logStream.end(resolveStream)),
-        new Promise((resolveStream) => errorStream.end(resolveStream))
-      ])
-        .then(() => {
-          if (code === 0) {
-            try {
-              const analysisResults = JSON.parse(autoRg_json)
-              DBjob.rg_min = analysisResults.rg_min
-              DBjob.rg_max = analysisResults.rg_max
-              DBjob.save()
-                .then(() => {
-                  status = {
-                    status: 'Success',
-                    message: 'Calculate Rg completed successfully.'
-                  }
-                  updateStepStatus(DBjob, 'autorg', status)
-                    .then(() => resolve())
-                    .catch(reject)
-                })
-                .catch(reject)
-            } catch (parseError) {
-              reject(parseError)
-            }
-          } else {
-            status = {
-              status: 'Error',
-              message: `AutoRg process exited with code ${code}.`
-            }
-            updateStepStatus(DBjob, 'autorg', status)
-              .then(() => reject(new Error(status.message)))
-              .catch(reject)
+    autoRg.on('exit', async (code) => {
+      // Close streams explicitly once the process exits
+      logStream.end()
+      errorStream.end()
+
+      if (code === 0) {
+        try {
+          // Read the output from the temp file
+          const analysisResults = JSON.parse(
+            await fs.promises.readFile(tempOutputFile, 'utf-8')
+          )
+
+          // Save results to the DBjob
+          DBjob.rg_min = analysisResults.rg_min
+          DBjob.rg_max = analysisResults.rg_max
+          await DBjob.save()
+
+          status = {
+            status: 'Success',
+            message: 'Calculate Rg completed successfully.'
           }
-        })
-        .catch((streamError) => {
-          logger.error(`Error closing file streams: ${streamError}`)
-          reject(streamError)
-        })
+          await updateStepStatus(DBjob, 'autorg', status)
+          resolve()
+        } catch (parseError) {
+          reject(parseError)
+        } finally {
+          // Clean up the temporary file
+          await fs.promises.unlink(tempOutputFile)
+        }
+      } else {
+        status = {
+          status: 'Error',
+          message: `AutoRg process exited with code ${code}.`
+        }
+        await updateStepStatus(DBjob, 'autorg', status)
+        reject(new Error(status.message))
+      }
     })
   })
 }
