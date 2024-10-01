@@ -1,8 +1,7 @@
 name: base
 channels:
-  - defaults
   - conda-forge
-
+  - defaults
 dependencies:
   - pillow
   - six
@@ -23,3 +22,7 @@ dependencies:
   - mmcif_pdbx
   - svglib
   - pyopencl
+  - pandas
+  - dask
+  - swig
+  - doxygen

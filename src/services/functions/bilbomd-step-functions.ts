@@ -4,6 +4,7 @@ import { config } from '../../config/config'
 import { spawn, ChildProcess } from 'node:child_process'
 import { promisify } from 'util'
 import fs from 'fs-extra'
+import os from 'os'
 import readline from 'node:readline'
 import path from 'path'
 import { Job as BullMQJob } from 'bullmq'
@@ -13,7 +14,8 @@ import {
   IBilboMDPDBJob,
   IBilboMDCRDJob,
   IBilboMDAutoJob,
-  IBilboMDAlphaFoldJob
+  IBilboMDAlphaFoldJob,
+  IBilboMDSANSJob
 } from '@bl1231/bilbomd-mongodb-schema'
 import { sendJobCompleteEmail } from '../../helpers/mailer'
 import { exec } from 'node:child_process'
@@ -86,16 +88,16 @@ const updateJobStatus = async (job: IJob, status: string): Promise<void> => {
   await job.save()
 }
 
-const writeToFile = async (template: string, params: CharmmParams): Promise<void> => {
+const writeInputFile = async (template: string, params: CharmmParams): Promise<void> => {
   try {
     const outFile = path.join(params.out_dir, params.charmm_inp_file)
     const templ = Handlebars.compile(template)
     const content = templ(params)
 
-    logger.info(`Write File: ${outFile}`)
+    logger.info(`Write Input File: ${outFile}`)
     await fs.promises.writeFile(outFile, content)
   } catch (error) {
-    logger.error(`Error in writeToFile: ${error}`)
+    logger.error(`Error in writeInputFile: ${error}`)
     throw error
   }
 }
@@ -107,7 +109,7 @@ const readTemplate = async (templateName: string): Promise<string> => {
 
 const generateInputFile = async (params: CharmmParams): Promise<void> => {
   const templateString = await readTemplate(params.charmm_template)
-  await writeToFile(templateString, params)
+  await writeInputFile(templateString, params)
 }
 
 const generateDCD2PDBInpFile = async (
@@ -115,7 +117,7 @@ const generateDCD2PDBInpFile = async (
   rg: number,
   run: number
 ) => {
-  params.charmm_template = 'dcd2pdb'
+  // params.charmm_template = 'dcd2pdb'
   // params.in_pdb = 'heat_output.pdb'
   params.in_dcd = `dynamics_rg${rg}_run${run}.dcd`
   await generateInputFile(params)
@@ -299,12 +301,12 @@ const spawnMultiFoxs = (params: MultiFoxsParams): Promise<void> => {
   })
 }
 
-const spawnCharmm = (params: CharmmParams): Promise<string> => {
+const spawnCharmm = (params: CharmmParams): Promise<void> => {
   const { charmm_inp_file: inputFile, charmm_out_file: outputFile, out_dir } = params
   const charmmArgs = ['-o', outputFile, '-i', inputFile]
   const charmmOpts = { cwd: out_dir }
 
-  return new Promise<string>((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const charmm: ChildProcess = spawn(CHARMM_BIN, charmmArgs, charmmOpts)
     let charmmOutput = '' // Create an empty string to capture stdout
 
@@ -319,7 +321,7 @@ const spawnCharmm = (params: CharmmParams): Promise<string> => {
     charmm.on('close', (code: number) => {
       if (code === 0) {
         logger.info(`CHARMM success: ${inputFile} exit code: ${code}`)
-        resolve('CHARMM execution succeeded')
+        resolve()
       } else {
         logger.info(`CHARMM error: ${inputFile} exit code: ${code}`)
         reject(new Error(charmmOutput))
@@ -376,7 +378,10 @@ const spawnPaeToConst = async (params: PaeParams): Promise<string> => {
   })
 }
 
-const runPdb2Crd = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void> => {
+const runPdb2Crd = async (
+  MQjob: BullMQJob,
+  DBjob: IBilboMDPDBJob | IBilboMDSANSJob
+): Promise<void> => {
   try {
     let status: IStepStatus = {
       status: 'Running',
@@ -446,7 +451,8 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   const logFile = path.join(outputDir, 'autoRg.log')
   const errorFile = path.join(outputDir, 'autoRg_error.log')
   const autoRg_script = '/app/scripts/autorg.py'
-  const args = [autoRg_script, DBjob.data_file]
+  const tempOutputFile = path.join(os.tmpdir(), `autoRg_${Date.now()}.json`)
+  const args = [autoRg_script, DBjob.data_file, tempOutputFile]
 
   const logStream = fs.createWriteStream(logFile)
   const errorStream = fs.createWriteStream(errorFile)
@@ -459,11 +465,9 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
 
   return new Promise<void>((resolve, reject) => {
     const autoRg = spawn('python', args, { cwd: outputDir })
-    let autoRg_json = ''
 
     autoRg.stdout?.on('data', (data) => {
       logStream.write(data.toString())
-      autoRg_json += data.toString()
     })
 
     autoRg.stderr?.on('data', (data) => {
@@ -471,51 +475,49 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
     })
 
     autoRg.on('error', (error) => {
-      logger.error(`spawnMultiFoxs error: ${error}`)
+      logger.error(`runAutoRg error: ${error}`)
       errorStream.end() // Ensure error stream is closed on process error
       logStream.end() // Ensure log stream is closed on process error
       reject(error)
     })
 
-    autoRg.on('exit', (code) => {
-      Promise.all([
-        new Promise((resolveStream) => logStream.end(resolveStream)),
-        new Promise((resolveStream) => errorStream.end(resolveStream))
-      ])
-        .then(() => {
-          if (code === 0) {
-            try {
-              const analysisResults = JSON.parse(autoRg_json)
-              DBjob.rg_min = analysisResults.rg_min
-              DBjob.rg_max = analysisResults.rg_max
-              DBjob.save()
-                .then(() => {
-                  status = {
-                    status: 'Success',
-                    message: 'Calculate Rg completed successfully.'
-                  }
-                  updateStepStatus(DBjob, 'autorg', status)
-                    .then(() => resolve())
-                    .catch(reject)
-                })
-                .catch(reject)
-            } catch (parseError) {
-              reject(parseError)
-            }
-          } else {
-            status = {
-              status: 'Error',
-              message: `AutoRg process exited with code ${code}.`
-            }
-            updateStepStatus(DBjob, 'autorg', status)
-              .then(() => reject(new Error(status.message)))
-              .catch(reject)
+    autoRg.on('exit', async (code) => {
+      // Close streams explicitly once the process exits
+      logStream.end()
+      errorStream.end()
+
+      if (code === 0) {
+        try {
+          // Read the output from the temp file
+          const analysisResults = JSON.parse(
+            await fs.promises.readFile(tempOutputFile, 'utf-8')
+          )
+
+          // Save results to the DBjob
+          DBjob.rg_min = analysisResults.rg_min
+          DBjob.rg_max = analysisResults.rg_max
+          await DBjob.save()
+
+          status = {
+            status: 'Success',
+            message: 'Calculate Rg completed successfully.'
           }
-        })
-        .catch((streamError) => {
-          logger.error(`Error closing file streams: ${streamError}`)
-          reject(streamError)
-        })
+          await updateStepStatus(DBjob, 'autorg', status)
+          resolve()
+        } catch (parseError) {
+          reject(parseError)
+        } finally {
+          // Clean up the temporary file
+          await fs.promises.unlink(tempOutputFile)
+        }
+      } else {
+        status = {
+          status: 'Error',
+          message: `AutoRg process exited with code ${code}.`
+        }
+        await updateStepStatus(DBjob, 'autorg', status)
+        reject(new Error(status.message))
+      }
     })
   })
 }
@@ -654,25 +656,48 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
   }
 
   try {
-    let status: IStepStatus = {
-      status: 'Running',
-      message: 'FoXS Calculations have started.'
-    }
-    await updateStepStatus(DBjob, 'foxs', status)
+    // Extract PDB coordinates from DCD
+    const foxsAnalysisDirectories = await extractPDBFromDCD(
+      DBjob,
+      MQjob,
+      foxsParams,
+      DCD2PDBParams
+    )
+
+    // Run FoXS calculations
+    await runFoXSCalculations(DBjob, MQjob, foxsAnalysisDirectories)
+  } catch (error) {
+    handleError(error, MQjob, DBjob, 'foxs')
+  }
+}
+
+const extractPDBFromDCD = async (
+  DBjob: IBilboMDCRDJob,
+  MQjob: BullMQJob,
+  foxsParams: FoxsParams,
+  DCD2PDBParams: CharmmDCD2PDBParams
+): Promise<string[]> => {
+  let status: IStepStatus = {
+    status: 'Running',
+    message: 'Extracting PDB coordinates from DCD trajectory has started.'
+  }
+  try {
+    await updateStepStatus(DBjob, 'dcd2pdb', status)
+
     const foxsDir = path.join(foxsParams.out_dir, 'foxs')
     await makeDir(foxsDir)
     const foxsRgFile = path.join(foxsParams.out_dir, foxsParams.foxs_rg)
     await makeFile(foxsRgFile)
 
     const step = Math.max(Math.round((foxsParams.rg_max - foxsParams.rg_min) / 5), 1)
+    const allCharmmDcd2PdbJobs: Promise<void>[] = []
+    const foxsAnalysisDirectories: string[] = []
 
     for (let rg = foxsParams.rg_min; rg <= foxsParams.rg_max; rg += step) {
       for (let run = 1; run <= foxsParams.conf_sample; run += 1) {
-        const runAllCharmm = []
-        const runAllFoxs = []
         const foxsRunDir = path.join(foxsDir, `rg${rg}_run${run}`)
-
         await makeDir(foxsRunDir)
+        foxsAnalysisDirectories.push(foxsRunDir)
 
         DCD2PDBParams.charmm_inp_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.inp`
         DCD2PDBParams.charmm_out_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.out`
@@ -680,14 +705,52 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
         DCD2PDBParams.run = `rg${rg}_run${run}`
 
         await generateDCD2PDBInpFile(DCD2PDBParams, rg, run)
-        runAllCharmm.push(spawnCharmm(DCD2PDBParams))
-        await Promise.all(runAllCharmm)
 
-        // then run FoXS on every PDB in foxsRunDir
-        runAllFoxs.push(spawnFoXS(foxsRunDir))
-        await Promise.all(runAllFoxs)
+        allCharmmDcd2PdbJobs.push(spawnCharmm(DCD2PDBParams))
       }
     }
+
+    // Wait for all CHARMM jobs to complete
+    await Promise.all(allCharmmDcd2PdbJobs)
+
+    // Update the dcd2pdb status
+    status = {
+      status: 'Success',
+      message: 'Extracting PDB coordinates from DCD trajectory has completed.'
+    }
+    await updateStepStatus(DBjob, 'dcd2pdb', status)
+
+    // return the list of directories for FoXS calculations
+    return foxsAnalysisDirectories
+  } catch (error) {
+    await handleError(error, MQjob, DBjob, 'dcd2pdb')
+    throw new Error(`Error in extractPDBFromDCD: ${error}`)
+  }
+}
+
+const runFoXSCalculations = async (
+  DBjob: IBilboMDCRDJob,
+  MQjob: BullMQJob,
+  foxsAnalysisDirectories: string[]
+): Promise<void> => {
+  let status: IStepStatus = {
+    status: 'Running',
+    message: 'FoXS Calculations have started.'
+  }
+
+  try {
+    await updateStepStatus(DBjob, 'foxs', status)
+    const allFoxsJobs: Promise<void>[] = []
+
+    // Iterate over the created directories and run FoXS on them
+    for (const foxsRunDir of foxsAnalysisDirectories) {
+      allFoxsJobs.push(spawnFoXS(foxsRunDir))
+    }
+
+    // Wait for all FoXS jobs to complete
+    await Promise.all(allFoxsJobs)
+
+    // Once everything is complete, update the foxs status
     status = {
       status: 'Success',
       message: 'FoXS Calculations have completed.'
@@ -1054,5 +1117,8 @@ export {
   runMolecularDynamics,
   runFoxs,
   runMultiFoxs,
-  prepareResults
+  prepareResults,
+  handleError,
+  generateDCD2PDBInpFile,
+  spawnCharmm
 }

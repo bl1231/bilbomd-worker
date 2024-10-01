@@ -1,16 +1,15 @@
 # -----------------------------------------------------------------------------
-# Build stage 1 - grab NodeJS v20 and update container.
-FROM ubuntu:22.04 AS worker-step1
+# Setup the base image
+FROM ubuntu:22.04 AS install-dependencies
 
-# Update package lists, install build tools, dependencies, and clean up
 RUN apt-get update && \
     apt-get install -y cmake gcc gfortran g++ wget libgl1-mesa-dev \
     build-essential libarchive13 zip python3-launchpadlib && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
-# Build stage 2 - CHARMM
-FROM worker-step1 AS build_charmm
+# Build CHARMM
+FROM install-dependencies AS build_charmm
 ARG CHARMM_VER=c48b2
 
 # Copy or Download CHARMM source code, extract, and remove the tarball
@@ -20,22 +19,18 @@ RUN mkdir -p /usr/local/src && \
     tar -zxvf /usr/local/src/${CHARMM_VER}.tar.gz -C /usr/local/src && \
     rm /usr/local/src/${CHARMM_VER}.tar.gz
 
-# Configure CHARMM
 WORKDIR /usr/local/src/charmm
 RUN ./configure
-
-# Build CHARMM
 RUN make -j$(nproc) -C build/cmake install
 
 # -----------------------------------------------------------------------------
-# Build stage 3 - Copy CHARMM binary
-#   I'm not sure if this needs to be a separate step.
-FROM build_charmm AS worker-step2
+# Copy CHARMM binary
+FROM build_charmm AS copy-charmm-binary
 COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 
 # -----------------------------------------------------------------------------
-# Build stage ## - Install NodeJS
-FROM worker-step2 AS install-node
+# Install NodeJS
+FROM copy-charmm-binary AS install-node
 ARG NODE_MAJOR=20
 RUN apt-get update && \
     apt-get install -y gpg curl && \
@@ -47,7 +42,7 @@ RUN apt-get update && \
 
 # -----------------------------------------------------------------------------
 # Build stage 4 - Miniconda3
-FROM install-node AS build-conda
+FROM install-node AS install-conda
 
 # Download and install Miniforge3
 RUN wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" && \
@@ -58,26 +53,33 @@ RUN wget "https://github.com/conda-forge/miniforge/releases/latest/download/Mini
 ENV PATH="/miniforge3/bin/:${PATH}"
 
 # Update conda
-RUN conda update -y -n base -c defaults conda && \
-    conda install -y cython swig doxygen && \
-    conda clean -afy
+# RUN conda update -y -n base -c defaults conda && \
+#     conda install -y cython swig doxygen && \
+#     conda clean -afy
 
 # Copy environment.yml and install dependencies
-COPY environment.yml /tmp/environment.yml
-RUN conda env update -f /tmp/environment.yml && \
-    rm /tmp/environment.yml && \
-    conda clean -afy
+# COPY environment.yml /tmp/environment.yml
+# RUN conda env update -f /tmp/environment.yml && \
+#     rm /tmp/environment.yml && \
+#     conda clean -afy
+
+# I was having trouble installing all of these dependencies in one go so
+# lets try this for now.
+RUN conda install --yes --name base -c conda-forge numpy scipy matplotlib
+RUN conda install --yes --name base -c conda-forge pillow numba h5py cython reportlab
+RUN conda install --yes --name base -c conda-forge dbus-python fabio pyfai hdf5plugin
+RUN conda install --yes --name base -c conda-forge mmcif_pdbx svglib python-igraph
 
 # -----------------------------------------------------------------------------
-# Build stage 5 - BioXTAS
-FROM build-conda AS bilbomd-worker-step5
+# Install BioXTAS
+FROM install-conda AS install-bioxtas-raw
 
 # Copy the BioXTAS GitHiub master zip file
 WORKDIR /tmp
-# COPY bioxtas/bioxtasraw-master.zip .
 
-# Download the BioXTAS RAW master zip file using wget
+# Download or Copy the BioXTAS RAW master zip file using wget
 RUN wget https://github.com/jbhopkins/bioxtasraw/archive/refs/heads/master.zip -O bioxtasraw-master.zip
+# COPY bioxtas/bioxtasraw-master.zip .
 RUN unzip bioxtasraw-master.zip && rm bioxtasraw-master.zip
 
 # Install BioXTAS RAW into local Python environment
@@ -87,8 +89,8 @@ RUN python setup.py build_ext --inplace && \
     rm -rf /tmp/bioxtasraw-master
 
 # -----------------------------------------------------------------------------
-# Build stage 6 - IMP
-FROM bilbomd-worker-step5 AS bilbomd-worker-step6
+# Install IMP (foxs & multi_foxs)
+FROM install-bioxtas-raw AS install-imp
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends software-properties-common && \
@@ -98,8 +100,33 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
-# Build stage 7 - worker app for deployment on SPIN
-FROM bilbomd-worker-step6 AS bilbomd-worker
+# Install SANS Stuff
+FROM install-imp AS install-sans-tools
+RUN apt-get update && \
+    apt-get install -y parallel && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install ga-sans dependencies
+RUN conda install --yes --name base -c conda-forge pandas dask
+
+# pip install lmfit
+RUN pip install lmfit
+
+WORKDIR /tmp
+
+# Pepsi-SANS version 3.0 (statically linked with libstdc++ and libgcc, GLIBC 2.4)
+# Must run on amd64 x86_64 architecture
+# COPY pepsisans/Pepsi-SANS-Linux.zip .
+RUN wget "https://bl1231.als.lbl.gov/pickup/pepsisans/Pepsi-SANS-Linux.zip" && \
+    unzip Pepsi-SANS-Linux.zip && \
+    mv Pepsi-SANS /usr/local/bin && \
+    rm Pepsi-SANS-Linux.zip
+
+COPY scripts/sans /usr/local/sans
+
+# -----------------------------------------------------------------------------
+# Install bilbomd-worker app
+FROM install-sans-tools AS bilbomd-worker
 ARG USER_ID
 ARG GROUP_ID
 ARG GITHUB_TOKEN
