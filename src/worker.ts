@@ -32,10 +32,11 @@ const redisConn = {
   port: 6379
 }
 
+// 9000000 is 2 hours and 30 minutes
 const workerOptions: WorkerOptions = {
   connection: redisConn,
   concurrency: config.runOnNERSC ? 50 : 1,
-  lockDuration: config.runOnNERSC ? 9000000 : 90000
+  lockDuration: config.runOnNERSC ? 9000000 : 9000000
 }
 
 const pdb2crdWorkerOptions: WorkerOptions = {
