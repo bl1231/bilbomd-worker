@@ -15,13 +15,12 @@ ARG CHARMM_VER=c48b2
 # Copy or Download CHARMM source code, extract, and remove the tarball
 # COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
 RUN wget https://bl1231.als.lbl.gov/pickup/charmm/${CHARMM_VER}.tar.gz -O /usr/local/src/${CHARMM_VER}.tar.gz
-RUN mkdir -p /usr/local/src && \
+RUN mkdir -p /usr/local/src/charmm && \
     tar -zxvf /usr/local/src/${CHARMM_VER}.tar.gz -C /usr/local/src && \
-    rm /usr/local/src/${CHARMM_VER}.tar.gz
-
-WORKDIR /usr/local/src/charmm
-RUN ./configure
-RUN make -j$(nproc) -C build/cmake install
+    rm /usr/local/src/${CHARMM_VER}.tar.gz && \
+    cd /usr/local/src/charmm && \
+    ./configure && \
+    make -j$(nproc) -C build/cmake install
 
 # -----------------------------------------------------------------------------
 # Copy CHARMM binary
