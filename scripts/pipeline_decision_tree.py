@@ -1,5 +1,6 @@
 """
-Decision tree to evaluate the FoXS fit of the BilboMD results and give a prediction of what went wrong with the experiment
+Decision tree to evaluate the FoXS fit of the BilboMD results and give a
+prediction of what went wrong with the experiment
 Ex: not enough flexibility, wrong oligomerization, etc.
 
 Inputs BilboMD results folder into command line 
@@ -48,9 +49,11 @@ def load_file(path):
     """
     Loads profiles using raw.load_profiles()
 
-    If file does not have a header which labels the q, experiment, model and error columns, raw.load_profiles() does not interpret it properly
+    If file does not have a header which labels the q, experiment, model,
+    and error columns, raw.load_profiles() does not interpret it properly
 
-    If no header, it will add the following header to the first line of the multi_state_model file if it doesn't already have it
+    If no header, it will add the following header to the first line of the
+    multi_state_model file if it doesn't already have it
 
     q       exp_intensity   model_intensity error
 
@@ -62,7 +65,7 @@ def load_file(path):
     """
 
     header_multifoxs = "#  q       exp_intensity   model_intensity error"
-    with open(path) as file:
+    with open(path, encoding="utf-8") as file:
         if header_multifoxs in file.read():
             SASM = raw.load_profiles(path)
         else:
