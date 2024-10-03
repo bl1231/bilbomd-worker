@@ -129,13 +129,13 @@ def residual(prof1, prof2):
     return (prof1.getI() - prof2.getI()) / prof1.getErr()
 
 
-def mean(list):
+def mean(values):
     """
-    Returns the mean value of the the elements of a list
+    Returns the mean value of the the elements of a list (values)
 
     idk why this isn't already a function in basic python
     """
-    return sum(list) / len(list)
+    return sum(values) / len(values)
 
 
 def residuals_region(prof1, prof2):
@@ -274,97 +274,123 @@ def residuals(q_ranges, q_rangesi, eprof, mprof):
 
 def highest_cs(chi_squares_of_regions, q_ranges):
     """
-    Determines the q-region with the highest chi-square value
+    Determines the q-region with the highest chi-square value.
 
-    returns "low_q_err" if the highest is chi_squares_of_regions[0]
-    returns "mid_q_err" if the highest is chi_squares_of_regions[1]
-    returns "high_q_err" if the highest is chi_squares_of_regions[2]
+    Returns a tuple with an error code and a report string:
+    - "low_q_err" if the highest is chi_squares_of_regions[0]
+    - "mid_q_err" if the highest is chi_squares_of_regions[1]
+    - "high_q_err" if the highest is chi_squares_of_regions[2]
+    - "no_q_err" if the highest chi-square value is <= 2
 
-    need to figure out how to make this more general if we want to change the number of regions from 3
+    Args:
+        chi_squares_of_regions (list): List of chi-square values for different regions.
+        q_ranges (list): List of q-range boundaries.
+
+    Returns:
+        tuple: (error_code, report_string)
     """
+    if not chi_squares_of_regions or not q_ranges:
+        raise ValueError(
+            "chi_squares_of_regions and q_ranges must not be None or empty"
+        )
+    if len(q_ranges) < len(chi_squares_of_regions) + 1:
+        raise ValueError(
+            "q_ranges must have at least one more element than chi_squares_of_regions"
+        )
+
     highest_cs_value = max(chi_squares_of_regions)
     i = chi_squares_of_regions.index(highest_cs_value)
     qLB = q_ranges[i]
     qUB = q_ranges[i + 1]
+
+    highest_chi_square_report = (
+        f"The chi-square is highest ({round(highest_cs_value, 2)}) "
+        f"in the region where ({round(qLB, 2)} < q < {round(qUB, 2)})."
+    )
+
+    print_debug(highest_chi_square_report)
+
     if highest_cs_value > 2:
-        highest_chi_square_report = (
-            "The chi-square is highest ("
-            + str(round(highest_cs_value, 2))
-            + ") in the region where ("
-            + str(round(qLB, 2))
-            + " < q < "
-            + str(round(qUB, 2))
-            + ")."
-        )
-        print_debug(highest_chi_square_report)
         if i == 0:
             return "low_q_err", highest_chi_square_report
         elif i == 1:
             return "mid_q_err", highest_chi_square_report
         elif i == 2:
             return "high_q_err", highest_chi_square_report
+        else:
+            return f"region_{i}_err", highest_chi_square_report
     else:
         highest_chi_square_report = (
-            "The chi-square is highest ("
-            + str(round(highest_cs_value, 2))
-            + ") in the region where "
-            + str(round(qLB, 2))
-            + " < q < "
-            + str(round(qUB, 2))
-            + ", but this is okay."
+            f"The chi-square is highest ({round(highest_cs_value, 2)}) "
+            f"in the region where {round(qLB, 2)} < q < {round(qUB, 2)}, but this is okay."
         )
         print_debug(highest_chi_square_report)
         return "no_q_err", highest_chi_square_report
 
 
+import copy
+
+
 def second_highest_cs(chi_squares_of_regions, q_ranges):
     """
-    Determines if q-region with the second highest chi-square value is > 2
+    Determines if the q-region with the second highest chi-square value is > 2.
 
-    returns "low_q_err" if the 2nd highest is chi_squares_of_regions[0]
-    returns "mid_q_err" if the 2nd highest is chi_squares_of_regions[1]
-    returns "high_q_err" if the 2nd highest is chi_squares_of_regions[2]
+    Returns a tuple with an error code and a report string:
+    - "low_q_err" if the 2nd highest is chi_squares_of_regions[0]
+    - "mid_q_err" if the 2nd highest is chi_squares_of_regions[1]
+    - "high_q_err" if the 2nd highest is chi_squares_of_regions[2]
+    - "no_q_err" if the 2nd highest chi-square value is <= 2
 
-    need to figure out how to make this more general if we want to change the number of regions from 3
+    Args:
+        chi_squares_of_regions (list): List of chi-square values for different regions.
+        q_ranges (list): List of q-range boundaries.
+
+    Returns:
+        tuple: (error_code, report_string)
     """
-    chisquare_all_regions_sorted = copy.deepcopy(chi_squares_of_regions)
-    chisquare_all_regions_sorted.sort()
+    if not chi_squares_of_regions or not q_ranges:
+        raise ValueError(
+            "chi_squares_of_regions and q_ranges must not be None or empty"
+        )
+    if len(q_ranges) < len(chi_squares_of_regions) + 1:
+        raise ValueError(
+            "q_ranges must have at least one more element than chi_squares_of_regions"
+        )
+
+    chisquare_all_regions_sorted = sorted(copy.deepcopy(chi_squares_of_regions))
     second_highest_cs_value = chisquare_all_regions_sorted[-2]
     i = chi_squares_of_regions.index(second_highest_cs_value)
     qLB = q_ranges[i]
     qUB = q_ranges[i + 1]
+
+    second_highest_cs_report = (
+        f"The chi-square is also high ({round(second_highest_cs_value)}) "
+        f"in the region where ({round(qLB, 2)} < q < {round(qUB, 2)})."
+    )
+
+    print_debug(second_highest_cs_report)
+
     if second_highest_cs_value > 2:
-        second_highest_cs_report = (
-            "The chi-square is also high ("
-            + str(round(second_highest_cs_value))
-            + ") is in the region where "
-            + str(round(qLB, 2))
-            + " < q < "
-            + str(round(qUB, 2))
-            + "."
-        )
-        print_debug(second_highest_cs_report)
         if i == 0:
             return "low_q_err", second_highest_cs_report
         elif i == 1:
             return "mid_q_err", second_highest_cs_report
         elif i == 2:
             return "high_q_err", second_highest_cs_report
+        else:
+            return f"region_{i}_err", second_highest_cs_report
     else:
         second_highest_cs_report = (
-            "The 2nd highest chi-square ("
-            + str(round(second_highest_cs_value, 2))
-            + ") is in the region where "
-            + str(round(qLB, 2))
-            + " < q < "
-            + str(round(qUB, 2))
-            + ", but this is okay."
+            f"The 2nd highest chi-square ({round(second_highest_cs_value, 2)}) "
+            f"is in the region where {round(qLB, 2)} < q < {round(qUB, 2)}, but this is okay."
         )
         print_debug(second_highest_cs_report)
         return "no_q_err", second_highest_cs_report
 
 
 def region_check(chi_squares_of_regions):
+    """
+    Checks if all chi-squares of regions are < 2"""
     if all(cs < 2 for cs in chi_squares_of_regions):
         return "all_good"
     else:
