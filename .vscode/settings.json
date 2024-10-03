@@ -1,16 +1,16 @@
 {
   "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.defaultFormatter": "ms-python.black-formatter",  // Use Black for formatting
     "editor.formatOnSave": true,
     "editor.tabSize": 4,
     "editor.insertSpaces": true,
     "editor.detectIndentation": false,
-    "editor.rulers": [88]
+    "editor.rulers": [79, 88]
   },
   "[markdown]": {
     "editor.formatOnSave": false
   },
-    "[typescript]": {
+  "[typescript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.formatOnSave": true,
     "editor.formatOnPaste": true
@@ -22,14 +22,17 @@
   },
   "editor.formatOnPaste": true,
   "editor.formatOnSave": true,
-  "flake8.args": ["--max-line-length=88"],
-  "cSpell.ignorePaths": [
-    "package-lock.json",
-    "node_modules",
-    "vscode-extension",
-    ".git/objects",
-    ".vscode",
-    ".vscode-insiders",
-    "pdb2crd.py"
-  ]
+
+  // Pylance settings for Python analysis and linting
+  "python.analysis.typeCheckingMode": "basic",  // Type checking mode with Pylance
+  "python.analysis.autoImportCompletions": true,  // Auto-import suggestions
+  
+  // Additional linting configuration
+  // "python.linting.enabled": true,  // Enable linting (handled by Pylance now)
+  // "python.linting.pylintEnabled": true,  // Enable Pylint linting if you have Pylint installed
+  // "python.linting.ignorePatterns": ["**/node_modules/**", "**/__pycache__/**"],  // Ignore common patterns
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingImports": "warning",
+    "reportUndefinedVariable": "error"
+  }
 }
