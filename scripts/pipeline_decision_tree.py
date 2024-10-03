@@ -41,15 +41,13 @@ def load_file(path):
     """
     Loads profiles using raw.load_profiles()
 
-    If file does not have a header which labels the q, experiment, model,
-    and error columns, raw.load_profiles() does not interpret it properly
+    If the file does not have a header which labels the q, experiment, model,
+    and error columns, raw.load_profiles() does not interpret it properly.
 
     If no header, it will add the following header to the first line of the
-    multi_state_model file if it doesn't already have it
+    multi_state_model file if it doesn't already have it:
 
     q       exp_intensity   model_intensity error
-
-
 
     TBA: compatibility for FoXS files which use the format:
 
@@ -57,21 +55,29 @@ def load_file(path):
     """
 
     header_multifoxs = "#  q       exp_intensity   model_intensity error"
-    with open(path, encoding="utf-8") as file:
-        if header_multifoxs in file.read():
-            SASM = raw.load_profiles(path)
-        else:
-            if os.path.isdir("temp") == False:
-                os.makedirs("temp")
-            shutil.copy(path, "temp")
-            new_path = "temp/" + os.path.basename(path)
-            with open(new_path, "r+") as new_file:
-                new_file_data = new_file.read()
-                new_file.seek(0, 0)
-                new_file.write(header_multifoxs + "\n" + new_file_data)
-            SASM = raw.load_profiles(new_path)
-            shutil.rmtree("temp")
-    return SASM
+    temp_dir = "temp"
+    temp_file_path = os.path.join(temp_dir, os.path.basename(path))
+
+    try:
+        with open(path, encoding="utf-8") as file:
+            file_content = file.read()
+            if header_multifoxs in file_content:
+                return raw.load_profiles(path)
+
+        # If header is not present, add it and load the profiles
+        os.makedirs(temp_dir, exist_ok=True)
+        shutil.copy(path, temp_file_path)
+
+        with open(temp_file_path, "r+", encoding="utf-8") as new_file:
+            new_file_data = new_file.read()
+            new_file.seek(0, 0)
+            new_file.write(header_multifoxs + "\n" + new_file_data)
+
+        return raw.load_profiles(temp_file_path)
+    finally:
+        # Clean up the temporary directory
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
 
 
 def rg_auto(profile):
@@ -326,9 +332,6 @@ def highest_cs(chi_squares_of_regions, q_ranges):
         )
         print_debug(highest_chi_square_report)
         return "no_q_err", highest_chi_square_report
-
-
-import copy
 
 
 def second_highest_cs(chi_squares_of_regions, q_ranges):
