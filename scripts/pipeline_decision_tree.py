@@ -24,13 +24,13 @@ import argparse
 from typing import List
 
 import bioxtasraw.RAWAPI as raw
-from matplotlib.pylab import f
+
 
 # Global constants
 MW_ERR_CUTOFF = 0.10
 CHI2_CUTOFF_EXCELLENT = 1.0
 CHI2_CUTOFF_MODERATE = 2.0
-PRINT_FLAG = True
+PRINT_FLAG = False
 
 
 def print_debug(arg):
@@ -84,14 +84,6 @@ def load_file(path):
             shutil.rmtree(temp_dir)
 
 
-# def rg_auto(profile):
-#     """
-#     Returns Rg calculated from a RAW SASM
-#     """
-#     rg = raw.auto_guinier(profile)[0]
-#     return rg
-
-
 def mw_bayes(profile):
     """
     Returns the Bayesian MW of a RAW SASM
@@ -104,7 +96,7 @@ def mw_bayes(profile):
     return mw
 
 
-def q_region(prof, q_lower_bound, q_upper_bound):
+def extract_q_region(prof, q_lower_bound, q_upper_bound):
     """
     Trims a RAW SASM to q_lower_bound < q < q_upper_bound
     """
@@ -125,43 +117,15 @@ def calculate_chi_square(prof1, prof2):
     chi_square = (1 / len(prof1.getQ())) * sum(
         pow(((prof1.getI() - prof2.getI()) / prof1.getErr()), 2)
     )
-    # print(f"Chi-square: {chi_square}")
     return chi_square
 
 
-def chi_square_region(prof1, prof2, q_lower_bound, q_upper_bound):
+def calculate_residual(prof1, prof2):
     """
-    Returns the chi-square between two RAW SASM within q_lower_bound < q < q_upper_bound
-
-    Combination of chi_square() and q_region() functions
+    Returns the mean of the residual of all data points between two RAW SASM profiles.
     """
-    return calculate_chi_square(
-        q_region(prof1, q_lower_bound, q_upper_bound),
-        q_region(prof2, q_lower_bound, q_upper_bound),
-    )
-
-
-def residual(prof1, prof2):
-    """
-    Returns the residuals(q) between two RAW SASM
-    """
-    return (prof1.getI() - prof2.getI()) / prof1.getErr()
-
-
-def mean(values):
-    """
-    Returns the mean value of the the elements of a list (values)
-
-    idk why this isn't already a function in basic python
-    """
-    return sum(values) / len(values)
-
-
-def residuals_region(prof1, prof2):
-    """
-    Returns the mean of the residual of all data points between two RAW SASM
-    """
-    return mean(residual(prof1, prof2))
+    residuals = (prof1.getI() - prof2.getI()) / prof1.getErr()
+    return sum(residuals) / len(residuals)
 
 
 def best_chi_square_i(cs_models, multi_state_models):
@@ -173,7 +137,7 @@ def best_chi_square_i(cs_models, multi_state_models):
     Goes through the list and selects the first chi-square that is high error
       (< 20%) with the previous value
     """
-    print_debug("\nComparing chi-squares of all multistates")
+    print_debug("Comparing chi-squares of all multistates")
     cs_models_rounded = [round(cs, 2) for cs in cs_models]
     print_debug(cs_models_rounded)
     csm_err_threshold = 0.2
@@ -221,8 +185,8 @@ def calculate_regional_chi_square_values(
     chi_squares_of_regions = []
 
     for i in range(len(q_ranges) - 1):
-        eregion = q_region(eprof, q_ranges[i], q_ranges[i + 1])
-        mregion = q_region(mprof, q_ranges[i], q_ranges[i + 1])
+        eregion = extract_q_region(eprof, q_ranges[i], q_ranges[i + 1])
+        mregion = extract_q_region(mprof, q_ranges[i], q_ranges[i + 1])
         chi_square_value = calculate_chi_square(eregion, mregion)
         chi_squares_of_regions.append(chi_square_value)
 
@@ -234,7 +198,9 @@ def calculate_regional_chi_square_values(
     return chi_squares_of_regions
 
 
-def calculate_residuals(q_ranges: List[float], eprof, mprof) -> List[float]:
+def calculate_regional_residual_values(
+    q_ranges: List[float], eprof, mprof
+) -> List[float]:
     """
     Returns a list of mean residuals for each q-region, defined by boundaries in q_ranges.
 
@@ -249,9 +215,9 @@ def calculate_residuals(q_ranges: List[float], eprof, mprof) -> List[float]:
     residuals_of_regions = []
 
     for i in range(len(q_ranges) - 1):
-        eregion = q_region(eprof, q_ranges[i], q_ranges[i + 1])
-        mregion = q_region(mprof, q_ranges[i], q_ranges[i + 1])
-        residual_value = residuals_region(eregion, mregion)
+        eregion = extract_q_region(eprof, q_ranges[i], q_ranges[i + 1])
+        mregion = extract_q_region(mprof, q_ranges[i], q_ranges[i + 1])
+        residual_value = calculate_residual(eregion, mregion)
         residuals_of_regions.append(residual_value)
 
         print_debug(
@@ -285,26 +251,26 @@ def generate_highest_chi_square_feedback(chi_squares_of_regions, q_ranges):
     q_lower_bound = q_ranges[i]
     q_upper_bound = q_ranges[i + 1]
 
-    highest_chi_square_report = (
+    highest_chi_square_feedback = (
         f"The chi-square is highest ({round(highest_cs_value, 2)}) "
         f"in the region where ({round(q_lower_bound, 2)} < q < {round(q_upper_bound, 2)})."
     )
 
-    print_debug(highest_chi_square_report)
+    print_debug(highest_chi_square_feedback)
 
     if highest_cs_value > CHI2_CUTOFF_MODERATE:
         error_code = {0: "low_q_err", 1: "mid_q_err", 2: "high_q_err"}.get(
             i, f"region_{i}_err"
         )
-        return error_code, highest_chi_square_report
+        return error_code, highest_chi_square_feedback
 
-    highest_chi_square_report = (
+    highest_chi_square_feedback = (
         f"The chi-square is highest ({round(highest_cs_value, 2)}) in the "
         f"region where {round(q_lower_bound, 2)} < q < {round(q_upper_bound, 2)}, "
         "but this is okay."
     )
-    print_debug(highest_chi_square_report)
-    return "no_q_err", highest_chi_square_report
+    print_debug(highest_chi_square_feedback)
+    return "no_q_err", highest_chi_square_feedback
 
 
 def generate_second_highest_chi_square_feedback(chi_squares_of_regions, q_ranges):
@@ -335,28 +301,28 @@ def generate_second_highest_chi_square_feedback(chi_squares_of_regions, q_ranges
     q_upper_bound = q_ranges[i + 1]
 
     # Generate the report string for the second highest chi-square value
-    second_highest_cs_report = (
+    second_highest_chi_square_feedback = (
         f"The chi-square is also high ({round(second_highest_cs_value)}) "
         f"in the region where ({round(q_lower_bound, 2)} < q < {round(q_upper_bound, 2)})."
     )
 
-    print_debug(second_highest_cs_report)
+    print_debug(second_highest_chi_square_feedback)
 
     # Check if the second highest chi-square value exceeds the moderate cutoff
     if second_highest_cs_value > CHI2_CUTOFF_MODERATE:
         error_code = {0: "low_q_err", 1: "mid_q_err", 2: "high_q_err"}.get(
             i, f"region_{i}_err"
         )
-        return error_code, second_highest_cs_report
+        return error_code, second_highest_chi_square_feedback
 
     # Generate the report string if the second highest chi-square value is acceptable
-    second_highest_cs_report = (
+    second_highest_chi_square_feedback = (
         f"The 2nd highest chi-square ({round(second_highest_cs_value, 2)}) "
         f"is in the region where {round(q_lower_bound, 2)} < q < {round(q_upper_bound, 2)}, "
         "but this is okay."
     )
-    print_debug(second_highest_cs_report)
-    return "no_q_err", second_highest_cs_report
+    print_debug(second_highest_chi_square_feedback)
+    return "no_q_err", second_highest_chi_square_feedback
 
 
 def all_regions_chi_square_good(chi_squares_of_regions):
@@ -402,24 +368,24 @@ def load_multi_state_models(folder):
 
 def calculate_chi_squares(models):
     """Calculate chi-square for each model."""
-    cs_models = []
-    for m in models:
-        prof = load_file(m)
-        m_cs = calculate_chi_square(prof[0], prof[1])
-        cs_models.append(m_cs)
-    return cs_models
+    chi_square_of_models = []
+    for model in models:
+        profile = load_file(model)
+        model_chi_square = calculate_chi_square(profile[0], profile[1])
+        chi_square_of_models.append(model_chi_square)
+    return chi_square_of_models
 
 
 def evaluate_model_fit(eprof, mprof, q_ranges):
     """Perform MW Bayesian calculation, chi-square analysis, and gather feedback."""
     e_mw, m_mw, mw_err = calculate_mw_bayes(eprof, mprof)
     overall_chi_square = calculate_chi_square(eprof, mprof)
-    print(f"Overall chi-square: {round(overall_chi_square, 2)}")
+    print_debug(f"Overall chi-square: {round(overall_chi_square, 2)}")
 
     chi_squares_of_regions = calculate_regional_chi_square_values(
         q_ranges, eprof, mprof
     )
-    residuals_of_regions = calculate_residuals(q_ranges, eprof, mprof)
+    residuals_of_regions = calculate_regional_residual_values(q_ranges, eprof, mprof)
 
     feedback = generate_feedback(
         e_mw, m_mw, mw_err, overall_chi_square, chi_squares_of_regions, q_ranges
@@ -441,7 +407,7 @@ def calculate_mw_bayes(eprof, mprof):
     e_mw = mw_bayes(eprof)
     m_mw = mw_bayes(mprof)
     mw_err = abs((e_mw - m_mw) / e_mw)
-    print(f"Experimental MW: {e_mw}, Model MW: {m_mw}, MW Error: {mw_err}")
+    print_debug(f"Experimental MW: {e_mw}, Model MW: {m_mw}, MW Error: {mw_err}")
     return e_mw, m_mw, mw_err
 
 
@@ -453,10 +419,10 @@ def generate_feedback(
     overall_chi_square_feedback = generate_overall_chi_square_feedback(
         overall_chi_square, mw_err
     )
-    highest_chi_square_flag, highest_chi_square_report = (
+    highest_chi_square_flag, highest_chi_square_feedback = (
         generate_highest_chi_square_feedback(chi_squares_of_regions, q_ranges)
     )
-    second_highest_chi_square_flag, second_highest_cs_report = (
+    second_highest_chi_square_flag, second_highest_chi_square_feedback = (
         generate_second_highest_chi_square_feedback(chi_squares_of_regions, q_ranges)
     )
     regional_chi_square_feedback = generate_regional_feedback(
@@ -466,13 +432,13 @@ def generate_feedback(
         mw_err,
         chi_squares_of_regions,
     )
-    print(f"Regional feedback: {regional_chi_square_feedback}")
+    print_debug(f"Regional feedback: {regional_chi_square_feedback}")
 
     return {
         "mw_feedback": mw_feedback,
         "overall_chi_square_feedback": overall_chi_square_feedback,
-        "highest_chi_square_report": highest_chi_square_report,
-        "second_highest_cs_report": second_highest_cs_report,
+        "highest_chi_square_feedback": highest_chi_square_feedback,
+        "second_highest_chi_square_feedback": second_highest_chi_square_feedback,
         "regional_chi_square_feedback": regional_chi_square_feedback,
     }
 
@@ -688,7 +654,7 @@ def save_to_json(output_dict, filename="feedback.json"):
     """Save the output dictionary to a JSON file."""
     with open(filename, "w", encoding="utf-8") as outfile:
         json.dump(output_dict, outfile, indent=4)
-    print(f"JSON data saved to {filename}")
+    print_debug(f"JSON data saved to {filename}")
 
 
 def main():
@@ -735,11 +701,11 @@ def main():
         "overall_chi_square_feedback": evaluation_result["feedback"][
             "overall_chi_square_feedback"
         ],
-        "highest_chi_square_report": evaluation_result["feedback"][
-            "highest_chi_square_report"
+        "highest_chi_square_feedback": evaluation_result["feedback"][
+            "highest_chi_square_feedback"
         ],
-        "second_highest_cs_report": evaluation_result["feedback"][
-            "second_highest_cs_report"
+        "second_highest_chi_square_feedback": evaluation_result["feedback"][
+            "second_highest_chi_square_feedback"
         ],
         "regional_chi_square_feedback": evaluation_result["feedback"][
             "regional_chi_square_feedback"
