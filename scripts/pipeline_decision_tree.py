@@ -13,25 +13,19 @@ __author__ = "Joshua Del Mundo"
 __version__ = "0.1.0"
 __license__ = "SIBYLS"
 
-import bioxtasraw.RAWAPI as raw
+
 import copy
 import glob
-import sys
 import os
 import os.path
 import shutil
 import json
 import argparse
 
-print_flag = True
+import bioxtasraw.RAWAPI as raw
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="A script that evaluates the fit of a BilboMD job"
-    )
-    parser.add_argument("results", help="results folder from BilboMD job")
-    args = parser.parse_args()
-    print(args)
+
+print_flag = True
 
 
 def print_debug(arg):
@@ -40,9 +34,6 @@ def print_debug(arg):
     """
     if print_flag:
         print(arg)
-
-
-# Define RAW functions
 
 
 def load_file(path):
@@ -82,22 +73,22 @@ def load_file(path):
     return SASM
 
 
-def rg_auto(prof):
+def rg_auto(profile):
     """
     Returns Rg calculated from a RAW SASM
     """
-    rg = raw.auto_guinier(prof)[0]
+    rg = raw.auto_guinier(profile)[0]
     return rg
 
 
-def mw_bayes(prof):
+def mw_bayes(profile):
     """
     Returns the Bayesian MW of a RAW SASM
 
     Needs to run raw.auto_guinier() first to fill guinier_dict with the correct guinier results for MW calc
     """
-    raw.auto_guinier(prof)
-    mw = raw.mw_bayes(prof)[0]
+    raw.auto_guinier(profile)
+    mw = raw.mw_bayes(profile)[0]
     return mw
 
 
@@ -153,25 +144,14 @@ def residuals_region(prof1, prof2):
     return mean(residual(prof1, prof2))
 
 
-Bilbo_output_folder = args.results
-
-multi_state_models = sorted(
-    glob.glob(Bilbo_output_folder + "/multi_state_model_*", recursive=True)
-)
-cs_models = []
-for m in multi_state_models:
-    prof = load_file(m)
-    m_cs = chi_square(prof[0], prof[1])
-    cs_models.append(m_cs)
-
-
 def best_chi_square_i():
     """
     Selects the "best" chi-square from all multi state files in the input folder
 
     Returns the index of the best chi-square in cs_models
 
-    Goes through the list and selects the first chi-square that is high error (< 20%) with the previous value
+    Goes through the list and selects the first chi-square that is high error
+      (< 20%) with the previous value
     """
     print_debug("\nComparing chi-squares of all multistates")
     cs_models_rounded = [round(cs, 2) for cs in cs_models]
@@ -204,18 +184,6 @@ def best_chi_square_i():
     return cs_models.index(best_cs)
 
 
-profs = load_file(multi_state_models[best_chi_square_i()])
-
-eprof = profs[0]
-mprof = profs[1]
-
-e_mw = mw_bayes(eprof)
-m_mw = mw_bayes(mprof)
-
-mw_err = abs((e_mw - m_mw) / e_mw)
-mw_err_cutoff = 0.10
-
-
 def check_mw():
     """
     Compares the % error between the MW calculated from the experimental and model profiles
@@ -228,9 +196,6 @@ def check_mw():
         return "low_error"
     else:
         return "high_error"
-
-
-overall_chi_square = chi_square(eprof, mprof)
 
 
 def check_overall():
@@ -264,12 +229,6 @@ def check_overall():
         return "bad_cs"
 
 
-q_min = eprof.getQ()[0]
-q_max = eprof.getQ()[-1]
-q_ranges = [q_min, 0.1, 0.2, q_max]
-q_rangesi = list(range(0, len(q_ranges) - 1))
-
-
 def chi_squares():
     """
     returns list of chi-square values for each q-region, which has bounds defined in q_ranges
@@ -291,10 +250,6 @@ def chi_squares():
     return chi_squares_of_regions
 
 
-print_debug("")
-chi_squares_of_regions = chi_squares()
-
-
 def residuals():
     """
     returns list of mean residuals for each q-region, which has bounds defined in q_ranges
@@ -314,10 +269,6 @@ def residuals():
             + str(round(n, 2))
         )
     return residuals_of_regions
-
-
-print_debug("")
-residuals_of_regions = residuals()
 
 
 def highest_cs():
@@ -621,8 +572,54 @@ def start_tree():
         "second_highest_cs_report": second_highest_cs_report,
         "regional_chi_square_feedback": regional_chi_square_feedback,
     }
-    json_output = json.dumps(output_dict, indent=4)
-    print(json_output)
+
+    # Specify the filename
+    filename = "feedback.json"
+
+    # Open a file in write mode and save the json data to it
+    with open(filename, "w", encoding="utf-8") as outfile:
+        json.dump(output_dict, outfile, indent=4)
+
+    # Optionally print the json output to confirm it worked
+    print(f"JSON data saved to {filename}")
 
 
-start_tree()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="A script that evaluates the fit of a BilboMD job"
+    )
+    parser.add_argument("results", help="results folder from BilboMD job")
+    args = parser.parse_args()
+    print(args)
+    Bilbo_output_folder = args.results
+    multi_state_models = sorted(
+        glob.glob(Bilbo_output_folder + "/multi_state_model_*", recursive=True)
+    )
+    cs_models = []
+    for m in multi_state_models:
+        prof = load_file(m)
+        m_cs = chi_square(prof[0], prof[1])
+        cs_models.append(m_cs)
+
+    profs = load_file(multi_state_models[best_chi_square_i()])
+
+    eprof = profs[0]
+    mprof = profs[1]
+
+    e_mw = mw_bayes(eprof)
+    m_mw = mw_bayes(mprof)
+
+    mw_err = abs((e_mw - m_mw) / e_mw)
+    mw_err_cutoff = 0.10
+
+    overall_chi_square = chi_square(eprof, mprof)
+    q_min = eprof.getQ()[0]
+    q_max = eprof.getQ()[-1]
+    q_ranges = [q_min, 0.1, 0.2, q_max]
+    q_rangesi = list(range(0, len(q_ranges) - 1))
+    print_debug("")
+    chi_squares_of_regions = chi_squares()
+    print_debug("")
+    residuals_of_regions = residuals()
+
+    start_tree()
