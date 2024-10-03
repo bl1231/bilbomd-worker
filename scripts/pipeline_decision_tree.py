@@ -92,7 +92,8 @@ def mw_bayes(profile):
     """
     Returns the Bayesian MW of a RAW SASM
 
-    Needs to run raw.auto_guinier() first to fill guinier_dict with the correct guinier results for MW calc
+    Needs to run raw.auto_guinier() first to fill guinier_dict with the correct
+      guinier results for MW calc
     """
     raw.auto_guinier(profile)
     mw = raw.mw_bayes(profile)[0]
@@ -333,8 +334,9 @@ def highest_cs(chi_squares_of_regions, q_ranges):
             return f"region_{i}_err", highest_chi_square_report
     else:
         highest_chi_square_report = (
-            f"The chi-square is highest ({round(highest_cs_value, 2)}) "
-            f"in the region where {round(q_lower_bound, 2)} < q < {round(q_upper_bound, 2)}, but this is okay."
+            f"The chi-square is highest ({round(highest_cs_value, 2)}) in the "
+            f"region where {round(q_lower_bound, 2)} < q < {round(q_upper_bound, 2)}, "
+            "but this is okay."
         )
         print_debug(highest_chi_square_report)
         return "no_q_err", highest_chi_square_report
@@ -391,7 +393,8 @@ def second_highest_cs(chi_squares_of_regions, q_ranges):
     else:
         second_highest_cs_report = (
             f"The 2nd highest chi-square ({round(second_highest_cs_value, 2)}) "
-            f"is in the region where {round(q_lower_bound, 2)} < q < {round(q_upper_bound, 2)}, but this is okay."
+            f"is in the region where {round(q_lower_bound, 2)} < q < {round(q_upper_bound, 2)}, "
+            "but this is okay."
         )
         print_debug(second_highest_cs_report)
         return "no_q_err", second_highest_cs_report
@@ -499,7 +502,10 @@ def main():
             + str(round(overall_chi_square, 2))
             + ". Relook at sequence or oligomerization state."
         )
-        regional_chi_square_feedback = "Please revisit sequence and oligomerization state before examining flexibility."
+        regional_chi_square_feedback = (
+            "Please revisit sequence and oligomerization state "
+            "before examining flexibility."
+        )
 
     else:
         mw_feedback = (
