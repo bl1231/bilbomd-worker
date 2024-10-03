@@ -24,15 +24,16 @@ import argparse
 
 import bioxtasraw.RAWAPI as raw
 
-
-print_flag = True
+# Global constants
+MW_ERR_CUTOFF = 0.10
+PRINT_FLAG = True
 
 
 def print_debug(arg):
     """
     print statement with flag for debugging
     """
-    if print_flag:
+    if PRINT_FLAG:
         print(arg)
 
 
@@ -144,7 +145,7 @@ def residuals_region(prof1, prof2):
     return mean(residual(prof1, prof2))
 
 
-def best_chi_square_i():
+def best_chi_square_i(cs_models, multi_state_models):
     """
     Selects the "best" chi-square from all multi state files in the input folder
 
@@ -184,7 +185,7 @@ def best_chi_square_i():
     return cs_models.index(best_cs)
 
 
-def check_mw():
+def check_mw(e_mw, m_mw, mw_err):
     """
     Compares the % error between the MW calculated from the experimental and model profiles
 
@@ -192,13 +193,13 @@ def check_mw():
     returns "high_error" otherwise
     """
     print_debug("Experimental MW = " + str(e_mw) + ", Model MW = " + str(m_mw))
-    if mw_err < mw_err_cutoff:
+    if mw_err < MW_ERR_CUTOFF:
         return "low_error"
     else:
         return "high_error"
 
 
-def check_overall():
+def check_overall(overall_chi_square):
     """
     Judges the quality of the overall chi-square between the experimental and model profiles
 
@@ -229,7 +230,7 @@ def check_overall():
         return "bad_cs"
 
 
-def chi_squares():
+def chi_squares(q_ranges, q_rangesi, eprof, mprof):
     """
     returns list of chi-square values for each q-region, which has bounds defined in q_ranges
     """
@@ -250,7 +251,7 @@ def chi_squares():
     return chi_squares_of_regions
 
 
-def residuals():
+def residuals(q_ranges, q_rangesi, eprof, mprof):
     """
     returns list of mean residuals for each q-region, which has bounds defined in q_ranges
     """
@@ -271,7 +272,7 @@ def residuals():
     return residuals_of_regions
 
 
-def highest_cs():
+def highest_cs(chi_squares_of_regions, q_ranges):
     """
     Determines the q-region with the highest chi-square value
 
@@ -281,14 +282,14 @@ def highest_cs():
 
     need to figure out how to make this more general if we want to change the number of regions from 3
     """
-    highest_cs = max(chi_squares_of_regions)
-    i = chi_squares_of_regions.index(highest_cs)
+    highest_cs_value = max(chi_squares_of_regions)
+    i = chi_squares_of_regions.index(highest_cs_value)
     qLB = q_ranges[i]
     qUB = q_ranges[i + 1]
-    if highest_cs > 2:
+    if highest_cs_value > 2:
         highest_chi_square_report = (
             "The chi-square is highest ("
-            + str(round(highest_cs, 2))
+            + str(round(highest_cs_value, 2))
             + ") in the region where ("
             + str(round(qLB, 2))
             + " < q < "
@@ -305,7 +306,7 @@ def highest_cs():
     else:
         highest_chi_square_report = (
             "The chi-square is highest ("
-            + str(round(highest_cs, 2))
+            + str(round(highest_cs_value, 2))
             + ") in the region where "
             + str(round(qLB, 2))
             + " < q < "
@@ -316,7 +317,7 @@ def highest_cs():
         return "no_q_err", highest_chi_square_report
 
 
-def second_highest_cs():
+def second_highest_cs(chi_squares_of_regions, q_ranges):
     """
     Determines if q-region with the second highest chi-square value is > 2
 
@@ -328,14 +329,14 @@ def second_highest_cs():
     """
     chisquare_all_regions_sorted = copy.deepcopy(chi_squares_of_regions)
     chisquare_all_regions_sorted.sort()
-    second_highest_cs = chisquare_all_regions_sorted[-2]
-    i = chi_squares_of_regions.index(second_highest_cs)
+    second_highest_cs_value = chisquare_all_regions_sorted[-2]
+    i = chi_squares_of_regions.index(second_highest_cs_value)
     qLB = q_ranges[i]
     qUB = q_ranges[i + 1]
-    if second_highest_cs > 2:
+    if second_highest_cs_value > 2:
         second_highest_cs_report = (
             "The chi-square is also high ("
-            + str(round(second_highest_cs))
+            + str(round(second_highest_cs_value))
             + ") is in the region where "
             + str(round(qLB, 2))
             + " < q < "
@@ -352,7 +353,7 @@ def second_highest_cs():
     else:
         second_highest_cs_report = (
             "The 2nd highest chi-square ("
-            + str(round(second_highest_cs, 2))
+            + str(round(second_highest_cs_value, 2))
             + ") is in the region where "
             + str(round(qLB, 2))
             + " < q < "
@@ -363,14 +364,14 @@ def second_highest_cs():
         return "no_q_err", second_highest_cs_report
 
 
-def region_check():
+def region_check(chi_squares_of_regions):
     if all(cs < 2 for cs in chi_squares_of_regions):
         return "all_good"
     else:
         return
 
 
-def high_q_noise():
+def high_q_noise(chi_squares_of_regions):
     """
     returns "high_noise" if  the chi-square of the highest most q-region is < 0.5
 
@@ -380,15 +381,73 @@ def high_q_noise():
         return "high_noise"
 
 
-def start_tree():
+def main():
     """
-    Starts the decision tree. Outputs user feedback based on the goodness of fit to the model.
-    """
+    Main function to run the decision tree"""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="A script that evaluates the fit of a BilboMD job"
+    )
+    parser.add_argument("results", help="results folder from BilboMD job")
+    args = parser.parse_args()
+
+    # Extract BilboMD output folder and find multi-state model files
+    bilbomd_results_folder = args.results
+    multi_state_models = sorted(
+        glob.glob(bilbomd_results_folder + "/multi_state_model_*", recursive=True)
+    )
+
+    if not multi_state_models:
+        raise FileNotFoundError("No multi-state models found in the specified folder")
+
+    # Calculate chi-square for each model
+    cs_models = []
+    for m in multi_state_models:
+        prof = load_file(m)
+        m_cs = chi_square(prof[0], prof[1])
+        cs_models.append(m_cs)
+
+    # Load best chi-square model
+    best_model_idx = best_chi_square_i(cs_models, multi_state_models)
+    profs = load_file(multi_state_models[best_model_idx])
+
+    # Extract profiles
+    eprof = profs[0]
+    mprof = profs[1]
+
+    # Perform MW Bayesian calculation
+    e_mw = mw_bayes(eprof)
+    m_mw = mw_bayes(mprof)
+
+    # Calculate MW error
+    mw_err = abs((e_mw - m_mw) / e_mw)
+
+    # Calculate overall chi-square
+    overall_chi_square = chi_square(eprof, mprof)
+
+    # Determine q ranges for analysis
+    q_min = eprof.getQ()[0]
+    q_max = eprof.getQ()[-1]
+    q_ranges = [q_min, 0.1, 0.2, q_max]
+    q_rangesi = list(range(0, len(q_ranges) - 1))
+
+    # Debug print for chi-square and residuals
+    print_debug("Calculating chi squares of regions...")
+    chi_squares_of_regions = chi_squares(q_ranges, q_rangesi, eprof, mprof)
+
+    print_debug("Calculating residuals of regions...")
+    residuals_of_regions = residuals(q_ranges, q_rangesi, eprof, mprof)
+
+    # Start the analysis tree
     print_debug("")
-    mw_flag = check_mw()
-    overall_cs_flag = check_overall()
-    highest_cs_flag, highest_chi_square_report = highest_cs()
-    second_highest_cs_flag, second_highest_cs_report = second_highest_cs()
+    mw_flag = check_mw(e_mw, m_mw, mw_err)
+    overall_cs_flag = check_overall(overall_chi_square)
+    highest_cs_flag, highest_chi_square_report = highest_cs(
+        chi_squares_of_regions, q_ranges
+    )
+    second_highest_cs_flag, second_highest_cs_report = second_highest_cs(
+        chi_squares_of_regions, q_ranges
+    )
 
     if mw_flag == "high_error":
         mw_feedback = (
@@ -397,7 +456,7 @@ def start_tree():
             + ") and the SAXS MW ("
             + str(e_mw)
             + ") is large ("
-            + str(round(100 * mw_err, 1), 2)
+            + str(round(100 * mw_err, 1))
             + "%), sequence or oligomerization state is likely incorrect."
         )
         overall_chi_square_feedback = (
@@ -416,7 +475,7 @@ def start_tree():
             + ") is "
             + str(round(100 * mw_err, 1))
             + "%, within acceptable error (< "
-            + str(round(100 * mw_err_cutoff, 1))
+            + str(round(100 * MW_ERR_CUTOFF, 1))
             + "%)"
         )
 
@@ -426,7 +485,7 @@ def start_tree():
                 + str(round(overall_chi_square, 2))
                 + ". Excellent."
             )
-            all_good_flag = region_check()
+            all_good_flag = region_check(chi_squares_of_regions)
             if all_good_flag == "all_good":
                 regional_chi_square_feedback = "The model has a low chi-square thoughout all q-ranges and is good fit overall."
             else:
@@ -436,7 +495,7 @@ def start_tree():
                     regional_chi_square_feedback = "Overall fit is good, but flexibility of elongated regions could be improved a bit. You can try to increase flexibility and see if that helps."
                 elif highest_cs_flag == "high_q_err":
                     regional_chi_square_feedback = "Overall fit is good, though there may be a small amount of error in the buffer subtraction."
-                    high_noise_flag = high_q_noise()
+                    high_noise_flag = high_q_noise(chi_squares_of_regions)
                     if high_noise_flag == "high_noise":
                         regional_chi_square_feedback = (
                             regional_chi_square_feedback
@@ -585,41 +644,4 @@ def start_tree():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="A script that evaluates the fit of a BilboMD job"
-    )
-    parser.add_argument("results", help="results folder from BilboMD job")
-    args = parser.parse_args()
-    print(args)
-    Bilbo_output_folder = args.results
-    multi_state_models = sorted(
-        glob.glob(Bilbo_output_folder + "/multi_state_model_*", recursive=True)
-    )
-    cs_models = []
-    for m in multi_state_models:
-        prof = load_file(m)
-        m_cs = chi_square(prof[0], prof[1])
-        cs_models.append(m_cs)
-
-    profs = load_file(multi_state_models[best_chi_square_i()])
-
-    eprof = profs[0]
-    mprof = profs[1]
-
-    e_mw = mw_bayes(eprof)
-    m_mw = mw_bayes(mprof)
-
-    mw_err = abs((e_mw - m_mw) / e_mw)
-    mw_err_cutoff = 0.10
-
-    overall_chi_square = chi_square(eprof, mprof)
-    q_min = eprof.getQ()[0]
-    q_max = eprof.getQ()[-1]
-    q_ranges = [q_min, 0.1, 0.2, q_max]
-    q_rangesi = list(range(0, len(q_ranges) - 1))
-    print_debug("")
-    chi_squares_of_regions = chi_squares()
-    print_debug("")
-    residuals_of_regions = residuals()
-
-    start_tree()
+    main()
