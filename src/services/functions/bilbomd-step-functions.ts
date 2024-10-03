@@ -947,6 +947,14 @@ const prepareResults = async (
       }
     }
 
+    // scripts/pipeline_decision_tree.py
+    try {
+      await runFeedbackScript(DBjob)
+      MQjob.log(`Feedback script executed successfully`)
+    } catch (error) {
+      logger.error(`Error running feedback script: ${error}`)
+    }
+
     // Create Job-specific README file.
     try {
       await createReadmeFile(DBjob, numEnsembles, resultsDir)
@@ -967,6 +975,30 @@ const prepareResults = async (
     }
   } catch (error) {
     await handleError(error, MQjob, DBjob, 'results')
+  }
+}
+
+const runFeedbackScript = async (DBjob: IJob): Promise<void> => {
+  try {
+    const resultsDir = path.join(DATA_VOL, DBjob.uuid, 'results')
+    const scriptPath = '/app/scripts/pipeline_decision_tree.py'
+    const command = `python ${scriptPath} ${resultsDir}`
+
+    const { stdout, stderr } = await execPromise(command)
+
+    if (stdout) {
+      logger.info(`Script output: ${stdout}`)
+    }
+
+    if (stderr) {
+      logger.error(`Script error: ${stderr}`)
+    }
+
+    logger.info(`Python script executed successfully for job ${DBjob.uuid}`)
+  } catch (error) {
+    // Handle any errors that occur during script execution
+    logger.error(`Failed to run the feedback script for job ${DBjob.uuid}: ${error}`)
+    throw error // Re-throw the error if you want to propagate it up the call chain
   }
 }
 
