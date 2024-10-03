@@ -99,13 +99,16 @@ def mw_bayes(profile):
     return mw
 
 
-def q_region(prof, qLB, qUB):
+def q_region(prof, q_lower_bound, q_upper_bound):
     """
-    Trims a RAW SASM to qLB < q < qUB
+    Trims a RAW SASM to q_lower_bound < q < q_upper_bound
     """
     region = copy.deepcopy(prof)
     region.setQrange(
-        [region.closest(region.getQ(), qLB), region.closest(region.getQ(), qUB)]
+        [
+            region.closest(region.getQ(), q_lower_bound),
+            region.closest(region.getQ(), q_upper_bound),
+        ]
     )
     return region
 
@@ -119,13 +122,16 @@ def chi_square(prof1, prof2):
     )
 
 
-def chi_square_region(prof1, prof2, qLB, qUB):
+def chi_square_region(prof1, prof2, q_lower_bound, q_upper_bound):
     """
-    Returns the chi-square between two RAW SASM within qLB < q < qUB
+    Returns the chi-square between two RAW SASM within q_lower_bound < q < q_upper_bound
 
     Combination of chi_square() and q_region() functions
     """
-    return chi_square(q_region(prof1, qLB, qUB), q_region(prof2, qLB, qUB))
+    return chi_square(
+        q_region(prof1, q_lower_bound, q_upper_bound),
+        q_region(prof2, q_lower_bound, q_upper_bound),
+    )
 
 
 def residual(prof1, prof2):
@@ -306,12 +312,12 @@ def highest_cs(chi_squares_of_regions, q_ranges):
 
     highest_cs_value = max(chi_squares_of_regions)
     i = chi_squares_of_regions.index(highest_cs_value)
-    qLB = q_ranges[i]
-    qUB = q_ranges[i + 1]
+    q_lower_bound = q_ranges[i]
+    q_upper_bound = q_ranges[i + 1]
 
     highest_chi_square_report = (
         f"The chi-square is highest ({round(highest_cs_value, 2)}) "
-        f"in the region where ({round(qLB, 2)} < q < {round(qUB, 2)})."
+        f"in the region where ({round(q_lower_bound, 2)} < q < {round(q_upper_bound, 2)})."
     )
 
     print_debug(highest_chi_square_report)
@@ -328,7 +334,7 @@ def highest_cs(chi_squares_of_regions, q_ranges):
     else:
         highest_chi_square_report = (
             f"The chi-square is highest ({round(highest_cs_value, 2)}) "
-            f"in the region where {round(qLB, 2)} < q < {round(qUB, 2)}, but this is okay."
+            f"in the region where {round(q_lower_bound, 2)} < q < {round(q_upper_bound, 2)}, but this is okay."
         )
         print_debug(highest_chi_square_report)
         return "no_q_err", highest_chi_square_report
@@ -363,12 +369,12 @@ def second_highest_cs(chi_squares_of_regions, q_ranges):
     chisquare_all_regions_sorted = sorted(copy.deepcopy(chi_squares_of_regions))
     second_highest_cs_value = chisquare_all_regions_sorted[-2]
     i = chi_squares_of_regions.index(second_highest_cs_value)
-    qLB = q_ranges[i]
-    qUB = q_ranges[i + 1]
+    q_lower_bound = q_ranges[i]
+    q_upper_bound = q_ranges[i + 1]
 
     second_highest_cs_report = (
         f"The chi-square is also high ({round(second_highest_cs_value)}) "
-        f"in the region where ({round(qLB, 2)} < q < {round(qUB, 2)})."
+        f"in the region where ({round(q_lower_bound, 2)} < q < {round(q_upper_bound, 2)})."
     )
 
     print_debug(second_highest_cs_report)
@@ -385,7 +391,7 @@ def second_highest_cs(chi_squares_of_regions, q_ranges):
     else:
         second_highest_cs_report = (
             f"The 2nd highest chi-square ({round(second_highest_cs_value, 2)}) "
-            f"is in the region where {round(qLB, 2)} < q < {round(qUB, 2)}, but this is okay."
+            f"is in the region where {round(q_lower_bound, 2)} < q < {round(q_upper_bound, 2)}, but this is okay."
         )
         print_debug(second_highest_cs_report)
         return "no_q_err", second_highest_cs_report
