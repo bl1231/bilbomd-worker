@@ -84,12 +84,12 @@ def load_file(path):
             shutil.rmtree(temp_dir)
 
 
-def rg_auto(profile):
-    """
-    Returns Rg calculated from a RAW SASM
-    """
-    rg = raw.auto_guinier(profile)[0]
-    return rg
+# def rg_auto(profile):
+#     """
+#     Returns Rg calculated from a RAW SASM
+#     """
+#     rg = raw.auto_guinier(profile)[0]
+#     return rg
 
 
 def mw_bayes(profile):
@@ -202,51 +202,6 @@ def best_chi_square_i(cs_models, multi_state_models):
         + " multi states)"
     )
     return cs_models.index(best_cs)
-
-
-# def check_mw(e_mw, m_mw, mw_err):
-#     """
-#     Compares the % error between the MW calculated from the experimental and model profiles
-
-#     returns "low_error" if the error is < 5% (defined by mw_cutoff)
-#     returns "high_error" otherwise
-#     """
-#     print_debug("Experimental MW = " + str(e_mw) + ", Model MW = " + str(m_mw))
-#     if mw_err < MW_ERR_CUTOFF:
-#         return "low_error"
-#     else:
-#         return "high_error"
-
-
-# def check_overall(overall_chi_square):
-#     """
-#     Judges the quality of the overall chi-square between the experimental and model profiles
-
-#     returns "excellent_cs" if chi-square < 2
-
-#     returns "moderate_cs" if 2 < chi-square < 4
-
-#     returns "bad_cs" if chi-square > 4
-#     """
-#     if overall_chi_square < 2:
-#         print_debug(
-#             "Overall chi-square = "
-#             + str(round(overall_chi_square, 2))
-#             + ", Excellent fit"
-#         )
-#         return "excellent_cs"
-#     elif overall_chi_square < 4:
-#         print_debug(
-#             "Overall chi-square = "
-#             + str(round(overall_chi_square, 2))
-#             + ", Moderate fit"
-#         )
-#         return "moderate_cs"
-#     else:
-#         print_debug(
-#             "Overall chi-square = " + str(round(overall_chi_square, 2)) + ", Bad fit"
-#         )
-#         return "bad_cs"
 
 
 def calculate_regional_chi_square_values(
@@ -511,6 +466,7 @@ def generate_feedback(
         mw_err,
         chi_squares_of_regions,
     )
+    print(f"Regional feedback: {regional_chi_square_feedback}")
 
     return {
         "mw_feedback": mw_feedback,
@@ -561,127 +517,171 @@ def generate_overall_chi_square_feedback(overall_chi_square, mw_err):
 
 
 def generate_regional_feedback(
-    overall_chi_square,
-    highest_chi_square_flag,
-    second_highest_chi_square_flag,
-    mw_err,
-    chi_squares_of_regions,
-):
+    overall_chi_square: float,
+    highest_chi_square_flag: str,
+    second_highest_chi_square_flag: str,
+    mw_err: float,
+    chi_squares_of_regions: list,
+) -> str:
     """Generate feedback based on chi-square analysis in different q regions."""
 
     if mw_err > MW_ERR_CUTOFF:
-        return (
-            "Please revisit sequence and oligomerization state "
-            "before examining flexibility."
-        )
+        return "Please revisit sequence and oligomerization state before examining flexibility."
 
     if all_regions_chi_square_good(chi_squares_of_regions):
-        return (
-            "The model has a low chi-square thoughout all q-ranges "
-            "and is good fit overall."
+        return "The model has a low chi-square throughout all q-ranges and is a good fit overall."
+
+    # Excellent Fit Case: overall_chi_square < CHI2_CUTOFF_EXCELLENT
+    if overall_chi_square < CHI2_CUTOFF_EXCELLENT:
+        return handle_excellent_fit(highest_chi_square_flag, chi_squares_of_regions)
+
+    # Moderate Fit Case: overall_chi_square < CHI2_CUTOFF_MODERATE
+    if overall_chi_square < CHI2_CUTOFF_MODERATE:
+        return handle_moderate_fit(
+            highest_chi_square_flag, second_highest_chi_square_flag
         )
 
-    # three scenarios that will be based on overall_chi_square
-    #
-    # 1. overall_chi_square < CHI2_CUTOFF_EXCELLENT
-    if overall_chi_square < CHI2_CUTOFF_EXCELLENT:
-        if highest_chi_square_flag == "low_q_err":
-            regional_chi_square_feedback = "Overall fit is good, but some error may come from detector artifacts or oligomerization states in the sample."
-        elif highest_chi_square_flag == "mid_q_err":
-            regional_chi_square_feedback = "Overall fit is good, but flexibility of elongated regions could be improved a bit. You can try to increase flexibility and see if that helps."
-        elif highest_chi_square_flag == "high_q_err":
-            regional_chi_square_feedback = "Overall fit is good, though there may be a small amount of error in the buffer subtraction."
-            high_noise_flag = check_high_q_noise(chi_squares_of_regions)
-            if high_noise_flag == "high_noise":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " Additionally, chi-square in the high-q region is very low ("
-                    + round(chi_squares_of_regions[-1])
-                    + "). Though the model fits well, the data are very noisy"
-                )
-    # 2. overall_chi_square < CHI2_CUTOFF_MODERATE
-    if overall_chi_square < CHI2_CUTOFF_MODERATE:
-        if highest_chi_square_flag == "low_q_err":
-            regional_chi_square_feedback = "The overall structure of the pdb model needs improvement. This may come from a sequence that is off, or the presence of oligomerization states in the sample"
-            if second_highest_chi_square_flag == "mid_q_err":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " Flexibility of elongated regions must also be increased. Try adjusting the flexible regions in the const.inp file using the PAE Jiffy."
-                )
-            elif second_highest_chi_square_flag == "high_q_err":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " Buffer subtraction problems may have also occured."
-                )
-        elif highest_chi_square_flag == "mid_q_err":
-            regional_chi_square_feedback = "Flexibility of elongated regions must be increased, but you are close to a good fit. Try adjusting the flexible regions in the const.inp file."
-            if second_highest_chi_square_flag == "low_q_err":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " The sequence and oligomerization states are also not a good fit and should be revisited."
-                )
-            elif second_highest_chi_square_flag == "high_q_err":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " Buffer subtraction problems may have also occured."
-                )
-        elif highest_chi_square_flag == "high_q_err":
-            regional_chi_square_feedback = "There are likely problems with buffer subtraction. Try re-analyzing the SAXS and scaling the buffer intensity."
-            if second_highest_chi_square_flag == "low_q_err":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " The sequence and oligomerization states should also be revisited."
-                )
-            elif second_highest_chi_square_flag == "mid_q_err":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " Flexibility of elongated regions must also be increased. Try adjusting the flexible regions in the const.inp file using the PAE Jiffy."
-                )
-        else:
-            regional_chi_square_feedback = "Something is wrong. The overall chi-square is > 2, but all q-regions have chi-square < 2? Please revisit fit."
+    # Poor Fit Case: overall_chi_square > CHI2_CUTOFF_MODERATE
+    return handle_poor_fit(highest_chi_square_flag, second_highest_chi_square_flag)
 
-    # 3. overall_chi_square > CHI2_CUTOFF_MODERATE
-    if overall_chi_square > CHI2_CUTOFF_MODERATE:
-        if highest_chi_square_flag == "low_q_err":
-            regional_chi_square_feedback = "Between the model and experiment, there is likely a large difference in sequence, oligomerization, etc."
-            if second_highest_chi_square_flag == "mid_q_err":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " The movement of flexible regions in the model also do not seem to improve the fitting"
-                )
-            elif second_highest_chi_square_flag == "high_q_err":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " There are also background subtraction problems."
-                )
-        elif highest_chi_square_flag == "mid_q_err":
-            regional_chi_square_feedback = "The flexible regions in the model cannot find a fit with the SAXS. Try adjusting the flexible regions in the const.inp file using the PAE Jiffy."
-            if second_highest_chi_square_flag == "low_q_err":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " The overall structure and oligomerization states are also likely wrong."
-                )
-            elif second_highest_chi_square_flag == "high_q_err":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " There are also background subtraction problems."
-                )
-        elif highest_chi_square_flag == "high_q_err":
-            regional_chi_square_feedback = "Buffer subtraction is incorrect."
-            if second_highest_chi_square_flag == "low_q_err":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " The overall structure and oligomerization states are also likely wrong."
-                )
-            elif second_highest_chi_square_flag == "mid_q_err":
-                regional_chi_square_feedback = (
-                    regional_chi_square_feedback
-                    + " The movement of flexible regions in the model also do not seem to improve the fitting"
-                )
-        else:
-            regional_chi_square_feedback = "Something is wrong. The overall chi-square is > 2, but all q-regions have chi-square < 2? Please revisit fit."
 
-    return regional_chi_square_feedback
+def handle_excellent_fit(
+    highest_chi_square_flag: str, chi_squares_of_regions: list
+) -> str:
+    """
+    Handles feedback when the fit is excellent (overall chi-square < CHI2_CUTOFF_EXCELLENT).
+    """
+    if highest_chi_square_flag == "low_q_err":
+        return (
+            "Overall fit is good, but some error may come from detector artifacts "
+            "or oligomerization states in the sample."
+        )
+    if highest_chi_square_flag == "mid_q_err":
+        return (
+            "Overall fit is good, but flexibility of elongated regions could be "
+            "improved. Try increasing flexibility to see if that helps."
+        )
+    if highest_chi_square_flag == "high_q_err":
+        feedback = (
+            "Overall fit is good, though there may be a small amount of error in "
+            "the buffer subtraction."
+        )
+        if check_high_q_noise(chi_squares_of_regions) == "high_noise":
+            feedback += (
+                f" Additionally, chi-square in the high-q region is very low "
+                f"({round(chi_squares_of_regions[-1], 2)}). Though the model fits "
+                "well, the data are very noisy."
+            )
+        return feedback
+    return "Overall fit is excellent."
+
+
+def handle_moderate_fit(
+    highest_chi_square_flag: str, second_highest_chi_square_flag: str
+) -> str:
+    """
+    Handles feedback when the fit is moderate (overall chi-square < CHI2_CUTOFF_MODERATE).
+    """
+    feedback = ""
+    if highest_chi_square_flag == "low_q_err":
+        feedback = (
+            "The overall structure of the PDB model needs improvement. This may come "
+            "from a sequence that is off, or the presence of oligomerization states "
+            "in the sample."
+        )
+        if second_highest_chi_square_flag == "mid_q_err":
+            feedback += (
+                " Flexibility of elongated regions must also be increased. Try "
+                "adjusting the flexible regions in the const.inp file using the PAE "
+                "Jiffy."
+            )
+        elif second_highest_chi_square_flag == "high_q_err":
+            feedback += " Buffer subtraction problems may have also occurred."
+    elif highest_chi_square_flag == "mid_q_err":
+        feedback = (
+            "Flexibility of elongated regions must be increased, but you are close to "
+            "a good fit. Try adjusting the flexible regions in the const.inp file."
+        )
+        if second_highest_chi_square_flag == "low_q_err":
+            feedback += (
+                " The sequence and oligomerization states are also not a good fit and "
+                "should be revisited."
+            )
+        elif second_highest_chi_square_flag == "high_q_err":
+            feedback += " Buffer subtraction problems may have also occurred."
+    elif highest_chi_square_flag == "high_q_err":
+        feedback = (
+            "There are likely problems with buffer subtraction. Try re-analyzing the "
+            "SAXS and scaling the buffer intensity."
+        )
+        if second_highest_chi_square_flag == "low_q_err":
+            feedback += (
+                " The sequence and oligomerization states should also be revisited."
+            )
+        elif second_highest_chi_square_flag == "mid_q_err":
+            feedback += (
+                " Flexibility of elongated regions must also be increased. Try "
+                "adjusting the flexible regions in the const.inp file using the PAE "
+                "Jiffy."
+            )
+    else:
+        feedback = (
+            "Something is wrong. The overall chi-square is > 2, but all q-regions "
+            "have chi-square < 2? Please revisit the fit."
+        )
+    return feedback
+
+
+def handle_poor_fit(
+    highest_chi_square_flag: str, second_highest_chi_square_flag: str
+) -> str:
+    """
+    Handles feedback when the fit is poor (overall chi-square > CHI2_CUTOFF_MODERATE).
+    """
+    feedback = ""
+    if highest_chi_square_flag == "low_q_err":
+        feedback = (
+            "Between the model and experiment, there is likely a large difference in "
+            "sequence, oligomerization, etc."
+        )
+        if second_highest_chi_square_flag == "mid_q_err":
+            feedback += (
+                " The movement of flexible regions in the model also do not seem to "
+                "improve the fitting."
+            )
+        elif second_highest_chi_square_flag == "high_q_err":
+            feedback += " There are also background subtraction problems."
+    elif highest_chi_square_flag == "mid_q_err":
+        feedback = (
+            "The flexible regions in the model cannot find a fit with the SAXS. Try "
+            "adjusting the flexible regions in the const.inp file using the PAE Jiffy."
+        )
+        if second_highest_chi_square_flag == "low_q_err":
+            feedback += (
+                " The overall structure and oligomerization states are also likely "
+                "wrong."
+            )
+        elif second_highest_chi_square_flag == "high_q_err":
+            feedback += " There are also background subtraction problems."
+    elif highest_chi_square_flag == "high_q_err":
+        feedback = "Buffer subtraction is incorrect."
+        if second_highest_chi_square_flag == "low_q_err":
+            feedback += (
+                " The overall structure and oligomerization states are also likely "
+                "wrong."
+            )
+        elif second_highest_chi_square_flag == "mid_q_err":
+            feedback += (
+                " The movement of flexible regions in the model also do not seem to "
+                "improve the fitting."
+            )
+    else:
+        feedback = (
+            f"Something is wrong. The overall chi-square is > {CHI2_CUTOFF_MODERATE}, "
+            f"but all q-regions have chi-square < {CHI2_CUTOFF_MODERATE}? "
+            "Please revisit the fit or talk to a beamline scientist."
+        )
+    return feedback
 
 
 def save_to_json(output_dict, filename="feedback.json"):
