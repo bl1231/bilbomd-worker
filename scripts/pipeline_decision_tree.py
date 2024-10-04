@@ -4,9 +4,6 @@ prediction of what went wrong with the experiment
 Ex: not enough flexibility, wrong oligomerization, etc.
 
 Inputs BilboMD results folder into command line 
-
-Ex: ../pipeline_decision_tree.py results
-
 """
 
 __author__ = "Joshua Del Mundo"
