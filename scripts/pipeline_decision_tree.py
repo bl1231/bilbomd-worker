@@ -30,7 +30,7 @@ import bioxtasraw.RAWAPI as raw
 MW_ERR_CUTOFF = 0.10
 CHI2_CUTOFF_EXCELLENT = 1.0
 CHI2_CUTOFF_MODERATE = 2.0
-PRINT_FLAG = False
+PRINT_FLAG = True
 
 
 def print_debug(arg):
@@ -159,7 +159,7 @@ def best_chi_square_i(cs_models, multi_state_models):
     multi_states_num_i = multi_states_file.find("multi_state_model_")
     multi_states_num = multi_states_file[multi_states_num_i + 18]
     print_debug(
-        "\nThe best chi-square is "
+        "The best chi-square is "
         + str(round(best_cs, 2))
         + " ("
         + multi_states_num
@@ -673,6 +673,12 @@ def main():
 
     # Load best chi-square model
     best_model_idx = best_chi_square_i(cs_models, multi_state_models)
+    print_debug("Model names in multi_state_models:")
+    for model in multi_state_models:
+        filename = os.path.basename(model)
+        print_debug(filename)
+    # Extract the best model filename
+    best_model = os.path.basename(multi_state_models[best_model_idx])
     profs = load_file(multi_state_models[best_model_idx])
     # Extract profiles and run evaluation
     eprof, mprof = profs[0], profs[1]
@@ -689,6 +695,7 @@ def main():
         "mw_saxs": round(evaluation_result["e_mw"], 2),
         "mw_model": round(evaluation_result["m_mw"], 2),
         "mw_err": round(evaluation_result["mw_err"], 1),
+        "best_model": best_model,
         "overall_chi_square": round(evaluation_result["overall_chi_square"], 2),
         "q_ranges": q_ranges,
         "chi_squares_of_regions": [
