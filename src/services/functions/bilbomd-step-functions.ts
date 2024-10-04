@@ -984,6 +984,7 @@ const runFeedbackScript = async (DBjob: IJob): Promise<void> => {
     const scriptPath = '/app/scripts/pipeline_decision_tree.py'
     const command = `python ${scriptPath} ${resultsDir}`
 
+    // Run the script
     const { stdout, stderr } = await execPromise(command)
 
     if (stdout) {
@@ -995,10 +996,26 @@ const runFeedbackScript = async (DBjob: IJob): Promise<void> => {
     }
 
     logger.info(`Python script executed successfully for job ${DBjob.uuid}`)
+
+    // Read and parse the feedback.json file
+    const feedbackFilePath = path.join(resultsDir, 'feedback.json')
+    const feedbackData = await fs.readFile(feedbackFilePath, 'utf-8')
+    const feedbackJSON = JSON.parse(feedbackData)
+
+    logger.info(
+      `Parsed feedback data for job ${DBjob.uuid}: ${JSON.stringify(feedbackJSON)}`
+    )
+
+    // Set feedback on the DBjob instance and save it
+    DBjob.feedback = feedbackJSON
+    await DBjob.save() // Save the updated job document to MongoDB
+
+    logger.info(`Feedback data saved to MongoDB for job ${DBjob.uuid}`)
   } catch (error) {
-    // Handle any errors that occur during script execution
-    logger.error(`Failed to run the feedback script for job ${DBjob.uuid}: ${error}`)
-    throw error // Re-throw the error if you want to propagate it up the call chain
+    logger.error(
+      `Failed to run the feedback script or save feedback for job ${DBjob.uuid}: ${error}`
+    )
+    throw error // Re-throw the error to propagate up the call chain
   }
 }
 
