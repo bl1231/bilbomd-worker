@@ -949,7 +949,7 @@ const prepareResults = async (
 
     // scripts/pipeline_decision_tree.py
     try {
-      await runFeedbackScript(DBjob)
+      await spawnFeedbackScript(DBjob)
       MQjob.log(`Feedback script executed successfully`)
     } catch (error) {
       logger.error(`Error running feedback script: ${error}`)
@@ -978,45 +978,73 @@ const prepareResults = async (
   }
 }
 
-const runFeedbackScript = async (DBjob: IJob): Promise<void> => {
-  try {
-    const resultsDir = path.join(DATA_VOL, DBjob.uuid, 'results')
-    const scriptPath = '/app/scripts/pipeline_decision_tree.py'
-    const command = `python ${scriptPath} ${resultsDir}`
+const spawnFeedbackScript = async (DBjob: IJob): Promise<void> => {
+  const resultsDir = path.join(DATA_VOL, DBjob.uuid, 'results')
+  const logFile = path.join(resultsDir, 'feedback.log')
+  const errorFile = path.join(resultsDir, 'feedback_error.log')
+  const logStream = fs.createWriteStream(logFile)
+  const errorStream = fs.createWriteStream(errorFile)
+  const scriptPath = '/app/scripts/pipeline_decision_tree.py'
+  const args = [scriptPath, resultsDir]
+  const opts = { cwd: resultsDir }
 
-    // Run the script
-    const { stdout, stderr } = await execPromise(command)
+  return new Promise((resolve, reject) => {
+    const runFeedbackScript: ChildProcess = spawn('python', args, opts)
 
-    if (stdout) {
-      logger.info(`Script output: ${stdout}`)
-    }
+    runFeedbackScript.stdout?.on('data', (data) => {
+      logger.info(`Feedback script stdout: ${data.toString()}`)
+      logStream.write(data.toString())
+    })
 
-    if (stderr) {
-      logger.error(`Script error: ${stderr}`)
-    }
+    runFeedbackScript.stderr?.on('data', (data) => {
+      logger.error(`Feedback script stderr: ${data.toString()}`)
+      errorStream.write(data.toString())
+    })
 
-    logger.info(`Python script executed successfully for job ${DBjob.uuid}`)
+    runFeedbackScript.on('error', (error) => {
+      logger.error(`Feedback script error: ${error}`)
+      reject(error)
+    })
 
-    // Read and parse the feedback.json file
-    const feedbackFilePath = path.join(resultsDir, 'feedback.json')
-    const feedbackData = await fs.readFile(feedbackFilePath, 'utf-8')
-    const feedbackJSON = JSON.parse(feedbackData)
+    runFeedbackScript.on('exit', async (code: number) => {
+      const closeStreamsPromises = [
+        new Promise((resolveStream) => logStream.end(resolveStream)),
+        new Promise((resolveStream) => errorStream.end(resolveStream))
+      ]
 
-    logger.info(
-      `Parsed feedback data for job ${DBjob.uuid}: ${JSON.stringify(feedbackJSON)}`
-    )
+      await Promise.all(closeStreamsPromises)
 
-    // Set feedback on the DBjob instance and save it
-    DBjob.feedback = feedbackJSON
-    await DBjob.save() // Save the updated job document to MongoDB
+      if (code === 0) {
+        logger.info(`Feedback script completed successfully with exit code ${code}`)
 
-    logger.info(`Feedback data saved to MongoDB for job ${DBjob.uuid}`)
-  } catch (error) {
-    logger.error(
-      `Failed to run the feedback script or save feedback for job ${DBjob.uuid}: ${error}`
-    )
-    throw error // Re-throw the error to propagate up the call chain
-  }
+        // Read and save feedback.json to DBjob
+        const feedbackFilePath = path.join(resultsDir, 'feedback.json')
+        try {
+          const feedbackData = await fs.promises.readFile(feedbackFilePath, 'utf-8')
+          const feedbackJSON = JSON.parse(feedbackData)
+
+          logger.info(
+            `Parsed feedback data for job ${DBjob.uuid}: ${JSON.stringify(feedbackJSON)}`
+          )
+
+          // Update DBjob with feedback and save it
+          DBjob.feedback = feedbackJSON
+          await DBjob.save()
+
+          logger.info(`Feedback data saved to MongoDB for job ${DBjob.uuid}`)
+          resolve()
+        } catch (err) {
+          logger.error(
+            `Failed to read or parse feedback.json for job ${DBjob.uuid}: ${err}`
+          )
+          reject(err)
+        }
+      } else {
+        logger.error(`Feedback script failed with exit code ${code}`)
+        reject(new Error('Feedback script failed. Please see the error log file.'))
+      }
+    })
+  })
 }
 
 const createReadmeFile = async (
