@@ -22,15 +22,8 @@
   },
   "editor.formatOnPaste": true,
   "editor.formatOnSave": true,
-
-  // Pylance settings for Python analysis and linting
   "python.analysis.typeCheckingMode": "basic",  // Type checking mode with Pylance
   "python.analysis.autoImportCompletions": true,  // Auto-import suggestions
-  
-  // Additional linting configuration
-  // "python.linting.enabled": true,  // Enable linting (handled by Pylance now)
-  // "python.linting.pylintEnabled": true,  // Enable Pylint linting if you have Pylint installed
-  // "python.linting.ignorePatterns": ["**/node_modules/**", "**/__pycache__/**"],  // Ignore common patterns
   "python.analysis.diagnosticSeverityOverrides": {
     "reportMissingImports": "warning",
     "reportUndefinedVariable": "error"
