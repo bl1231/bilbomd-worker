@@ -49,6 +49,8 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.9.1
+  - Add feedback analysis sub-step for BilboMD Classic PDB (others will be added later)
 - 1.9.0
   - Add BilboMD SANS capabilities
   - Refactor BullMQ worker code to make it more modular
