@@ -130,8 +130,10 @@ RUN apt-get update && \
     libxcb-keysyms1 libxcb-shape0 libc6 libgcc1 libquadmath0 libstdc++6 libxml2 libtiff5 liblzma5 libgfortran5 libicu70 libharfbuzz0b && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /tmp
-COPY atsas/ATSAS-4.0.1-1-Linux-Ubuntu-22.run .
-COPY atsas/atsas.lic .
+# COPY atsas/ATSAS-4.0.1-1-Linux-Ubuntu-22.run .
+# COPY atsas/atsas.lic .
+RUN wget https://bl1231.als.lbl.gov/pickup/atsas/ATSAS-4.0.1-1-Linux-Ubuntu-22.run -O ATSAS-4.0.1-1-Linux-Ubuntu-22.run
+RUN wget https://bl1231.als.lbl.gov/pickup/atsas/atsas.lic -O atsas.lic
 RUN mkdir /root/.local && chmod +x ATSAS-4.0.1-1-Linux-Ubuntu-22.run && \
     ./ATSAS-4.0.1-1-Linux-Ubuntu-22.run --accept-licenses --auto-answer \
     AutomaticRuntimeDependencyResolution=Yes --root /usr/local/ATSAS-4.0.1 --file-query KeyFilePath=/tmp/atsas.lic \
