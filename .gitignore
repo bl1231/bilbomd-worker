@@ -111,8 +111,10 @@ build
 
 *.zip
 
-test/
+test/data/sans
 test-data/
 *.slurm
 scripts/nersc/workdir
 scripts/nersc/test-scripts
+atsas/*.run
+atsas/*.lic
