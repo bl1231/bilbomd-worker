@@ -62,10 +62,11 @@ ENV PATH="/miniforge3/bin/:${PATH}"
 
 # I was having trouble installing all of these dependencies in one go so
 # lets try this for now.
-RUN conda install --yes --name base -c conda-forge numpy scipy matplotlib
-RUN conda install --yes --name base -c conda-forge pillow numba h5py cython reportlab
-RUN conda install --yes --name base -c conda-forge dbus-python fabio pyfai hdf5plugin
-RUN conda install --yes --name base -c conda-forge mmcif_pdbx svglib python-igraph
+RUN conda install --yes --name base -c conda-forge numpy scipy matplotlib \
+    pillow numba h5py cython reportlab \
+    dbus-python fabio pyfai hdf5plugin \
+    mmcif_pdbx svglib python-igraph && \
+    conda clean -afy
 
 # -----------------------------------------------------------------------------
 # Install BioXTAS
@@ -113,7 +114,7 @@ WORKDIR /tmp
 
 # Pepsi-SANS version 3.0 (statically linked with libstdc++ and libgcc, GLIBC 2.4)
 # Must run on amd64 x86_64 architecture
-# COPY pepsisans/Pepsi-SANS-Linux.zip .
+#COPY pepsisans/Pepsi-SANS-Linux.zip .
 RUN wget https://bl1231.als.lbl.gov/pickup/pepsisans/Pepsi-SANS-Linux.zip -O Pepsi-SANS-Linux.zip
 RUN unzip Pepsi-SANS-Linux.zip && \
     mv Pepsi-SANS /usr/local/bin && \
@@ -122,8 +123,26 @@ RUN unzip Pepsi-SANS-Linux.zip && \
 COPY scripts/sans /usr/local/sans
 
 # -----------------------------------------------------------------------------
+# Install ATSAS
+FROM install-sans-tools AS install-atsas
+RUN apt-get update && \
+    apt-get install -y shared-mime-info libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
+    libxcb-keysyms1 libxcb-shape0 libc6 libgcc1 libquadmath0 libstdc++6 libxml2 libtiff5 liblzma5 libgfortran5 libicu70 libharfbuzz0b && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+WORKDIR /tmp
+# COPY atsas/ATSAS-4.0.1-1-Linux-Ubuntu-22.run .
+# COPY atsas/atsas.lic .
+RUN wget https://bl1231.als.lbl.gov/pickup/atsas/ATSAS-4.0.1-1-Linux-Ubuntu-22.run -O ATSAS-4.0.1-1-Linux-Ubuntu-22.run
+RUN wget https://bl1231.als.lbl.gov/pickup/atsas/atsas.lic -O atsas.lic
+RUN mkdir /root/.local && chmod +x ATSAS-4.0.1-1-Linux-Ubuntu-22.run && \
+    ./ATSAS-4.0.1-1-Linux-Ubuntu-22.run --accept-licenses --auto-answer \
+    AutomaticRuntimeDependencyResolution=Yes --root /usr/local/ATSAS-4.0.1 --file-query KeyFilePath=/tmp/atsas.lic \
+    --confirm-command install && \
+    rm ATSAS-4.0.1-1-Linux-Ubuntu-22.run
+
+# -----------------------------------------------------------------------------
 # Install bilbomd-worker app
-FROM install-sans-tools AS bilbomd-worker
+FROM install-atsas AS bilbomd-worker
 ARG USER_ID
 ARG GROUP_ID
 ARG GITHUB_TOKEN
@@ -167,6 +186,10 @@ COPY --chown=bilbo:bilbomd . .
 # Use the ARG to set the environment variable
 ENV BILBOMD_WORKER_GIT_HASH=${BILBOMD_WORKER_GIT_HASH}
 ENV BILBOMD_WORKER_VERSION=${BILBOMD_WORKER_VERSION}
+
+# set ATSAS environment variables
+ENV ATSAS=/usr/local/ATSAS-4.0.1
+ENV PATH="${ATSAS}/bin:${PATH}"
 
 EXPOSE 3000
 
