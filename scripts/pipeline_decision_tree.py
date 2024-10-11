@@ -131,27 +131,18 @@ def best_chi_square_i(cs_models, multi_state_models):
 
     Returns the index of the best chi-square in cs_models
 
-    Goes through the list and selects the first chi-square that is high error
-      (< 20%) with the previous value
+    Selects the highest cs that is <= 2. If they are all > 2, select the lowest.
     """
     print_debug("Comparing chi-squares of all multistates")
     cs_models_rounded = [round(cs, 2) for cs in cs_models]
     print_debug(cs_models_rounded)
-    csm_err_threshold = 0.2
-    i = 0
+    
     if len(cs_models) == 1:
         best_cs = cs_models[0]
+    elif any (cs < 2 for cs in cs_models):
+        best_cs = max((cs for cs in cs_models if cs < 2))
     else:
-        while i < (len(cs_models) - 1):
-            csm_err = abs(cs_models[i + 1] - cs_models[i]) / cs_models[i]
-            if csm_err <= csm_err_threshold:
-                best_cs = cs_models[i]
-                break
-            elif i == (len(cs_models) - 2):
-                best_cs = min(cs_models)
-                break
-            else:
-                i = i + 1
+        best_cs = min(cs_models)
     multi_states_file = multi_state_models[cs_models.index(best_cs)]
     multi_states_num_i = multi_states_file.find("multi_state_model_")
     multi_states_num = multi_states_file[multi_states_num_i + 18]
