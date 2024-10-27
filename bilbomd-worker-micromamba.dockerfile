@@ -54,13 +54,17 @@ RUN apt-get update && \
 USER mambauser
 
 # Install BioXTAS dependencies
-RUN micromamba install --yes --name base -c conda-forge numpy=1.26.4 scipy=1.13.1 matplotlib \
-    pillow numba h5py cython reportlab \
-    dbus-python fabio pyfai hdf5plugin \
-    mmcif_pdbx svglib python-igraph
+RUN micromamba install --yes --name base -c conda-forge numpy=1.26.4 scipy=1.13.1 matplotlib 
+RUN micromamba install --yes --name base -c conda-forge pillow numba h5py cython reportlab 
+RUN micromamba install --yes --name base -c conda-forge dbus-python fabio pyfai hdf5plugin 
+RUN micromamba install --yes --name base -c conda-forge mmcif_pdbx svglib python-igraph
 # RUN micromamba install --yes --name base pip
 
-USER root
+# Create the directory and set world-writable permissions
+RUN mkdir -p /home/mambauser/.cache/matplotlib && \
+    chmod 777 /home/mambauser/.cache/matplotlib
+
+    USER root
 
 WORKDIR /home/mambauser
 # Download or Copy the BioXTAS RAW master zip file using wget
