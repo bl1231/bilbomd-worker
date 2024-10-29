@@ -112,6 +112,7 @@ build
 *.zip
 
 test/data/sans
+test/parsing
 test-data/
 *.slurm
 scripts/nersc/workdir
