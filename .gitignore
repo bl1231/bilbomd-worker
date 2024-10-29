@@ -114,6 +114,7 @@ build
 test/data/sans
 test/data/6fe8378a-7204-4042-8ea2-e71cebbd5977
 test/data/30feae80-611b-4c3f-8f4a-f33980387441
+test/parsing
 test-data/
 *.slurm
 scripts/nersc/workdir
