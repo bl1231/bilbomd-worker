@@ -1,5 +1,7 @@
 """
-stuff
+rgyr_v_dmax_analysis.py
+
+
 """
 
 import argparse
@@ -42,6 +44,21 @@ def parse_ensemble_size_file(ensemble_file):
                 # print(f"PDB: {pdb_name}, Occurrence: {occurrence}")
     return pdb_occurrences
 
+def extract_complex_chi(ensemble_file):
+    """Extract complex number and chi-square values from ensemble size file."""
+    complex_data = []
+    with open(ensemble_file, "r", encoding="utf-8") as file:
+        for line in file:
+            # Match lines that start with an integer followed by ' | ' and a floating number
+            match = re.match(r"^(\d+)\s*\|\s*([\d\.]+)", line)
+            if match:
+                complex_number = int(match.group(1))
+                chi_square = float(match.group(2))
+                complex_data.append({
+                    "complex_number": complex_number,
+                    "chi_square": chi_square
+                })
+    return complex_data
 
 def collect_pdb_data(foxs_dir):
     """Collect Rgyr, Dmax, and initial size data from PDB files."""
@@ -120,6 +137,14 @@ def build_scatter_data(base_dir):
                 json.dump(scatter_data, json_file, indent=2)
             print(f"Saved scatter data to {ensemble_json}")
 
+            # Extract and save complex number and chi-square values
+            complex_data = extract_complex_chi(ensemble_path)
+            complex_json = os.path.join(
+                root, f"{os.path.splitext(ensemble_file)[0]}_complex.json"
+            )
+            with open(complex_json, "w", encoding="utf-8") as json_file:
+                json.dump(complex_data, json_file, indent=2)
+            print(f"Saved complex data to {complex_json}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
