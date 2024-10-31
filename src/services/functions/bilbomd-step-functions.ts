@@ -948,6 +948,15 @@ const prepareResults = async (
       }
     }
 
+    // Write the DBjob to a JSON file
+    try {
+      const dbJobJsonPath = path.join(resultsDir, 'bilbomd_job.json')
+      await fs.writeFile(dbJobJsonPath, JSON.stringify(DBjob, null, 2), 'utf8')
+      MQjob.log(`DBjob data written to ${dbJobJsonPath}`)
+    } catch (error) {
+      logger.error(`Error writing DBjob JSON file: ${error}`)
+    }
+
     // scripts/pipeline_decision_tree.py
     try {
       await spawnFeedbackScript(DBjob)
