@@ -44,6 +44,7 @@ def parse_ensemble_size_file(ensemble_file):
                 # print(f"PDB: {pdb_name}, Occurrence: {occurrence}")
     return pdb_occurrences
 
+
 def extract_complex_chi(ensemble_file):
     """Extract complex number and chi-square values from ensemble size file."""
     complex_data = []
@@ -54,32 +55,27 @@ def extract_complex_chi(ensemble_file):
             if match:
                 complex_number = int(match.group(1))
                 chi_square = float(match.group(2))
-                complex_data.append({
-                    "complex_number": complex_number,
-                    "chi_square": chi_square
-                })
+                complex_data.append(
+                    {"complex_number": complex_number, "chi_square": chi_square}
+                )
     return complex_data
+
 
 def collect_pdb_data(foxs_dir):
     """Collect Rgyr, Dmax, and initial size data from PDB files."""
-    pdb_data = []
+    pdb_data = {}
 
-    # Traverse through the foxs directory
     for root, _, files in os.walk(foxs_dir):
         for file in files:
             if file.endswith(".pdb"):
                 pdb_file = os.path.join(root, file)
-                # print(f"Processing PDB file: {pdb_file}")
                 pdb_prefix, rgyr, dmax = parse_pdb_file(pdb_file)
                 if pdb_prefix is not None:
-                    pdb_data.append(
-                        {
-                            "pdb_prefix": pdb_prefix,
-                            "rgyr": rgyr,
-                            "dmax": dmax,
-                            "occur": 0.00,
-                        }
-                    )
+                    pdb_data[pdb_prefix] = {
+                        "rgyr": rgyr,
+                        "dmax": dmax,
+                        "pdb": pdb_prefix
+                    }
 
     return pdb_data
 
@@ -88,6 +84,7 @@ def build_scatter_data(base_dir):
     """Build scatter data and save separate CSV and JSON files for each ensemble size file."""
     foxs_dir = os.path.join(base_dir, "foxs")
     multifoxs_dir = os.path.join(base_dir, "multifoxs")
+    # results_dir = os.path.join(base_dir, "multifoxs")
     print(f"Foxs directory: {foxs_dir}")
     print(f"Multifoxs directory: {multifoxs_dir}")
     # Collect PDB data from the foxs directory
@@ -103,48 +100,43 @@ def build_scatter_data(base_dir):
         # Process each ensemble size file separately
         for ensemble_file in ensemble_files:
             print(f"Processing ensemble size file: {ensemble_file}")
+
+            # Extract N from the filename
+            match = re.search(r"ensemble[s]?_size_(\d+)\.txt", ensemble_file)
+            if not match:
+                print(f"Skipping file: {ensemble_file}")
+                continue
+            N = int(match.group(1))
+
             ensemble_path = os.path.join(root, ensemble_file)
             pdb_occurrences = parse_ensemble_size_file(ensemble_path)
 
-            # Update scatter data with sizes from the ensemble file
-            scatter_data = []
-            for pdb_entry in pdb_data:
-                pdb_prefix = pdb_entry["pdb_prefix"]
-                # print(f"PDB prefix: {pdb_prefix}")
-                occur = pdb_occurrences.get(pdb_prefix, 0.00)
-                scatter_data.append(
-                    {
-                        "rgyr": pdb_entry["rgyr"],
-                        "dmax": pdb_entry["dmax"],
-                        "occur": occur,
+            # Update pdb_data to include the "N-state" occurrence data
+            for pdb_prefix, occurrence in pdb_occurrences.items():
+                if pdb_prefix in pdb_data:
+                    pdb_data[pdb_prefix][f"{N}-state"] = occurrence
+                else:
+                    pdb_data[pdb_prefix] = {
+                        "rgyr": None,
+                        "dmax": None,
                         "pdb": pdb_prefix,
+                        f"{N}-state": occurrence
                     }
-                )
 
-            # Save the scatter data to a CSV file
-            ensemble_csv = os.path.join(
-                root, f"{os.path.splitext(ensemble_file)[0]}.csv"
-            )
-            df = pd.DataFrame(scatter_data)
-            df.to_csv(ensemble_csv, index=False)
-            print(f"Saved scatter data to {ensemble_csv}")
+    # Fill missing "N-state" fields with 0.00
+    for pdb_prefix, data in pdb_data.items():
+        for ensemble_file in ensemble_files:
+            match = re.search(r"ensemble[s]?_size_(\d+)\.txt", ensemble_file)
+            if match:
+                N = match.group(1)
+                data.setdefault(f"{N}-state", 0.00)
 
-            # Save the scatter data to a JSON file
-            ensemble_json = os.path.join(
-                root, f"{os.path.splitext(ensemble_file)[0]}.json"
-            )
-            with open(ensemble_json, "w", encoding="utf-8") as json_file:
-                json.dump(scatter_data, json_file, indent=2)
-            print(f"Saved scatter data to {ensemble_json}")
+    # Save the consolidated data to a single JSON file
+    consolidated_json_path = os.path.join(multifoxs_dir, "consolidated_rgyr_dmax_data.json")
+    with open(consolidated_json_path, "w", encoding="utf-8") as json_file:
+        json.dump(list(pdb_data.values()), json_file, indent=2)
+    print(f"Saved consolidated data to {consolidated_json_path}")
 
-            # Extract and save complex number and chi-square values
-            complex_data = extract_complex_chi(ensemble_path)
-            complex_json = os.path.join(
-                root, f"{os.path.splitext(ensemble_file)[0]}_complex.json"
-            )
-            with open(complex_json, "w", encoding="utf-8") as json_file:
-                json.dump(complex_data, json_file, indent=2)
-            print(f"Saved complex data to {complex_json}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
