@@ -1,9 +1,3 @@
-"""
-rgyr_v_dmax_analysis.py
-
-
-"""
-
 import argparse
 import json
 import os
@@ -11,9 +5,7 @@ import re
 
 import pandas as pd
 
-
 os.environ["MKL_SERVICE_FORCE_INTEL"] = "1"
-
 
 def parse_pdb_file(pdb_file):
     """Parse a PDB file to extract Rgyr and Dmax."""
@@ -25,41 +17,31 @@ def parse_pdb_file(pdb_file):
                     rgyr = float(parts[2])
                     dmax = float(parts[3])
                     pdb_prefix = parts[1]
-                    # print(f"Rgyr: {rgyr}, Dmax: {dmax}, PDB prefix: {pdb_prefix}")
                     return pdb_prefix, rgyr, dmax
     return None, None, None
 
 
 def parse_ensemble_size_file(ensemble_file):
-    """Parse an ensemble size file to extract PDB occurrences."""
+    """Parse an ensemble size file to extract PDB occurrences and counts."""
     pdb_occurrences = {}
+    pdb_counts = {}
+
     with open(ensemble_file, "r", encoding="utf-8") as file:
         for line in file:
-            # Adjust the regex to capture only the filename
             match = re.search(r"([^/\\]+)\.pdb\.dat\s+\(([\d\.]+)\)", line)
             if match:
                 pdb_name = match.group(1).upper()
                 occurrence = float(match.group(2))
-                pdb_occurrences[pdb_name] = occurrence
-                # print(f"PDB: {pdb_name}, Occurrence: {occurrence}")
-    return pdb_occurrences
-
-
-def extract_complex_chi(ensemble_file):
-    """Extract complex number and chi-square values from ensemble size file."""
-    complex_data = []
-    with open(ensemble_file, "r", encoding="utf-8") as file:
-        for line in file:
-            # Match lines that start with an integer followed by ' | ' and a floating number
-            match = re.match(r"^(\d+)\s*\|\s*([\d\.]+)", line)
-            if match:
-                complex_number = int(match.group(1))
-                chi_square = float(match.group(2))
-                complex_data.append(
-                    {"complex_number": complex_number, "chi_square": chi_square}
-                )
-    return complex_data
-
+                print(f"PDB: {pdb_name}, Occurrence: {occurrence}")
+                
+                # Count the number of times each PDB is found
+                pdb_counts[pdb_name] = pdb_counts.get(pdb_name, 0) + 1
+                
+                # Assign the first non-zero occurrence percentage
+                if pdb_name not in pdb_occurrences or pdb_occurrences[pdb_name] == 0.0:
+                    pdb_occurrences[pdb_name] = occurrence
+                
+    return pdb_occurrences, pdb_counts
 
 def collect_pdb_data(foxs_dir):
     """Collect Rgyr, Dmax, and initial size data from PDB files."""
@@ -79,14 +61,13 @@ def collect_pdb_data(foxs_dir):
 
     return pdb_data
 
-
 def build_scatter_data(base_dir):
     """Build scatter data and save separate CSV and JSON files for each ensemble size file."""
     foxs_dir = os.path.join(base_dir, "foxs")
     multifoxs_dir = os.path.join(base_dir, "multifoxs")
-    # results_dir = os.path.join(base_dir, "multifoxs")
     print(f"Foxs directory: {foxs_dir}")
     print(f"Multifoxs directory: {multifoxs_dir}")
+
     # Collect PDB data from the foxs directory
     pdb_data = collect_pdb_data(foxs_dir)
 
@@ -109,34 +90,41 @@ def build_scatter_data(base_dir):
             N = int(match.group(1))
 
             ensemble_path = os.path.join(root, ensemble_file)
-            pdb_occurrences = parse_ensemble_size_file(ensemble_path)
+            pdb_occurrences, pdb_counts = parse_ensemble_size_file(ensemble_path)
 
-            # Update pdb_data to include the "N-state" occurrence data
+            # Update pdb_data to include occurrence percentages and model counts
             for pdb_prefix, occurrence in pdb_occurrences.items():
+                percent_key = f"percent-in-{N}-state-models"
+                count_key = f"{N}-state-model-count"
+                
                 if pdb_prefix in pdb_data:
-                    pdb_data[pdb_prefix][f"{N}-state"] = occurrence
+                    pdb_data[pdb_prefix][percent_key] = occurrence
+                    pdb_data[pdb_prefix][count_key] = pdb_counts[pdb_prefix]
                 else:
                     pdb_data[pdb_prefix] = {
                         "rgyr": None,
                         "dmax": None,
                         "pdb": pdb_prefix,
-                        f"{N}-state": occurrence
+                        percent_key: occurrence,
+                        count_key: pdb_counts[pdb_prefix]
                     }
 
-    # Fill missing "N-state" fields with 0.00
+    # Fill missing fields for each ensemble size
     for pdb_prefix, data in pdb_data.items():
         for ensemble_file in ensemble_files:
             match = re.search(r"ensemble[s]?_size_(\d+)\.txt", ensemble_file)
             if match:
                 N = match.group(1)
-                data.setdefault(f"{N}-state", 0.00)
+                percent_key = f"percent-in-{N}-state-models"
+                count_key = f"{N}-state-model-count"
+                data.setdefault(percent_key, 0.0)
+                data.setdefault(count_key, 0)
 
     # Save the consolidated data to a single JSON file
     consolidated_json_path = os.path.join(multifoxs_dir, "consolidated_rgyr_dmax_data.json")
     with open(consolidated_json_path, "w", encoding="utf-8") as json_file:
         json.dump(list(pdb_data.values()), json_file, indent=2)
     print(f"Saved consolidated data to {consolidated_json_path}")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
