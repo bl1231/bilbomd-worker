@@ -32,7 +32,7 @@ def parse_ensemble_size_file(ensemble_file):
             if match:
                 pdb_name = match.group(1).upper()
                 occurrence = float(match.group(2))
-                print(f"PDB: {pdb_name}, Occurrence: {occurrence}")
+                # print(f"PDB: {pdb_name}, Occurrence: {occurrence}")
                 
                 # Count the number of times each PDB is found
                 pdb_counts[pdb_name] = pdb_counts.get(pdb_name, 0) + 1
@@ -65,8 +65,8 @@ def build_scatter_data(base_dir):
     """Build scatter data and save separate CSV and JSON files for each ensemble size file."""
     foxs_dir = os.path.join(base_dir, "foxs")
     multifoxs_dir = os.path.join(base_dir, "multifoxs")
-    print(f"Foxs directory: {foxs_dir}")
-    print(f"Multifoxs directory: {multifoxs_dir}")
+    print(f"FoXS directory: {foxs_dir}")
+    print(f"MultiFoXS directory: {multifoxs_dir}")
 
     # Collect PDB data from the foxs directory
     pdb_data = collect_pdb_data(foxs_dir)
@@ -115,7 +115,7 @@ def build_scatter_data(base_dir):
             match = re.search(r"ensemble[s]?_size_(\d+)\.txt", ensemble_file)
             if match:
                 N = match.group(1)
-                percent_key = f"percent-in-{N}-state-models"
+                percent_key = f"percent-of-{N}-state-models"
                 count_key = f"{N}-state-model-count"
                 data.setdefault(percent_key, 0.0)
                 data.setdefault(count_key, 0)
