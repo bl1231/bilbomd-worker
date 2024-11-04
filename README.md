@@ -49,6 +49,8 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.9.3 (11/04/2024)
+  - Changes required to migrate from CJS to ESM
 - 1.9.2
   - Update dependencies
 - 1.9.1
