@@ -33,7 +33,7 @@ import {
 import { updateStepStatus } from './mongo-utils.js'
 
 const execPromise = promisify(exec)
-const TEMPLATES = '../../templates/bilbomd'
+const TEMPLATES = '/app/build/templates/bilbomd'
 
 const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
 const FOXS_BIN = process.env.FOXS ?? '/usr/bin/foxs'
