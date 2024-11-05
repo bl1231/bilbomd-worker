@@ -24,7 +24,7 @@ fi
 # Define base directories
 BASE_DIR=${CFS}/${PROJECT}/bilbomd
 UPLOAD_DIR=${BASE_DIR}/${ENV_DIR}/uploads/${UUID}
-WORKDIR=${PSCRATCH}/bilbomd/${UUID}
+WORKDIR=${PSCRATCH}/bilbomd/${ENV_DIR}/${UUID}
 
 echo "Copying results back to CFS..."
 cp -nR $WORKDIR/* $UPLOAD_DIR
