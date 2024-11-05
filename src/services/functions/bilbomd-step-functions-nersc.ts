@@ -133,6 +133,16 @@ const submitBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob): Promise<string
     const jobID = submitResultObject.jobid
     logger.info(`JOBID: ${jobID}`)
 
+    // Populate the `nersc` field in the `DBjob`
+    DBjob.nersc = {
+      jobid: jobID,
+      state: 'PENDING',
+      qos: undefined,
+      time_submitted: new Date(),
+      time_started: undefined,
+      time_completed: undefined
+    }
+
     await updateJobStatus(DBjob, stepName, 'Success', `NERSC JobID ${jobID}`)
     await MQjob.log('end nersc submit slurm batch')
     return jobID
