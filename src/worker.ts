@@ -8,7 +8,7 @@ import { createBilboMdWorker } from './workers/bilboMdWorker.js'
 import { createPdb2CrdWorker } from './workers/pdb2CrdWorker.js'
 import { createWebhooksWorker } from './workers/webhooksWorker.js'
 import { checkNERSC } from './workers/workerControl.js'
-import { monitorAndCleanupJobs } from 'workers/bilboMdNerscJobMonitor.js'
+import { monitorAndCleanupJobs } from './workers/bilboMdNerscJobMonitor.js'
 
 dotenv.config()
 
