@@ -52,7 +52,7 @@ const monitorAndCleanupJobs = async () => {
   }
 }
 
-export const fetchNERSCJobState = async (jobID: string) => {
+const fetchNERSCJobState = async (jobID: string) => {
   const url = `${config.nerscBaseAPI}/compute/jobs/perlmutter/${jobID}?sacct=true`
   logger.info(`Fetching state for NERSC job: ${jobID} from URL: ${url}`)
 
@@ -72,8 +72,8 @@ export const fetchNERSCJobState = async (jobID: string) => {
       logger.info(`Job Details for ${jobID}: ${JSON.stringify(jobDetails, null, 2)}`)
 
       return {
-        state: jobDetails.state,
-        qos: jobDetails.qos,
+        state: jobDetails.state || null,
+        qos: jobDetails.qos || null,
         time_submitted: jobDetails.submit ? new Date(jobDetails.submit) : null,
         time_started: jobDetails.start ? new Date(jobDetails.start) : null,
         time_completed: jobDetails.end ? new Date(jobDetails.end) : null
