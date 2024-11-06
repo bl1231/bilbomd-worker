@@ -1200,5 +1200,10 @@ export {
   prepareResults,
   handleError,
   generateDCD2PDBInpFile,
-  spawnCharmm
+  spawnCharmm,
+  getNumEnsembles,
+  extractPdbPaths,
+  concatenateAndSaveAsEnsemble,
+  spawnFeedbackScript,
+  createReadmeFile
 }

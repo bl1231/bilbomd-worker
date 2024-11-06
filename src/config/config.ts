@@ -11,11 +11,13 @@ const getEnvVar = (name: string): string => {
 
 export const config = {
   sendEmailNotifications: process.env.SEND_EMAIL_NOTIFICATIONS === 'true',
+  bilbomdUrl: process.env.BILBOMD_URL,
   runOnNERSC: process.env.USE_NERSC === 'true',
   nerscBaseAPI: getEnvVar('SFAPI_URL'),
   nerscScriptDir: getEnvVar('SCRIPT_DIR'),
   nerscUploadDir: getEnvVar('UPLOAD_DIR'),
   nerscWorkDir: getEnvVar('WORK_DIR'),
+  uploadDir: getEnvVar('DATA_VOL'),
   scripts: {
     prepareSlurmScript: getEnvVar('PREPARE_SLURM_SCRIPT'),
     copyFromScratchToCFSScript: getEnvVar('CP2CFS_SCRIPT'),
