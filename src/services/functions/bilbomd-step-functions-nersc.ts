@@ -324,5 +324,9 @@ export {
   monitorBilboMDJob,
   copyBilboMDResults,
   prepareBilboMDResults,
-  sendBilboMDEmail
+  sendBilboMDEmail,
+  isBilboMDCRDJob,
+  isBilboMDPDBJob,
+  isBilboMDAutoJob,
+  isBilboMDAlphaFoldJob
 }
