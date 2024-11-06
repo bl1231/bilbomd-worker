@@ -1,11 +1,11 @@
 import { Job } from 'bullmq'
 import { logger } from '../helpers/loggers.js'
 import { config } from '../config/config.js'
-import { processBilboMDAutoJob } from '../services/process/bilbomd-auto.js'
-import { processBilboMDCRDJob } from '../services/process/bilbomd-crd.js'
-import { processBilboMDJobNersc } from '../services/process/bilbomd-nersc.js'
-import { processBilboMDPDBJob } from '../services/process/bilbomd-pdb.js'
-import { processBilboMDSANSJob } from '../services/process/bilbomd-sans.js'
+import { processBilboMDAutoJob } from '../services/pipelines/bilbomd-auto.js'
+import { processBilboMDCRDJob } from '../services/pipelines/bilbomd-crd.js'
+import { processBilboMDJobNersc } from '../services/pipelines/bilbomd-nersc.js'
+import { processBilboMDPDBJob } from '../services/pipelines/bilbomd-pdb.js'
+import { processBilboMDSANSJob } from '../services/pipelines/bilbomd-sans.js'
 import { WorkerJob } from 'types/jobtypes.js'
 
 export const bilboMdHandler = async (job: Job<WorkerJob>) => {

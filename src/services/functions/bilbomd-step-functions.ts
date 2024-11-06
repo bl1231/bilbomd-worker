@@ -19,7 +19,10 @@ import {
 } from '@bl1231/bilbomd-mongodb-schema'
 import { sendJobCompleteEmail } from '../../helpers/mailer.js'
 import { exec } from 'node:child_process'
-import { createPdb2CrdCharmmInpFiles, spawnPdb2CrdCharmm } from '../process/pdb-to-crd.js'
+import {
+  createPdb2CrdCharmmInpFiles,
+  spawnPdb2CrdCharmm
+} from '../pipelines/pdb-to-crd.js'
 import {
   CharmmParams,
   CharmmDCD2PDBParams,
