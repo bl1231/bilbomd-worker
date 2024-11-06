@@ -8,6 +8,7 @@ import { createBilboMdWorker } from './workers/bilboMdWorker.js'
 import { createPdb2CrdWorker } from './workers/pdb2CrdWorker.js'
 import { createWebhooksWorker } from './workers/webhooksWorker.js'
 import { checkNERSC } from './workers/workerControl.js'
+import { monitorAndCleanupJobs } from 'workers/bilboMdNerscJobMonitor.js'
 
 dotenv.config()
 
@@ -50,7 +51,7 @@ const webhooksWorkerOptions: WorkerOptions = {
 }
 
 const startWorkers = async () => {
-  const systemName = config.runOnNERSC ? 'NERSC' : 'Hyperion' // Set system name based on the config
+  const systemName = config.runOnNERSC ? 'NERSC' : 'Hyperion'
   logger.info(`Attempting to start workers on ${systemName}...`)
 
   // Create workers only if they are not already initialized
@@ -115,6 +116,17 @@ if (config.runOnNERSC) {
       }
     }
   }, 300000) // Check every 300 seconds i.e. 5 minutes
+
+  // Start monitoring and cleanup process
+  logger.info('Starting the monitoring and cleanup process...')
+  setInterval(async () => {
+    try {
+      await monitorAndCleanupJobs()
+      logger.info('Monitoring and cleanup completed successfully.')
+    } catch (error) {
+      logger.error(`Monitoring and cleanup process failed: ${error.message}`)
+    }
+  }, 60000) // Run every 1 minutes
 }
 
 // Start the workers initially
