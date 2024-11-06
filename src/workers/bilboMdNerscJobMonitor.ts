@@ -72,7 +72,10 @@ const monitorAndCleanupJobs = async () => {
           await job.save()
 
           // If job is no longer pending or running, perform cleanup
-          if (!['PENDING', 'RUNNING'].includes(nerscState.state)) {
+          if (
+            !['PENDING', 'RUNNING'].includes(nerscState.state) &&
+            job.status !== 'Completed'
+          ) {
             logger.info(
               `Job: ${job.nersc.jobid} state: ${nerscState.state}. Initiating cleanup...`
             )
