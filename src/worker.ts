@@ -122,7 +122,7 @@ if (config.runOnNERSC) {
   setInterval(async () => {
     try {
       await monitorAndCleanupJobs()
-      logger.info('Monitoring and cleanup completed successfully.')
+      // logger.info('Monitoring and cleanup completed successfully.')
     } catch (error) {
       logger.error(`Monitoring and cleanup process failed: ${error.message}`)
     }

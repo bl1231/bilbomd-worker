@@ -369,5 +369,7 @@ export {
   submitJobToNersc,
   monitorTaskAtNERSC,
   monitorJobAtNERSC,
-  getSlurmOutFile
+  getSlurmOutFile,
+  getSlurmStatusFile,
+  calculateProgress
 }

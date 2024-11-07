@@ -20,7 +20,9 @@ import { JobStatusOutputSacct } from '../types/nersc.js'
 import { updateStepStatus } from '../services/functions/mongo-utils.js'
 import {
   executeNerscScript,
-  monitorTaskAtNERSC
+  monitorTaskAtNERSC,
+  calculateProgress,
+  getSlurmStatusFile
 } from '../services/functions/nersc-api-functions.js'
 import {
   isBilboMDPDBJob,
@@ -49,12 +51,11 @@ const monitorAndCleanupJobs = async () => {
   try {
     // Get all jobs with a defined NERSC state
     const jobs = await DBJob.find({ 'nersc.state': { $ne: null } }).exec()
+    logger.info(`Found ${jobs.length} jobs with NERSC info.`)
 
     for (const job of jobs) {
       try {
-        logger.info(
-          `Checking NERSC job ${job.nersc.jobid}, current state: ${job.nersc.state}`
-        )
+        logger.info(`NERSC Job: ${job.nersc.jobid} State: ${job.nersc.state}`)
 
         // Fetch the current state of the NERSC job
         const nerscState = await fetchNERSCJobState(job.nersc.jobid)
@@ -70,6 +71,9 @@ const monitorAndCleanupJobs = async () => {
 
           // Save the updated job document
           await job.save()
+
+          // Update the job steps based on the slurm status file
+          await updateJobSteps(job)
 
           // If job is no longer pending or running, perform cleanup
           if (
@@ -98,7 +102,7 @@ const monitorAndCleanupJobs = async () => {
 
 const fetchNERSCJobState = async (jobID: string) => {
   const url = `${config.nerscBaseAPI}/compute/jobs/perlmutter/${jobID}?sacct=true`
-  logger.info(`Fetching state for NERSC job: ${jobID} from URL: ${url}`)
+  // logger.info(`Fetching state for NERSC job: ${jobID} from URL: ${url}`)
 
   const token = await ensureValidToken() // Fetch or refresh the token
   const headers = {
@@ -509,6 +513,33 @@ const updateJobStatus = async (
     message
   }
   await updateStepStatus(DBJob, stepName, stepStatus)
+}
+
+const updateJobSteps = async (DBJob: IJob) => {
+  const UUID = DBJob.uuid
+  const contents: string = await getSlurmStatusFile(UUID)
+  const lines = contents.split('\n')
+
+  lines.forEach((line) => {
+    const [step, status] = line.split(':').map((part) => part.trim())
+    if (step in DBJob.steps) {
+      const key = step as keyof IBilboMDSteps
+      DBJob.steps[key] = {
+        status: status,
+        message: status
+      }
+    }
+  })
+
+  try {
+    await DBJob.save()
+    const progress = calculateProgress(DBJob.steps)
+    logger.info(`Progress for ${DBJob._id}: ${progress}`)
+    // await MQjob.updateProgress(progress)
+  } catch (error) {
+    logger.error(`Unable to save job status for ${DBJob._id}: ${error}`)
+    throw error
+  }
 }
 
 const copyFiles = async ({
