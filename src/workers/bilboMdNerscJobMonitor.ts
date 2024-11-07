@@ -114,13 +114,19 @@ const fetchNERSCJobState = async (jobID: string) => {
 
       // Log the entire jobDetails object for debugging
       // logger.info(`Job Details for ${jobID}: ${JSON.stringify(jobDetails, null, 2)}`)
+      const parseDate = (dateStr: string | undefined): Date | null => {
+        const parsedDate = dateStr ? new Date(dateStr) : null
+        return parsedDate instanceof Date && !isNaN(parsedDate.getTime())
+          ? parsedDate
+          : null
+      }
 
       return {
         state: jobDetails.state || null,
         qos: jobDetails.qos || null,
-        time_submitted: jobDetails.submit ? new Date(jobDetails.submit) : null,
-        time_started: jobDetails.start ? new Date(jobDetails.start) : null,
-        time_completed: jobDetails.end ? new Date(jobDetails.end) : null
+        time_submitted: parseDate(jobDetails.submit),
+        time_started: parseDate(jobDetails.start),
+        time_completed: parseDate(jobDetails.end)
       }
     } else {
       logger.warn(`No output received for NERSC job: ${jobID}`)
