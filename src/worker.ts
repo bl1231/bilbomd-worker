@@ -1,13 +1,13 @@
 import * as dotenv from 'dotenv'
 import express from 'express'
-import { connectDB } from './helpers/db'
+import { connectDB } from './helpers/db.js'
 import { Worker, WorkerOptions } from 'bullmq'
-import { logger } from './helpers/loggers'
-import { config } from './config/config'
-import { createBilboMdWorker } from './workers/bilboMdWorker'
-import { createPdb2CrdWorker } from './workers/pdb2CrdWorker'
-import { createWebhooksWorker } from './workers/webhooksWorker'
-import { checkNERSC } from './workers/workerControl'
+import { logger } from './helpers/loggers.js'
+import { config } from './config/config.js'
+import { createBilboMdWorker } from './workers/bilboMdWorker.js'
+import { createPdb2CrdWorker } from './workers/pdb2CrdWorker.js'
+import { createWebhooksWorker } from './workers/webhooksWorker.js'
+import { checkNERSC } from './workers/workerControl.js'
 
 dotenv.config()
 

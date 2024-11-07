@@ -1,6 +1,6 @@
-import { pdb2CrdHandler } from '../workerHandlers/pdb2CrdHandler'
+import { pdb2CrdHandler } from '../workerHandlers/pdb2CrdHandler.js'
 import { Worker, WorkerOptions } from 'bullmq'
-import { logger } from '../helpers/loggers'
+import { logger } from '../helpers/loggers.js'
 
 let pdb2CrdActiveJobsCount = 0
 

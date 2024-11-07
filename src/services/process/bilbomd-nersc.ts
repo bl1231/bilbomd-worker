@@ -1,7 +1,7 @@
 import { Job as BullMQJob } from 'bullmq'
 import { Job } from '@bl1231/bilbomd-mongodb-schema'
-import { logger } from '../../helpers/loggers'
-import { initializeJob } from '../functions/job-utils'
+import { logger } from '../../helpers/loggers.js'
+import { initializeJob } from '../functions/job-utils.js'
 import {
   makeBilboMDSlurm,
   submitBilboMDSlurm,
@@ -9,7 +9,7 @@ import {
   prepareBilboMDResults,
   sendBilboMDEmail,
   copyBilboMDResults
-} from '../functions/bilbomd-step-functions-nersc'
+} from '../functions/bilbomd-step-functions-nersc.js'
 
 const processBilboMDJobNersc = async (MQjob: BullMQJob) => {
   try {

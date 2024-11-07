@@ -6,10 +6,10 @@ import {
   runMolecularDynamics,
   runFoxs,
   runMultiFoxs
-} from '../functions/bilbomd-step-functions'
-import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc'
-import { initializeJob, cleanupJob } from '../functions/job-utils'
-import { runSingleFoXS } from '../functions/foxs-analysis'
+} from '../functions/bilbomd-step-functions.js'
+import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc.js'
+import { initializeJob, cleanupJob } from '../functions/job-utils.js'
+import { runSingleFoXS } from '../functions/foxs-analysis.js'
 
 const processBilboMDJobTest = async (MQjob: BullMQJob) => {
   const foundJob = await BilboMdCRDJob.findOne({ _id: MQjob.data.jobid })

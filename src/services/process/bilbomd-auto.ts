@@ -8,10 +8,10 @@ import {
   runMultiFoxs,
   runPaeToConstInp,
   runAutoRg
-} from '../functions/bilbomd-step-functions'
-import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc'
-import { initializeJob, cleanupJob } from '../functions/job-utils'
-import { runSingleFoXS } from '../functions/foxs-analysis'
+} from '../functions/bilbomd-step-functions.js'
+import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc.js'
+import { initializeJob, cleanupJob } from '../functions/job-utils.js'
+import { runSingleFoXS } from '../functions/foxs-analysis.js'
 
 const processBilboMDAutoJobTest = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(1)

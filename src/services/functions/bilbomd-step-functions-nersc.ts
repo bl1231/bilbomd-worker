@@ -1,4 +1,4 @@
-import { config } from '../../config/config'
+import { config } from '../../config/config.js'
 import { Job as BullMQJob } from 'bullmq'
 import {
   IJob,
@@ -9,16 +9,16 @@ import {
   IBilboMDAlphaFoldJob,
   IBilboMDSteps
 } from '@bl1231/bilbomd-mongodb-schema'
-import { logger } from '../../helpers/loggers'
-import { updateStepStatus } from './mongo-utils'
+import { logger } from '../../helpers/loggers.js'
+import { updateStepStatus } from './mongo-utils.js'
 import {
   executeNerscScript,
   submitJobToNersc,
   monitorTaskAtNERSC,
   monitorJobAtNERSC
-} from './nersc-api-functions'
-import { prepareResults } from './bilbomd-step-functions'
-import { cleanupJob } from './job-utils'
+} from './nersc-api-functions.js'
+import { prepareResults } from './bilbomd-step-functions.js'
+import { cleanupJob } from './job-utils.js'
 
 interface INerscTaskResult {
   id: string

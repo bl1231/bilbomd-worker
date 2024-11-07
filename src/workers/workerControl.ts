@@ -1,6 +1,6 @@
 import { Worker } from 'bullmq'
-import { logger } from '../helpers/loggers'
-import { ensureValidToken } from '../services/functions/nersc-api-token-functions'
+import { logger } from '../helpers/loggers.js'
+import { ensureValidToken } from '../services/functions/nersc-api-token-functions.js'
 
 // Define types for clarity
 type WorkerInfo = {

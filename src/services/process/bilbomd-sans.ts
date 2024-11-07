@@ -5,16 +5,16 @@ import {
   runMinimize,
   runHeat,
   runMolecularDynamics
-} from '../functions/bilbomd-step-functions'
+} from '../functions/bilbomd-step-functions.js'
 import {
   extractPDBFilesFromDCD,
   remediatePDBFiles,
   runPepsiSANSOnPDBFiles,
   runGASANS,
   prepareBilboMDSANSResults
-} from '../functions/bilbomd-sans-functions'
+} from '../functions/bilbomd-sans-functions.js'
 // import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc'
-import { initializeJob, cleanupJob } from '../functions/job-utils'
+import { initializeJob, cleanupJob } from '../functions/job-utils.js'
 
 const processBilboMDSANSJob = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(1)

@@ -1,6 +1,6 @@
 import Handlebars from 'handlebars'
-import { logger } from '../../helpers/loggers'
-import { config } from '../../config/config'
+import { logger } from '../../helpers/loggers.js'
+import { config } from '../../config/config.js'
 import { spawn, ChildProcess } from 'node:child_process'
 import { promisify } from 'util'
 import fs from 'fs-extra'
@@ -17,9 +17,9 @@ import {
   IBilboMDAlphaFoldJob,
   IBilboMDSANSJob
 } from '@bl1231/bilbomd-mongodb-schema'
-import { sendJobCompleteEmail } from '../../helpers/mailer'
+import { sendJobCompleteEmail } from '../../helpers/mailer.js'
 import { exec } from 'node:child_process'
-import { createPdb2CrdCharmmInpFiles, spawnPdb2CrdCharmm } from '../process/pdb-to-crd'
+import { createPdb2CrdCharmmInpFiles, spawnPdb2CrdCharmm } from '../process/pdb-to-crd.js'
 import {
   CharmmParams,
   CharmmDCD2PDBParams,
@@ -29,11 +29,11 @@ import {
   CharmmMDParams,
   FoxsParams,
   FileCopyParams
-} from '../../types/index'
-import { updateStepStatus } from './mongo-utils'
+} from '../../types/index.js'
+import { updateStepStatus } from './mongo-utils.js'
 
 const execPromise = promisify(exec)
-const TEMPLATES = path.resolve(__dirname, '../../templates/bilbomd')
+const TEMPLATES = '/app/build/templates/bilbomd'
 
 const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
 const FOXS_BIN = process.env.FOXS ?? '/usr/bin/foxs'

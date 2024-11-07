@@ -1,13 +1,13 @@
 import path from 'path'
 import fs from 'fs-extra'
-import { logger } from '../../helpers/loggers'
+import { logger } from '../../helpers/loggers.js'
 import { promisify } from 'util'
 import { IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
 import { IJob, IBilboMDSANSJob } from '@bl1231/bilbomd-mongodb-schema'
-import { updateStepStatus } from './mongo-utils'
-import { generateDCD2PDBInpFile } from './bilbomd-step-functions'
+import { updateStepStatus } from './mongo-utils.js'
+import { generateDCD2PDBInpFile } from './bilbomd-step-functions.js'
 import { spawn, ChildProcess, exec } from 'node:child_process'
-import { CharmmParams } from '../../types/index'
+import { CharmmParams } from '../../types/index.js'
 
 const execPromise = promisify(exec)
 

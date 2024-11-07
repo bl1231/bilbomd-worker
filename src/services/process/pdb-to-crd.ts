@@ -1,6 +1,6 @@
 import { Job as BullMQJob } from 'bullmq'
 import { Job } from '@bl1231/bilbomd-mongodb-schema'
-import { logger } from '../../helpers/loggers'
+import { logger } from '../../helpers/loggers.js'
 import fs from 'fs-extra'
 import path from 'path'
 import { spawn } from 'node:child_process'

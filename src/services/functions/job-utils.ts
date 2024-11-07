@@ -1,8 +1,8 @@
 import { User, IJob } from '@bl1231/bilbomd-mongodb-schema'
 import { Job as BullMQJob } from 'bullmq'
-import { logger } from '../../helpers/loggers'
-import { sendJobCompleteEmail } from '../../helpers/mailer'
-import { config } from '../../config/config'
+import { logger } from '../../helpers/loggers.js'
+import { sendJobCompleteEmail } from '../../helpers/mailer.js'
+import { config } from '../../config/config.js'
 
 const BILBOMD_URL = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
 
