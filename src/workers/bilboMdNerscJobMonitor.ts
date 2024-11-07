@@ -515,29 +515,37 @@ const updateJobStatus = async (
   await updateStepStatus(DBJob, stepName, stepStatus)
 }
 
-const updateJobSteps = async (DBJob: IJob) => {
-  const UUID = DBJob.uuid
-  const contents: string = await getSlurmStatusFile(UUID)
-  const lines = contents.split('\n')
-
-  lines.forEach((line) => {
-    const [step, status] = line.split(':').map((part) => part.trim())
-    if (step in DBJob.steps) {
-      const key = step as keyof IBilboMDSteps
-      DBJob.steps[key] = {
-        status: status,
-        message: status
-      }
-    }
-  })
-
+const updateJobSteps = async (DBJob: IJob): Promise<void> => {
   try {
+    const UUID = DBJob.uuid
+    const contents: string = await getSlurmStatusFile(UUID)
+    const lines = contents.split('\n').filter(Boolean) // Filter out empty lines
+
+    // Update steps from the status file
+    const updatedSteps = lines.reduce(
+      (acc, line) => {
+        const [step, status] = line.split(':').map((part) => part.trim())
+        if (step in DBJob.steps) {
+          const key = step as keyof IBilboMDSteps
+          acc[key] = { status, message: status }
+        }
+        return acc
+      },
+      { ...DBJob.steps } as IBilboMDSteps
+    )
+
+    // Apply the updated steps to the job
+    DBJob.steps = updatedSteps
     await DBJob.save()
+
+    // Calculate and log progress
     const progress = calculateProgress(DBJob.steps)
+    DBJob.progress = progress // Ensure progress is updated in the Job schema
+    await DBJob.save() // Save the updated progress
+
     logger.info(`Progress for ${DBJob._id}: ${progress}`)
-    // await MQjob.updateProgress(progress)
   } catch (error) {
-    logger.error(`Unable to save job status for ${DBJob._id}: ${error}`)
+    logger.error(`Unable to update job status for ${DBJob._id}: ${error}`)
     throw error
   }
 }
