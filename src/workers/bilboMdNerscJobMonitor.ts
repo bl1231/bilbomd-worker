@@ -71,7 +71,13 @@ const monitorAndCleanupJobs = async () => {
 
           // Save the updated job document
           await job.save()
-
+          // Update nersc_job_status
+          await updateJobStatus(
+            job,
+            'nersc_job_status',
+            nerscState.state,
+            `NERSC job status: ${nerscState.state}`
+          )
           // Update the job steps based on the slurm status file
           await updateJobSteps(job)
 
@@ -543,7 +549,7 @@ const updateJobSteps = async (DBJob: IJob): Promise<void> => {
     DBJob.progress = progress // Ensure progress is updated in the Job schema
     await DBJob.save() // Save the updated progress
 
-    logger.info(`Progress for ${DBJob._id}: ${progress}`)
+    logger.info(`Progress for ${UUID}: ${progress}`)
   } catch (error) {
     logger.error(`Unable to update job status for ${DBJob._id}: ${error}`)
     throw error
