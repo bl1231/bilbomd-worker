@@ -52,11 +52,9 @@ const monitorAndCleanupJobs = async () => {
   try {
     // Get all jobs with a defined NERSC state
     const jobs: IJob[] = await DBJob.find({ 'nersc.state': { $ne: null } }).exec()
-    // logger.info(`Found ${jobs.length} jobs with NERSC info.`)
 
     for (const job of jobs) {
       const jobId = job.nersc?.jobid
-      // const currentState = job.nersc?.state
 
       if (!jobId) {
         logger.warn(`Job ${job.uuid} has no NERSC job ID.`)
@@ -64,8 +62,6 @@ const monitorAndCleanupJobs = async () => {
       }
 
       try {
-        // logger.info(`Monitoring NERSC job ${jobId}, current state: ${currentState}`)
-
         // Fetch the current state from NERSC via SFAPI
         const nerscState = await fetchNERSCJobState(jobId)
 
@@ -91,11 +87,29 @@ const monitorAndCleanupJobs = async () => {
 
         // If job is no longer PENDING or RUNNING, perform cleanup
         if (shouldCleanupJob(job)) {
-          logger.info(
-            `Job ${job.nersc.jobid} state: ${job.nersc.state}. Initiating cleanup...`
+          // Check if cleanup is already in progress
+          const updatedJob = await DBJob.findOneAndUpdate(
+            { _id: job._id, cleanup_in_progress: false }, // Check if cleanup is not already in progress
+            { cleanup_in_progress: true }, // Set the flag atomically
+            { new: true } // Return the updated job document
           )
-          await performJobCleanup(job)
-          logger.info(`Cleanup complete for job ${job.nersc.jobid}.`)
+
+          if (!updatedJob) {
+            logger.info(`Cleanup already in progress for job ${jobId}. Skipping.`)
+            continue // Skip to the next job
+          }
+
+          try {
+            logger.info(
+              `Job ${updatedJob.nersc.jobid} state: ${updatedJob.nersc.state}. Initiating cleanup...`
+            )
+            await performJobCleanup(updatedJob)
+            logger.info(`Cleanup complete for job ${updatedJob.nersc.jobid}.`)
+          } finally {
+            // Ensure the flag is reset regardless of success or failure
+            updatedJob.cleanup_in_progress = false
+            await updatedJob.save()
+          }
         }
       } catch (error) {
         logger.error(`Error monitoring job ${jobId}: ${error.message}`)
