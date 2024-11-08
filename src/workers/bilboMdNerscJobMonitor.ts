@@ -85,7 +85,7 @@ const monitorAndCleanupJobs = async () => {
           await updateJobStepsFromSlurmStatusFile(job)
 
           // Calculate progress
-          const progress = calculateProgress(job)
+          const progress = await calculateProgress(job)
           logger.info(`Progress for ${job.uuid}: ${progress}`)
           // job.progress = progress
           // await job.save()
@@ -524,7 +524,7 @@ const cleanupJob = async (DBjob: IJob, message: EmailMessage): Promise<void> => 
   }
 }
 
-const calculateProgress = (job: IJob): number => {
+const calculateProgress = async (job: IJob): Promise<number> => {
   const steps = Object.values(job.steps).filter(
     (step) => step && typeof step === 'object' && 'status' in step
   )
