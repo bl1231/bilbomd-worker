@@ -264,16 +264,30 @@ const copyBilboMDResults = async (DBjob: IJob) => {
       'Running',
       'Copying results from PSCRATCH to CFS has started.'
     )
+    await updateSingleJobStep(
+      DBjob,
+      'nersc_copy_results_to_cfs',
+      'Running',
+      'Copying results from PSCRATCH to CFS has started.'
+    )
 
     const copyID = await executeNerscScript(
       config.scripts.copyFromScratchToCFSScript,
       DBjob.uuid
     )
+
     const copyResult = await monitorTaskAtNERSC(copyID)
     logger.info(`copyResult: ${JSON.stringify(copyResult)}`)
+
     await updateSingleJobStep(
       DBjob,
       'copy_results_to_cfs',
+      'Success',
+      'Copying results from PSCRATCH to CFS successful.'
+    )
+    await updateSingleJobStep(
+      DBjob,
+      'nersc_copy_results_to_cfs',
       'Success',
       'Copying results from PSCRATCH to CFS successful.'
     )
@@ -286,7 +300,13 @@ const copyBilboMDResults = async (DBjob: IJob) => {
       DBjob,
       'copy_results_to_cfs',
       'Error',
-      `Failed to copy BilboMD results from pscratch to cfs: ${errorMessage}`
+      `Failed to copy BilboMD results from PSCRATCH to CFS: ${errorMessage}`
+    )
+    await updateSingleJobStep(
+      DBjob,
+      'nersc_copy_results_to_cfs',
+      'Error',
+      `Failed to copy BilboMD results from PSCRATCH to CFS: ${errorMessage}`
     )
     logger.error(`Error during copyBilboMDResults job: ${errorMessage}`)
   }
