@@ -57,7 +57,7 @@ const monitorAndCleanupJobs = async () => {
       try {
         logger.info(`NERSC Job: ${job.nersc.jobid} State: ${job.nersc.state}`)
         // Log the full job details as JSON
-        logger.info(`Job Details: ${JSON.stringify(job.toObject(), null, 2)}`)
+        // logger.info(`Job Details: ${JSON.stringify(job.toObject(), null, 2)}`)
         // Fetch the current state of the NERSC job
         const nerscState = await fetchNERSCJobState(job.nersc.jobid)
 
