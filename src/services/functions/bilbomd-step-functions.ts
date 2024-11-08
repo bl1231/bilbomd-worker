@@ -1269,5 +1269,6 @@ export {
   extractPdbPaths,
   concatenateAndSaveAsEnsemble,
   spawnFeedbackScript,
+  spawnRgyrDmaxScript,
   createReadmeFile
 }
