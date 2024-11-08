@@ -187,4 +187,4 @@ interface JobStatusOutputSacct {
   workdir: '/global/u2/s/sclassen'
 }
 
-export { TaskStatusResponse, JobStatusResponse, NerscAccessToken }
+export { TaskStatusResponse, JobStatusResponse, NerscAccessToken, JobStatusOutputSacct }
