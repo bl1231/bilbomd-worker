@@ -85,11 +85,10 @@ const monitorAndCleanupJobs = async () => {
           await updateJobStepsFromSlurmStatusFile(job)
 
           // Calculate progress
-          const progress = await calculateProgress(job)
+          // Extract a plain copy of the steps and calculate progress
+          const stepsCopy = JSON.parse(JSON.stringify(job.steps)) // Deep copy steps
+          const progress = await calculateProgress({ steps: stepsCopy })
           logger.info(`Progress for ${job.uuid}: ${progress}`)
-          // job.progress = progress
-          // await job.save()
-          // logger.info(`Progress for ${job.uuid}: ${progress}`)
 
           // If job is no longer pending or running, perform cleanup
           if (
@@ -524,37 +523,22 @@ const cleanupJob = async (DBjob: IJob, message: EmailMessage): Promise<void> => 
   }
 }
 
-const calculateProgress = async (job: IJob): Promise<number> => {
-  // Log the raw steps object
-  logger.debug(`job.steps: ${JSON.stringify(job.steps, null, 2)}`)
+const calculateProgress = ({ steps }: { steps: IBilboMDSteps }): number => {
+  const validSteps = Object.values(steps).filter(
+    (step) => step && typeof step === 'object' && 'status' in step
+  )
 
-  // Log the keys in the steps object
-  logger.debug(`Keys in steps: ${Object.keys(job.steps)}`)
-
-  // Filter valid step objects
-  const steps = Object.values(job.steps).filter((step) => {
-    if (!step || typeof step !== 'object' || !('status' in step)) {
-      logger.warn(`Invalid step: ${JSON.stringify(step)}`)
-      return false
-    }
-    return true
-  })
-
-  const totalSteps = steps.length
+  const totalSteps = validSteps.length
   logger.info(`Total steps: ${totalSteps}`)
 
   if (totalSteps === 0) {
     return 0 // Avoid division by zero
   }
 
-  const completedSteps = steps.filter((step) => step.status === 'Success').length
+  const completedSteps = validSteps.filter((step) => step.status === 'Success').length
   logger.info(`Completed steps: ${completedSteps}`)
 
-  // Calculate progress
-  const progressPercentage = (completedSteps / totalSteps) * 100
-
-  // Return rounded progress
-  return Math.round(progressPercentage * 100) / 100
+  return Math.round((completedSteps / totalSteps) * 100 * 100) / 100
 }
 
 const updateSingleJobStep = async (
