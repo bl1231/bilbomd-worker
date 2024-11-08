@@ -497,6 +497,7 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
           )
 
           // Save results to the DBjob
+          DBjob.rg = analysisResults.rg
           DBjob.rg_min = analysisResults.rg_min
           DBjob.rg_max = analysisResults.rg_max
           await DBjob.save()
@@ -950,12 +951,29 @@ const prepareResults = async (
       }
     }
 
+    // Write the DBjob to a JSON file
+    try {
+      const dbJobJsonPath = path.join(resultsDir, 'bilbomd_job.json')
+      await fs.writeFile(dbJobJsonPath, JSON.stringify(DBjob, null, 2), 'utf8')
+      MQjob.log(`DBjob data written to ${dbJobJsonPath}`)
+    } catch (error) {
+      logger.error(`Error writing DBjob JSON file: ${error}`)
+    }
+
     // scripts/pipeline_decision_tree.py
     try {
       await spawnFeedbackScript(DBjob)
       MQjob.log(`Feedback script executed successfully`)
     } catch (error) {
       logger.error(`Error running feedback script: ${error}`)
+    }
+
+    // create the rgyr vs. dmax multifoxs ensembles plots
+    try {
+      await spawnRgyrDmaxScript(DBjob)
+      MQjob.log(`Rgyr vs. Dmax script executed successfully`)
+    } catch (error) {
+      logger.error(`Error running Rgyr vs. Dmax script: ${error}`)
     }
 
     // Create Job-specific README file.
@@ -979,6 +997,52 @@ const prepareResults = async (
   } catch (error) {
     await handleError(error, MQjob, DBjob, 'results')
   }
+}
+
+const spawnRgyrDmaxScript = async (DBjob: IJob): Promise<void> => {
+  const jobDir = path.join(DATA_VOL, DBjob.uuid)
+  const logFile = path.join(jobDir, 'rgyr_v_dmax.log')
+  const errorFile = path.join(jobDir, 'rgyr_v_dmax_error.log')
+  const logStream = fs.createWriteStream(logFile)
+  const errorStream = fs.createWriteStream(errorFile)
+  const scriptPath = '/app/scripts/rgyr_v_dmax_analysis.py'
+  const args = [scriptPath, jobDir]
+  const opts = { cwd: jobDir }
+
+  return new Promise((resolve, reject) => {
+    const runRgyrDmaxScript: ChildProcess = spawn('python', args, opts)
+
+    runRgyrDmaxScript.stdout?.on('data', (data) => {
+      logger.info(`Rgyr Dmax script stdout: ${data.toString()}`)
+      logStream.write(data.toString())
+    })
+
+    runRgyrDmaxScript.stderr?.on('data', (data) => {
+      logger.error(`Rgyr Dmax script stderr: ${data.toString()}`)
+      errorStream.write(data.toString())
+    })
+
+    runRgyrDmaxScript.on('error', (error) => {
+      logger.error(`Rgyr Dmax script error: ${error}`)
+      reject(error)
+    })
+
+    runRgyrDmaxScript.on('exit', async (code: number) => {
+      const closeStreamsPromises = [
+        new Promise((resolveStream) => logStream.end(resolveStream)),
+        new Promise((resolveStream) => errorStream.end(resolveStream))
+      ]
+
+      await Promise.all(closeStreamsPromises)
+      if (code === 0) {
+        logger.info(`Rgyr Dmax script completed successfully with exit code ${code}`)
+        resolve()
+      } else {
+        logger.error(`Rgyr Dmax script failed with exit code ${code}`)
+        reject(new Error('Rgyr Dmax script failed. Please see the error log file.'))
+      }
+    })
+  })
 }
 
 const spawnFeedbackScript = async (DBjob: IJob): Promise<void> => {
@@ -1205,5 +1269,6 @@ export {
   extractPdbPaths,
   concatenateAndSaveAsEnsemble,
   spawnFeedbackScript,
+  spawnRgyrDmaxScript,
   createReadmeFile
 }

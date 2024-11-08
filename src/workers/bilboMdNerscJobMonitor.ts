@@ -36,6 +36,7 @@ import {
   extractPdbPaths,
   concatenateAndSaveAsEnsemble,
   spawnFeedbackScript,
+  spawnRgyrDmaxScript,
   createReadmeFile
 } from '../services/functions/bilbomd-step-functions.js'
 import path from 'path'
@@ -502,6 +503,14 @@ const prepareResults = async (
       logger.info(`Feedback script executed successfully`)
     } catch (error) {
       logger.error(`Error running feedback script: ${error}`)
+    }
+
+    // create the rgyr vs. dmax multifoxs ensembles plots
+    try {
+      await spawnRgyrDmaxScript(DBjob)
+      logger.info(`Rgyr vs. Dmax script executed successfully`)
+    } catch (error) {
+      logger.error(`Error running Rgyr vs. Dmax script: ${error}`)
     }
 
     // Create Job-specific README file.
