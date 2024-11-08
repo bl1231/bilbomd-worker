@@ -144,10 +144,6 @@ const updateJobNerscState = async (job: IJob, nerscState: INerscInfo) => {
 
   // Update the job steps from the Slurm status file
   await updateJobStepsFromSlurmStatusFile(job)
-
-  // Calculate and log progress
-  const progress = await calculateProgress(JSON.parse(JSON.stringify(job.steps)))
-  logger.info(`Progress for ${job.uuid}: ${progress}`)
 }
 
 const fetchNERSCJobState = async (jobID: string): Promise<INerscInfo> => {
@@ -227,6 +223,7 @@ const performJobCleanup = async (DBjob: IJob) => {
 
       // Update job status to 'Completed'
       DBjob.status = 'Completed'
+      DBjob.progress = 100
       logger.info(`Cleanup completed successfully for job ${DBjob.nersc.jobid}`)
     } else {
       // Log the unexpected state and send an email notification
@@ -239,8 +236,8 @@ const performJobCleanup = async (DBjob: IJob) => {
         error: true
       })
 
-      // Update job status to 'Error'
       DBjob.status = 'Error'
+      DBjob.progress = 100
     }
 
     // Save the updated job status
