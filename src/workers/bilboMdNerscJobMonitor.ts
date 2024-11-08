@@ -85,7 +85,8 @@ const monitorAndCleanupJobs = async () => {
           await updateJobStepsFromSlurmStatusFile(job)
 
           // Calculate progress
-          // const progress = calculateProgress(job)
+          const progress = calculateProgress(job)
+          logger.info(`Progress for ${job.uuid}: ${progress}`)
           // job.progress = progress
           // await job.save()
           // logger.info(`Progress for ${job.uuid}: ${progress}`)
@@ -523,22 +524,24 @@ const cleanupJob = async (DBjob: IJob, message: EmailMessage): Promise<void> => 
   }
 }
 
-// function calculateProgress(job: IJob): number {
-//   const steps = Object.values(job.steps)
-//   const totalSteps = steps.length
+function calculateProgress(job: IJob): number {
+  const steps = Object.values(job.steps)
+  const totalSteps = steps.length
+  logger.info(`Total steps: ${totalSteps}`)
 
-//   if (totalSteps === 0) {
-//     return 0 // Avoid division by zero
-//   }
+  if (totalSteps === 0) {
+    return 0 // Avoid division by zero
+  }
 
-//   const completedSteps = steps.filter((step) => step.status === 'Success').length
+  const completedSteps = steps.filter((step) => step.status === 'Success').length
+  logger.info(`Completed steps: ${completedSteps}`)
 
-//   // Calculate the progress percentage
-//   const progressPercentage = (completedSteps / totalSteps) * 100
+  // Calculate the progress percentage
+  const progressPercentage = (completedSteps / totalSteps) * 100
 
-//   // Return the progress rounded to two decimal places
-//   return Math.round(progressPercentage * 100) / 100
-// }
+  // Return the progress rounded to two decimal places
+  return Math.round(progressPercentage * 100) / 100
+}
 
 const updateSingleJobStep = async (
   DBJob: IJob,
