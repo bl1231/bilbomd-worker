@@ -78,12 +78,16 @@ const monitorAndCleanupJobs = async () => {
         // Update the job state in MongoDB
         await updateJobNerscState(job, nerscState)
 
-        // Calculate and save progress
-        const jcopy = job.toObject()
-        const progress = await calculateProgress(jcopy.steps)
-        job.progress = progress
-        logger.info(`Progress for job ${job.uuid}: ${progress}%`)
-        await job.save()
+        // Calculate and save progress only if the job is not already marked as Completed
+        if (job.status !== 'Completed') {
+          const jcopy = job.toObject()
+          const progress = await calculateProgress(jcopy.steps)
+          job.progress = progress
+          logger.info(`Progress for job ${job.uuid}: ${progress}%`)
+          await job.save() // Save the updated progress
+        } else {
+          logger.info(`Skipping progress update for completed job ${job.uuid}.`)
+        }
 
         // If job is no longer PENDING or RUNNING, perform cleanup
         if (shouldCleanupJob(job)) {

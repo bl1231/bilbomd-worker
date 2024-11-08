@@ -74,7 +74,12 @@ const updateNerscSpecificSteps = async (DBJob: IJob): Promise<void> => {
 
   DBJob.steps.nersc_copy_results_to_cfs = DBJob.steps.nersc_copy_results_to_cfs || {
     status: 'Waiting',
-    message: 'Step not started'
+    message: 'Waiting until job is completed'
+  }
+
+  DBJob.steps.copy_results_to_cfs = DBJob.steps.copy_results_to_cfs || {
+    status: 'Waiting',
+    message: 'Waiting until job is completed'
   }
 
   // Save the job document to persist the changes
