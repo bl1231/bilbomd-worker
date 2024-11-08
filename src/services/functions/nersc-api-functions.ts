@@ -360,6 +360,16 @@ const calculateProgress = (steps: IBilboMDSteps): number => {
     logger.warn('Steps are empty or undefined.')
     return 20 // Minimum progress
   }
+
+  logger.info('Printing all steps and their statuses:')
+  for (const [step, value] of Object.entries(steps)) {
+    logger.info(
+      `Step: ${step}, Status: ${value?.status || 'Undefined'}, Message: ${
+        value?.message || 'None'
+      }`
+    )
+  }
+
   const totalWeight = Object.values(stepWeights).reduce((acc, weight) => acc + weight, 0)
   if (totalWeight === 0) {
     logger.error('Total weight is zero. Check stepWeights configuration.')
