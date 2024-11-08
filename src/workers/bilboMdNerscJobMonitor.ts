@@ -7,7 +7,8 @@ import {
   IBilboMDCRDJob,
   IBilboMDPDBJob,
   IBilboMDAutoJob,
-  IBilboMDAlphaFoldJob
+  IBilboMDAlphaFoldJob,
+  StepStatusEnum
 } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../helpers/loggers.js'
 import { config } from '../config/config.js'
@@ -71,13 +72,15 @@ const monitorAndCleanupJobs = async () => {
 
           // Save the updated job document
           await job.save()
+
           // Update nersc_job_status
           await updateJobStatus(
             job,
             'nersc_job_status',
-            nerscState.state,
+            'Success',
             `NERSC job status: ${nerscState.state}`
           )
+
           // Update the job steps based on the slurm status file
           await updateJobSteps(job)
 
@@ -511,7 +514,7 @@ const cleanupJob = async (DBjob: IJob, message: EmailMessage): Promise<void> => 
 const updateJobStatus = async (
   DBJob: IJob,
   stepName: keyof IBilboMDSteps,
-  status: string,
+  status: StepStatusEnum,
   message: string
 ): Promise<void> => {
   const stepStatus: IStepStatus = {
@@ -533,7 +536,7 @@ const updateJobSteps = async (DBJob: IJob): Promise<void> => {
         const [step, status] = line.split(':').map((part) => part.trim())
         if (step in DBJob.steps) {
           const key = step as keyof IBilboMDSteps
-          acc[key] = { status, message: status }
+          acc[key] = { status: status as StepStatusEnum, message: status }
         }
         return acc
       },
