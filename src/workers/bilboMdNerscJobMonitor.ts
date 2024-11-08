@@ -52,11 +52,11 @@ const monitorAndCleanupJobs = async () => {
   try {
     // Get all jobs with a defined NERSC state
     const jobs: IJob[] = await DBJob.find({ 'nersc.state': { $ne: null } }).exec()
-    logger.info(`Found ${jobs.length} jobs with NERSC info.`)
+    // logger.info(`Found ${jobs.length} jobs with NERSC info.`)
 
     for (const job of jobs) {
       const jobId = job.nersc?.jobid
-      const currentState = job.nersc?.state
+      // const currentState = job.nersc?.state
 
       if (!jobId) {
         logger.warn(`Job ${job.uuid} has no NERSC job ID.`)
@@ -64,7 +64,7 @@ const monitorAndCleanupJobs = async () => {
       }
 
       try {
-        logger.info(`Monitoring NERSC job ${jobId}, current state: ${currentState}`)
+        // logger.info(`Monitoring NERSC job ${jobId}, current state: ${currentState}`)
 
         // Fetch the current state from NERSC via SFAPI
         const nerscState = await fetchNERSCJobState(jobId)
@@ -83,7 +83,7 @@ const monitorAndCleanupJobs = async () => {
           const jcopy = job.toObject()
           const progress = await calculateProgress(jcopy.steps)
           job.progress = progress
-          logger.info(`Progress for job ${job.uuid}: ${progress}%`)
+          logger.info(`Progress for job ${job.nersc.jobid}: ${progress}%`)
           await job.save() // Save the updated progress
         } else {
           logger.info(`Skipping progress update for completed job ${job.uuid}.`)
@@ -136,7 +136,7 @@ const updateJobNerscState = async (job: IJob, nerscState: INerscInfo) => {
   job.nersc.time_completed = nerscState.time_completed
 
   await job.save()
-  logger.info(`Updated job ${job.nersc.jobid} with state: ${nerscState.state}`)
+  // logger.info(`Updated job ${job.nersc.jobid} with state: ${nerscState.state}`)
 
   // Update NERSC job status step
   await updateSingleJobStep(
