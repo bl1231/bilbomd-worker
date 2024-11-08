@@ -8,7 +8,8 @@ import {
   IBilboMDPDBJob,
   IBilboMDAutoJob,
   IBilboMDAlphaFoldJob,
-  StepStatusEnum
+  StepStatusEnum,
+  INerscInfo
 } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../helpers/loggers.js'
 import { config } from '../config/config.js'
@@ -44,7 +45,7 @@ const execPromise = promisify(exec)
 
 interface EmailMessage {
   message: string
-  error?: boolean // Optional field to indicate error state
+  error?: boolean
 }
 
 const monitorAndCleanupJobs = async () => {
@@ -54,66 +55,46 @@ const monitorAndCleanupJobs = async () => {
     logger.info(`Found ${jobs.length} jobs with NERSC info.`)
 
     for (const job of jobs) {
+      const jobId = job.nersc?.jobid
+      const currentState = job.nersc?.state
+
+      if (!jobId) {
+        logger.warn(`Job ${job.uuid} has no NERSC job ID.`)
+        continue // Skip jobs without a NERSC job ID
+      }
+
       try {
-        logger.info(`NERSC Job: ${job.nersc.jobid} State: ${job.nersc.state}`)
-        // Log the full job details as JSON
-        // logger.info(`Job Details: ${JSON.stringify(job.toObject(), null, 2)}`)
-        // Fetch the current state of the NERSC job
-        const nerscState = await fetchNERSCJobState(job.nersc.jobid)
+        logger.info(`Monitoring NERSC job ${jobId}, current state: ${currentState}`)
 
-        if (nerscState) {
-          // Update the job's state in MongoDB
-          job.nersc.state = nerscState.state
-          job.nersc.qos = nerscState.qos
-          job.nersc.time_started = nerscState.time_started
-          job.nersc.time_completed = nerscState.time_completed
+        // Fetch the current state from NERSC via SFAPI
+        const nerscState = await fetchNERSCJobState(jobId)
 
-          logger.info(`Updated job ${job.nersc.jobid} with state: ${nerscState.state}`)
+        if (!nerscState) {
+          logger.warn(`Failed to fetch NERSC state for job ${jobId}.`)
+          await handleStateFetchFailure(job)
+          continue // Skip further processing if state fetch fails
+        }
 
-          // Save the updated job document
-          await job.save()
+        // Update the job state in MongoDB
+        await updateJobNerscState(job, nerscState)
 
-          // Update nersc_job_status
-          await updateSingleJobStep(
-            job,
-            'nersc_job_status',
-            'Success',
-            `NERSC job status: ${nerscState.state}`
+        // Calculate and save progress
+        const progress = await calculateProgress(job.steps)
+        job.progress = progress
+        logger.info(`Progress for job ${job.uuid}: ${progress}%`)
+        await job.save()
+
+        // If job is no longer PENDING or RUNNING, perform cleanup
+        if (shouldCleanupJob(job)) {
+          logger.info(
+            `Job ${job.nersc.jobid} state: ${job.nersc.state}. Initiating cleanup...`
           )
-
-          // Update the job steps based on the slurm status file
-          await updateJobStepsFromSlurmStatusFile(job)
-
-          // Calculate progress
-          // Extract a plain copy of the steps and calculate progress
-          const stepsCopy = JSON.parse(JSON.stringify(job.steps)) // Deep copy steps
-          const progress = await calculateProgress({ steps: stepsCopy })
-          logger.info(`Progress for ${job.uuid}: ${progress}`)
-
-          // If job is no longer pending or running, perform cleanup
-          if (
-            !['PENDING', 'RUNNING'].includes(nerscState.state) &&
-            job.status !== 'Completed'
-          ) {
-            logger.info(
-              `Job: ${job.nersc.jobid} state: ${nerscState.state}. Initiating cleanup...`
-            )
-            await performJobCleanup(job)
-            logger.info(`Cleanup complete for job ${job.nersc.jobid}.`)
-          }
-        } else {
-          logger.warn(`Failed to fetch NERSC state for job ${job.nersc.jobid}.`)
+          await performJobCleanup(job)
+          logger.info(`Cleanup complete for job ${job.nersc.jobid}.`)
         }
       } catch (error) {
-        logger.error(`Error monitoring job ${job.nersc.jobid}: ${error.message}`)
-        await updateSingleJobStep(
-          job,
-          'nersc_job_status',
-          'Error',
-          `NERSC job status: ${error.message}`
-        )
-        job.status = 'Error'
-        await job.save()
+        logger.error(`Error monitoring job ${jobId}: ${error.message}`)
+        await handleMonitoringError(job, error)
       }
     }
   } catch (error) {
@@ -121,7 +102,54 @@ const monitorAndCleanupJobs = async () => {
   }
 }
 
-const fetchNERSCJobState = async (jobID: string) => {
+interface MonitoringError {
+  message: string
+}
+
+const handleMonitoringError = async (
+  job: IJob,
+  error: MonitoringError
+): Promise<void> => {
+  await updateSingleJobStep(job, 'nersc_job_status', 'Error', `Error: ${error.message}`)
+  job.status = 'Error'
+  await job.save()
+}
+
+const shouldCleanupJob = (job: IJob) => {
+  const nerscState = job.nersc?.state
+  const jobStatus = job.status
+
+  // Check if the job is no longer PENDING or RUNNING on NERSC
+  // and is not already Completed overall
+  return !['PENDING', 'RUNNING'].includes(nerscState) && jobStatus !== 'Completed'
+}
+
+const updateJobNerscState = async (job: IJob, nerscState: INerscInfo) => {
+  job.nersc.state = nerscState.state
+  job.nersc.qos = nerscState.qos
+  job.nersc.time_started = nerscState.time_started
+  job.nersc.time_completed = nerscState.time_completed
+
+  await job.save()
+  logger.info(`Updated job ${job.nersc.jobid} with state: ${nerscState.state}`)
+
+  // Update NERSC job status step
+  await updateSingleJobStep(
+    job,
+    'nersc_job_status',
+    'Success',
+    `NERSC job status: ${nerscState.state}`
+  )
+
+  // Update the job steps from the Slurm status file
+  await updateJobStepsFromSlurmStatusFile(job)
+
+  // Calculate and log progress
+  const progress = await calculateProgress(JSON.parse(JSON.stringify(job.steps)))
+  logger.info(`Progress for ${job.uuid}: ${progress}`)
+}
+
+const fetchNERSCJobState = async (jobID: string): Promise<INerscInfo> => {
   const url = `${config.nerscBaseAPI}/compute/jobs/perlmutter/${jobID}?sacct=true`
   // logger.info(`Fetching state for NERSC job: ${jobID} from URL: ${url}`)
 
@@ -147,6 +175,7 @@ const fetchNERSCJobState = async (jobID: string) => {
       }
 
       return {
+        jobid: jobID,
         state: jobDetails.state || null,
         qos: jobDetails.qos || null,
         time_submitted: parseDate(jobDetails.submit),
@@ -166,6 +195,15 @@ const fetchNERSCJobState = async (jobID: string) => {
       throw error
     }
   }
+}
+
+const handleStateFetchFailure = async (job: IJob) => {
+  await updateSingleJobStep(
+    job,
+    'nersc_job_status',
+    'Error',
+    'Failed to fetch NERSC job state.'
+  )
 }
 
 const performJobCleanup = async (DBjob: IJob) => {
@@ -523,22 +561,24 @@ const cleanupJob = async (DBjob: IJob, message: EmailMessage): Promise<void> => 
   }
 }
 
-const calculateProgress = ({ steps }: { steps: IBilboMDSteps }): number => {
-  const validSteps = Object.values(steps).filter(
-    (step) => step && typeof step === 'object' && 'status' in step
-  )
+const calculateProgress = async (steps: IBilboMDSteps): Promise<number> => {
+  if (!steps) return 0
+
+  // Extract all step statuses from the steps object
+  const stepStatuses = Object.values(steps)
+
+  // Filter out undefined steps (in case some steps are optional or not defined yet)
+  const validSteps = stepStatuses.filter((step) => step !== undefined)
 
   const totalSteps = validSteps.length
-  logger.info(`Total steps: ${totalSteps}`)
 
-  if (totalSteps === 0) {
-    return 0 // Avoid division by zero
-  }
+  if (totalSteps === 0) return 0 // Avoid division by zero
 
-  const completedSteps = validSteps.filter((step) => step.status === 'Success').length
-  logger.info(`Completed steps: ${completedSteps}`)
+  // Count the steps marked as 'Success'
+  const completedSteps = validSteps.filter((step) => step?.status === 'Success').length
 
-  return Math.round((completedSteps / totalSteps) * 100 * 100) / 100
+  // Calculate the percentage of completed steps
+  return Math.round((completedSteps / totalSteps) * 100)
 }
 
 const updateSingleJobStep = async (
