@@ -4,7 +4,12 @@ import axiosRetry from 'axios-retry'
 import qs from 'qs'
 import { logger } from '../../helpers/loggers.js'
 import { config } from '../../config/config.js'
-import { IBilboMDSteps, IJob, IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
+import {
+  IBilboMDSteps,
+  IJob,
+  IStepStatus,
+  StepStatusEnum
+} from '@bl1231/bilbomd-mongodb-schema'
 import { ensureValidToken } from './nersc-api-token-functions.js'
 import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc.js'
 import { updateStepStatus } from './mongo-utils.js'
@@ -334,7 +339,7 @@ const updateStatus = async (MQjob: BullMQJob, DBJob: IJob) => {
     if (step in DBJob.steps) {
       const key = step as keyof IBilboMDSteps // Assert that step is a valid key of IBilboMDSteps
       DBJob.steps[key] = {
-        status: status,
+        status: status as StepStatusEnum,
         message: status
       }
     }

@@ -7,7 +7,8 @@ import {
   IBilboMDCRDJob,
   IBilboMDAutoJob,
   IBilboMDAlphaFoldJob,
-  IBilboMDSteps
+  IBilboMDSteps,
+  StepStatusEnum
 } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../../helpers/loggers.js'
 import { updateStepStatus } from './mongo-utils.js'
@@ -308,7 +309,7 @@ const sendBilboMDEmail = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> =>
 const updateJobStatus = async (
   job: IJob,
   stepName: keyof IBilboMDSteps,
-  status: string,
+  status: StepStatusEnum,
   message: string
 ): Promise<void> => {
   const stepStatus: IStepStatus = {
