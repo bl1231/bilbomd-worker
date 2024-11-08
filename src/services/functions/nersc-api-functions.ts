@@ -356,6 +356,7 @@ const updateStatus = async (MQjob: BullMQJob, DBJob: IJob) => {
 }
 
 const calculateProgress = (steps: IBilboMDSteps): number => {
+  // Total weight of all steps
   const totalWeight = Object.values(stepWeights).reduce((acc, weight) => acc + weight, 0)
   if (totalWeight === 0) {
     console.error('Total weight is zero. Check stepWeights configuration.')
@@ -364,21 +365,21 @@ const calculateProgress = (steps: IBilboMDSteps): number => {
 
   let completedWeight = 0
 
-  for (const step of Object.keys(steps)) {
+  // Iterate only over valid keys in `steps` that exist in `stepWeights`
+  for (const step of Object.keys(steps).filter((key) => key in stepWeights)) {
     const status = steps[step as keyof IBilboMDSteps]?.status
+
     console.log(`Step: ${step}, Status: ${status}`)
 
     if (status === 'Success') {
       const weight = stepWeights[step] || 0
-      if (!stepWeights[step]) {
-        console.warn(`No weight defined for step "${step}". Defaulting to 0.`)
-      }
       completedWeight += weight
     }
   }
 
   console.log(`Completed Weight: ${completedWeight}, Total Weight: ${totalWeight}`)
 
+  // Calculate progress
   const progress = (completedWeight / totalWeight) * 70 + 20 // Scale between 20% and 90%
   return Math.min(progress, 90) // Ensure it doesn't exceed 90%
 }

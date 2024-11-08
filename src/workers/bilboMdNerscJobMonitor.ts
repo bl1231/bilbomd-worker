@@ -74,7 +74,7 @@ const monitorAndCleanupJobs = async () => {
           await job.save()
 
           // Update nersc_job_status
-          await updateJobStatus(
+          await updateSingleJobStep(
             job,
             'nersc_job_status',
             'Success',
@@ -82,7 +82,13 @@ const monitorAndCleanupJobs = async () => {
           )
 
           // Update the job steps based on the slurm status file
-          await updateJobSteps(job)
+          await updateJobStepsFromSlurmStatusFile(job)
+
+          // Calculate progress
+          const progress = calculateProgress(job.steps)
+          job.progress = progress
+          await job.save()
+          logger.info(`Progress for ${job.uuid}: ${progress}`)
 
           // If job is no longer pending or running, perform cleanup
           if (
@@ -96,11 +102,11 @@ const monitorAndCleanupJobs = async () => {
             logger.info(`Cleanup complete for job ${job.nersc.jobid}.`)
           }
         } else {
-          logger.warn(`Failed to fetch state for job ${job.nersc.jobid}.`)
+          logger.warn(`Failed to fetch NERSC state for job ${job.nersc.jobid}.`)
         }
       } catch (error) {
         logger.error(`Error monitoring job ${job.nersc.jobid}: ${error.message}`)
-        await updateJobStatus(
+        await updateSingleJobStep(
           job,
           'nersc_job_status',
           'Error',
@@ -212,7 +218,7 @@ const performJobCleanup = async (DBjob: IJob) => {
 
 const copyBilboMDResults = async (DBjob: IJob) => {
   try {
-    await updateJobStatus(
+    await updateSingleJobStep(
       DBjob,
       'copy_results_to_cfs',
       'Running',
@@ -225,7 +231,7 @@ const copyBilboMDResults = async (DBjob: IJob) => {
     )
     const copyResult = await monitorTaskAtNERSC(copyID)
     logger.info(`copyResult: ${JSON.stringify(copyResult)}`)
-    await updateJobStatus(
+    await updateSingleJobStep(
       DBjob,
       'copy_results_to_cfs',
       'Success',
@@ -236,7 +242,7 @@ const copyBilboMDResults = async (DBjob: IJob) => {
     if (error instanceof Error) {
       errorMessage = error.message
     }
-    await updateJobStatus(
+    await updateSingleJobStep(
       DBjob,
       'copy_results_to_cfs',
       'Error',
@@ -248,7 +254,7 @@ const copyBilboMDResults = async (DBjob: IJob) => {
 
 const prepareBilboMDResults = async (DBjob: IJob): Promise<void> => {
   try {
-    await updateJobStatus(
+    await updateSingleJobStep(
       DBjob,
       'results',
       'Running',
@@ -263,7 +269,7 @@ const prepareBilboMDResults = async (DBjob: IJob): Promise<void> => {
       isBilboMDAlphaFoldJob(DBjob)
     ) {
       await prepareResults(DBjob)
-      await updateJobStatus(
+      await updateSingleJobStep(
         DBjob,
         'results',
         'Success',
@@ -277,7 +283,7 @@ const prepareBilboMDResults = async (DBjob: IJob): Promise<void> => {
     if (error instanceof Error) {
       errorMessage = error.message
     }
-    await updateJobStatus(
+    await updateSingleJobStep(
       DBjob,
       'results',
       'Error',
@@ -450,7 +456,7 @@ const prepareResults = async (
 const sendBilboMDEmail = async (DBjob: IJob, message: EmailMessage): Promise<void> => {
   try {
     // Log the beginning of the process
-    await updateJobStatus(
+    await updateSingleJobStep(
       DBjob,
       'email',
       'Running',
@@ -461,7 +467,7 @@ const sendBilboMDEmail = async (DBjob: IJob, message: EmailMessage): Promise<voi
     await cleanupJob(DBjob, message)
 
     // Log success
-    await updateJobStatus(
+    await updateSingleJobStep(
       DBjob,
       'email',
       'Success',
@@ -479,8 +485,8 @@ const sendBilboMDEmail = async (DBjob: IJob, message: EmailMessage): Promise<voi
 
     const statusMessage = `Failed to send email: ${errorMessage}`
     // Update job status to indicate error
-    await updateJobStatus(DBjob, 'email', 'Error', statusMessage)
-    await updateJobStatus(DBjob, 'nersc_job_status', 'Error', statusMessage)
+    await updateSingleJobStep(DBjob, 'email', 'Error', statusMessage)
+    await updateSingleJobStep(DBjob, 'nersc_job_status', 'Error', statusMessage)
 
     logger.error(`Error during sendBilboMDEmail job: ${errorMessage}`)
   }
@@ -517,20 +523,23 @@ const cleanupJob = async (DBjob: IJob, message: EmailMessage): Promise<void> => 
   }
 }
 
-const updateJobStatus = async (
+const updateSingleJobStep = async (
   DBJob: IJob,
   stepName: keyof IBilboMDSteps,
   status: StepStatusEnum,
   message: string
 ): Promise<void> => {
-  const stepStatus: IStepStatus = {
-    status,
-    message
+  try {
+    DBJob.steps[stepName] = { status, message }
+    await DBJob.save()
+  } catch (error) {
+    logger.error(
+      `Error updating step status for job ${DBJob.uuid} in step ${stepName}: ${error}`
+    )
   }
-  await updateStepStatus(DBJob, stepName, stepStatus)
 }
 
-const updateJobSteps = async (DBJob: IJob): Promise<void> => {
+const updateJobStepsFromSlurmStatusFile = async (DBJob: IJob): Promise<void> => {
   try {
     const UUID = DBJob.uuid
     const contents: string = await getSlurmStatusFile(UUID)
@@ -552,13 +561,6 @@ const updateJobSteps = async (DBJob: IJob): Promise<void> => {
     // Apply the updated steps to the job
     DBJob.steps = updatedSteps
     await DBJob.save()
-
-    // Calculate and log progress
-    const progress = calculateProgress(DBJob.steps)
-    DBJob.progress = progress // Ensure progress is updated in the Job schema
-    await DBJob.save() // Save the updated progress
-
-    logger.info(`Progress for ${UUID}: ${progress}`)
   } catch (error) {
     logger.error(`Unable to update job status for ${DBJob._id}: ${error}`)
     throw error
