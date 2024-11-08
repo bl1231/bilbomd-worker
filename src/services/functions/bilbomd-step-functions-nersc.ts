@@ -50,6 +50,37 @@ function isBilboMDAlphaFoldJob(job: IJob): job is IBilboMDAlphaFoldJob {
   return (job as IBilboMDAlphaFoldJob).alphafold_entities !== undefined
 }
 
+const updateNerscSpecificSteps = async (DBJob: IJob): Promise<void> => {
+  // Ensure the steps object exists
+  if (!DBJob.steps) {
+    DBJob.steps = {} as IBilboMDSteps
+  }
+
+  // Add NERSC-specific steps if they are missing
+  DBJob.steps.nersc_prepare_slurm_batch = DBJob.steps.nersc_prepare_slurm_batch || {
+    status: 'Waiting',
+    message: 'Step not started'
+  }
+
+  DBJob.steps.nersc_submit_slurm_batch = DBJob.steps.nersc_submit_slurm_batch || {
+    status: 'Waiting',
+    message: 'Step not started'
+  }
+
+  DBJob.steps.nersc_job_status = DBJob.steps.nersc_job_status || {
+    status: 'Waiting',
+    message: 'Step not started'
+  }
+
+  DBJob.steps.nersc_copy_results_to_cfs = DBJob.steps.nersc_copy_results_to_cfs || {
+    status: 'Waiting',
+    message: 'Step not started'
+  }
+
+  // Save the job document to persist the changes
+  await DBJob.save()
+}
+
 const makeBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
   const stepName = 'nersc_prepare_slurm_batch'
   try {
@@ -320,6 +351,7 @@ const updateJobStatus = async (
 }
 
 export {
+  updateNerscSpecificSteps,
   makeBilboMDSlurm,
   submitBilboMDSlurm,
   monitorBilboMDJob,

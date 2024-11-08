@@ -258,7 +258,7 @@ const copyBilboMDResults = async (DBjob: IJob) => {
       DBjob,
       'copy_results_to_cfs',
       'Running',
-      'Copying results from pscratch to CFS has started.'
+      'Copying results from PSCRATCH to CFS has started.'
     )
 
     const copyID = await executeNerscScript(
@@ -271,7 +271,7 @@ const copyBilboMDResults = async (DBjob: IJob) => {
       DBjob,
       'copy_results_to_cfs',
       'Success',
-      'Copying results from pscratch to CFS successful.'
+      'Copying results from PSCRATCH to CFS successful.'
     )
   } catch (error) {
     let errorMessage = 'Unknown error'

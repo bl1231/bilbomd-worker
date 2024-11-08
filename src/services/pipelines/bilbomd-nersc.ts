@@ -3,6 +3,7 @@ import { Job } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../../helpers/loggers.js'
 import { initializeJob } from '../functions/job-utils.js'
 import {
+  updateNerscSpecificSteps,
   makeBilboMDSlurm,
   submitBilboMDSlurm
 } from '../functions/bilbomd-step-functions-nersc.js'
@@ -26,6 +27,14 @@ const processBilboMDJobNersc = async (MQjob: BullMQJob) => {
       throw error
     }
 
+    // Add any missing NERSC-specific job steps
+    try {
+      await updateNerscSpecificSteps(foundJob)
+    } catch (error) {
+      logger.error(`Failed to add NERSC-specific job steps: ${MQjob.data.uuid}`)
+      throw error
+    }
+
     // Prepare bilbomd.slurm file
     try {
       await makeBilboMDSlurm(MQjob, foundJob)
@@ -45,44 +54,6 @@ const processBilboMDJobNersc = async (MQjob: BullMQJob) => {
       logger.error(`Failed to submit bilbomd.slurm: ${MQjob.data.uuid}`)
       throw error
     }
-
-    // From here on, we will monitor the job at NERSC with the monitorAndCleanupJobs function in worker.ts
-
-    // Watch the job
-    // try {
-    //   await monitorBilboMDJob(MQjob, foundJob, jobID)
-    //   await MQjob.updateProgress(90)
-    // } catch (error) {
-    //   logger.error(`Failed to monitor BilboMD job: ${MQjob.data.uuid}`)
-    //   throw error
-    // }
-
-    // Copy files from PSCRATCH to CFS
-    // try {
-    //   await copyBilboMDResults(MQjob, foundJob)
-    //   await MQjob.updateProgress(95)
-    // } catch (error) {
-    //   logger.error(`Failed to copy BilboMD results: ${MQjob.data.uuid}`)
-    //   throw error
-    // }
-
-    // Prepare results
-    // try {
-    //   await prepareBilboMDResults(MQjob, foundJob)
-    //   await MQjob.updateProgress(99)
-    // } catch (error) {
-    //   logger.error(`Failed to prepare BilboMD results: ${MQjob.data.uuid}`)
-    //   throw error
-    // }
-
-    // Cleanup & send email
-    // try {
-    //   await sendBilboMDEmail(MQjob, foundJob)
-    //   await MQjob.updateProgress(100)
-    // } catch (error) {
-    //   logger.error(`Failed to cleanup and send email: ${MQjob.data.uuid}`)
-    //   throw error
-    // }
   } catch (error) {
     logger.error(`Failed to process job: ${MQjob.data.uuid}`)
     throw error
