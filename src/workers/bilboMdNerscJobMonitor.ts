@@ -525,11 +525,22 @@ const cleanupJob = async (DBjob: IJob, message: EmailMessage): Promise<void> => 
 }
 
 const calculateProgress = async (job: IJob): Promise<number> => {
-  const steps = Object.values(job.steps).filter(
-    (step) => step && typeof step === 'object' && 'status' in step
-  )
-  const totalSteps = steps.length
+  // Log the raw steps object
+  logger.debug(`job.steps: ${JSON.stringify(job.steps, null, 2)}`)
 
+  // Log the keys in the steps object
+  logger.debug(`Keys in steps: ${Object.keys(job.steps)}`)
+
+  // Filter valid step objects
+  const steps = Object.values(job.steps).filter((step) => {
+    if (!step || typeof step !== 'object' || !('status' in step)) {
+      logger.warn(`Invalid step: ${JSON.stringify(step)}`)
+      return false
+    }
+    return true
+  })
+
+  const totalSteps = steps.length
   logger.info(`Total steps: ${totalSteps}`)
 
   if (totalSteps === 0) {
@@ -539,10 +550,10 @@ const calculateProgress = async (job: IJob): Promise<number> => {
   const completedSteps = steps.filter((step) => step.status === 'Success').length
   logger.info(`Completed steps: ${completedSteps}`)
 
-  // Calculate the progress percentage
+  // Calculate progress
   const progressPercentage = (completedSteps / totalSteps) * 100
 
-  // Return the progress rounded to two decimal places
+  // Return rounded progress
   return Math.round(progressPercentage * 100) / 100
 }
 
