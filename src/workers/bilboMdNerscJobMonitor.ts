@@ -100,6 +100,12 @@ const monitorAndCleanupJobs = async () => {
         }
       } catch (error) {
         logger.error(`Error monitoring job ${job.nersc.jobid}: ${error.message}`)
+        await updateJobStatus(
+          job,
+          'nersc_job_status',
+          'Error',
+          `NERSC job status: ${error.message}`
+        )
         job.status = 'Error'
         await job.save()
       }

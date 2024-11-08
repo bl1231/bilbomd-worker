@@ -357,11 +357,15 @@ const updateStatus = async (MQjob: BullMQJob, DBJob: IJob) => {
 
 const calculateProgress = (steps: IBilboMDSteps): number => {
   const totalWeight = Object.values(stepWeights).reduce((acc, weight) => acc + weight, 0)
+  logger.info(`Total Weight: ${totalWeight}`) // Expected: 154
   let completedWeight = 0
 
   for (const [step, status] of Object.entries(steps)) {
+    logger.info(`Step: ${step}, Status: ${status?.status}`)
     if (status?.status === 'Success') {
-      completedWeight += stepWeights[step] || 0
+      const weight = stepWeights[step] || 0
+      logger.info(`Weight for step "${step}": ${weight}`)
+      completedWeight += weight
     }
   }
 
