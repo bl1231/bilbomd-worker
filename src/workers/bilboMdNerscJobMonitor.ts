@@ -82,7 +82,7 @@ const monitorAndCleanupJobs = async () => {
           logger.info(`Progress for job ${job.nersc.jobid}: ${progress}%`)
           await job.save() // Save the updated progress
         } else {
-          logger.info(`Skipping progress update for completed job ${job.uuid}.`)
+          // logger.info(`Skipping progress update for completed job ${job.nersc.jobid}.`)
         }
 
         // If job is no longer PENDING or RUNNING, perform cleanup
