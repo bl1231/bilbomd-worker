@@ -51,7 +51,7 @@ interface EmailMessage {
 const monitorAndCleanupJobs = async () => {
   try {
     // Get all jobs with a defined NERSC state
-    const jobs = await DBJob.find({ 'nersc.state': { $ne: null } }).exec()
+    const jobs: IJob[] = await DBJob.find({ 'nersc.state': { $ne: null } }).exec()
     logger.info(`Found ${jobs.length} jobs with NERSC info.`)
 
     for (const job of jobs) {
@@ -79,7 +79,8 @@ const monitorAndCleanupJobs = async () => {
         await updateJobNerscState(job, nerscState)
 
         // Calculate and save progress
-        const progress = await calculateProgress(job.steps)
+        const jcopy = job.toObject()
+        const progress = await calculateProgress(jcopy.steps)
         job.progress = progress
         logger.info(`Progress for job ${job.uuid}: ${progress}%`)
         await job.save()
