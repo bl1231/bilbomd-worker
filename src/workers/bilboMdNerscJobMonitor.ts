@@ -524,9 +524,12 @@ const cleanupJob = async (DBjob: IJob, message: EmailMessage): Promise<void> => 
   }
 }
 
-function calculateProgress(job: IJob): number {
-  const steps = Object.values(job.steps)
+const calculateProgress = (job: IJob): number => {
+  const steps = Object.values(job.steps).filter(
+    (step) => step && typeof step === 'object' && 'status' in step
+  )
   const totalSteps = steps.length
+
   logger.info(`Total steps: ${totalSteps}`)
 
   if (totalSteps === 0) {
