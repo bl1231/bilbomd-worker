@@ -53,6 +53,7 @@ const monitorAndCleanupJobs = async () => {
   try {
     // Get all jobs with a defined NERSC state
     const jobs: IJob[] = await DBJob.find({ 'nersc.state': { $ne: null } }).exec()
+    logger.info(`Found ${jobs.length} jobs with NERSC info.`)
 
     for (const job of jobs) {
       const jobId = job.nersc?.jobid
@@ -77,39 +78,51 @@ const monitorAndCleanupJobs = async () => {
 
         // Calculate and save progress only if the job is not already marked as Completed
         if (job.status !== 'Completed') {
-          const jcopy = job.toObject()
+          const jcopy = job.toObject() // Create a plain object for progress calculation
           const progress = await calculateProgress(jcopy.steps)
           job.progress = progress
           logger.info(`Progress for job ${job.nersc.jobid}: ${progress}%`)
           await job.save() // Save the updated progress
         } else {
-          // logger.info(`Skipping progress update for completed job ${job.nersc.jobid}.`)
+          logger.info(`Skipping progress update for completed job ${job.nersc.jobid}.`)
         }
 
         // If job is no longer PENDING or RUNNING, perform cleanup
         if (shouldCleanupJob(job)) {
-          // Check if cleanup is already in progress
-          const updatedJob = await DBJob.findOneAndUpdate(
-            { _id: job._id, cleanup_in_progress: false }, // Check if cleanup is not already in progress
-            { cleanup_in_progress: true }, // Set the flag atomically
-            { new: true } // Return the updated job document
-          )
-
-          if (!updatedJob) {
-            logger.info(`Cleanup already in progress for job ${jobId}. Skipping.`)
-            continue // Skip to the next job
-          }
-
           try {
+            // Atomically check and set the cleanup_in_progress flag
+            const updatedJob = await DBJob.findOneAndUpdate(
+              { _id: job._id, cleanup_in_progress: false }, // Only pick jobs not already in progress
+              { cleanup_in_progress: true }, // Mark as in progress
+              { new: true } // Return the updated document
+            )
+
+            if (!updatedJob) {
+              logger.info(`Cleanup already in progress for job ${jobId}. Skipping.`)
+              continue // Skip to the next job
+            }
+
             logger.info(
               `Job ${updatedJob.nersc.jobid} state: ${updatedJob.nersc.state}. Initiating cleanup...`
             )
+
+            // Perform cleanup
             await performJobCleanup(updatedJob)
+
             logger.info(`Cleanup complete for job ${updatedJob.nersc.jobid}.`)
           } finally {
             // Ensure the flag is reset regardless of success or failure
-            updatedJob.cleanup_in_progress = false
-            await updatedJob.save()
+            const resetJob = await DBJob.findOneAndUpdate(
+              { _id: job._id }, // Locate the job
+              { cleanup_in_progress: false }, // Reset the flag
+              { new: true } // Return the updated document
+            )
+
+            if (resetJob) {
+              logger.info(`Reset cleanup_in_progress flag for job ${jobId}.`)
+            } else {
+              logger.warn(`Failed to reset cleanup_in_progress flag for job ${jobId}.`)
+            }
           }
         }
       } catch (error) {
@@ -135,7 +148,7 @@ const handleMonitoringError = async (
   await job.save()
 }
 
-const shouldCleanupJob = (job: IJob) => {
+const shouldCleanupJob = (job: IJob): boolean => {
   const nerscState = job.nersc?.state
   const jobStatus = job.status
 
