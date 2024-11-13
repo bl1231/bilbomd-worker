@@ -49,6 +49,8 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.10.1 (11.13.2024)
+  - Update job progress in Mongo Job entry for all non-NERSC jobs
 - 1.10.0 (11/08/2024)
   - Decouple job submission from job monitoring on NERSC
   - Add the step to calculate Rgyr vs. Dmax consolodated json file
