@@ -4,11 +4,15 @@ import {
   runMinimize,
   runHeat,
   runMolecularDynamics,
-  runFoxs,
   runMultiFoxs,
   runPaeToConstInp,
   runAutoRg
 } from '../functions/bilbomd-step-functions.js'
+import {
+  extractPDBFilesFromDCD,
+  remediatePDBFiles,
+  runFoXS
+} from '../functions/bilbomd-functions.js'
 import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc.js'
 import { initializeJob, cleanupJob } from '../functions/job-utils.js'
 import { runSingleFoXS } from '../functions/foxs-analysis.js'
@@ -76,13 +80,29 @@ const processBilboMDAutoJob = async (MQjob: BullMQJob) => {
   await MQjob.log('start md')
   await runMolecularDynamics(MQjob, foundJob)
   await MQjob.log('end md')
+  await MQjob.updateProgress(50)
+  foundJob.progress = 50
+  await foundJob.save()
+
+  // Extract PDBs from DCDs
+  await MQjob.log('start dcd2pdb')
+  await extractPDBFilesFromDCD(foundJob)
+  await MQjob.log('end dcd2pdb')
   await MQjob.updateProgress(60)
   foundJob.progress = 60
   await foundJob.save()
 
+  // Remediate PDB files
+  await MQjob.log('start remediate')
+  await remediatePDBFiles(foundJob)
+  await MQjob.log('end remediate')
+  await MQjob.updateProgress(70)
+  foundJob.progress = 70
+  await foundJob.save()
+
   // Calculate FoXS profiles
   await MQjob.log('start foxs')
-  await runFoxs(MQjob, foundJob)
+  await runFoXS(foundJob)
   await MQjob.log('end foxs')
   await MQjob.updateProgress(80)
   foundJob.progress = 80
