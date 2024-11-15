@@ -11,7 +11,7 @@ import {
   extractPDBFilesFromDCD,
   remediatePDBFiles,
   runFoXS
-} from 'services/functions/bilbomd-functions.js'
+} from '../functions/bilbomd-functions.js'
 import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc.js'
 import { initializeJob, cleanupJob } from '../functions/job-utils.js'
 import { runSingleFoXS } from '../functions/foxs-analysis.js'
