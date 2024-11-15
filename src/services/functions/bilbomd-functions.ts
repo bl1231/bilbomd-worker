@@ -33,7 +33,7 @@ const extractPDBFilesFromDCD = async (
   const DCD2PDBParams: CharmmDCD2PDBParams = {
     out_dir: outputDir,
     charmm_template: 'dcd2pdb',
-    charmm_topo_dir: config.topoDir,
+    charmm_topo_dir: config.charmmTopoDir,
     charmm_inp_file: '',
     charmm_out_file: '',
     in_psf_file: 'bilbomd_pdb2crd.psf',

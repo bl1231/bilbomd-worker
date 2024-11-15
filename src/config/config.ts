@@ -18,10 +18,11 @@ export const config = {
   nerscUploadDir: getEnvVar('UPLOAD_DIR'),
   nerscWorkDir: getEnvVar('WORK_DIR'),
   uploadDir: getEnvVar('DATA_VOL'),
-  topoDir: getEnvVar('CHARMM_TOPOLOGY'),
+  charmmTopoDir: getEnvVar('CHARMM_TOPOLOGY'),
   charmmTemplateDir: getEnvVar('CHARMM_TEMPLATES'),
   charmmBin: getEnvVar('CHARMM'),
   foxBin: getEnvVar('FOXS'),
+  multifoxsBin: getEnvVar('MULTIFOXS'),
   scripts: {
     prepareSlurmScript: getEnvVar('PREPARE_SLURM_SCRIPT'),
     copyFromScratchToCFSScript: getEnvVar('CP2CFS_SCRIPT'),

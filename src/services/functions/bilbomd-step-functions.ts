@@ -44,9 +44,9 @@ import {
 
 const execPromise = promisify(exec)
 
-const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
-const MULTIFOXS_BIN = process.env.MULTIFOXS ?? '/usr/bin/multi_foxs'
-const DATA_VOL = process.env.DATA_VOL ?? '/bilbomd/uploads'
+// const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
+// const MULTIFOXS_BIN = process.env.MULTIFOXS ?? '/usr/bin/multi_foxs'
+// const DATA_VOL = process.env.DATA_VOL ?? '/bilbomd/uploads'
 const BILBOMD_URL = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
 
 const handleError = async (
@@ -204,7 +204,7 @@ const spawnMultiFoxs = (params: MultiFoxsParams): Promise<void> => {
   const multiFoxOpts = { cwd: multiFoxsDir }
 
   return new Promise((resolve, reject) => {
-    const multiFoxs: ChildProcess = spawn(MULTIFOXS_BIN, multiFoxArgs, multiFoxOpts)
+    const multiFoxs: ChildProcess = spawn(config.multifoxsBin, multiFoxArgs, multiFoxOpts)
     multiFoxs.stdout?.on('data', (data) => {
       logStream.write(data.toString())
     })
@@ -326,7 +326,7 @@ const runPaeToConstInp = async (
   MQjob: BullMQJob,
   DBjob: IBilboMDAutoJob
 ): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   // I'm struggling with Typescript here. Since a BilboMDAutoJob will not
   // have a CRD file when it is first created. I know it's not considered
   // safe, but I'm going to use type assertion for now.
@@ -355,7 +355,7 @@ const runPaeToConstInp = async (
 }
 
 const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const logFile = path.join(outputDir, 'autoRg.log')
   const errorFile = path.join(outputDir, 'autoRg_error.log')
   const autoRg_script = '/app/scripts/autorg.py'
@@ -432,11 +432,11 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
 }
 
 const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const params: CharmmParams = {
     out_dir: outputDir,
     charmm_template: 'minimize',
-    charmm_topo_dir: TOPO_FILES,
+    charmm_topo_dir: config.charmmTopoDir,
     charmm_inp_file: 'minimize.inp',
     charmm_out_file: 'minimize.out',
     in_psf_file: DBjob.psf_file,
@@ -461,11 +461,11 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<voi
 }
 
 const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const params: CharmmHeatParams = {
     out_dir: outputDir,
     charmm_template: 'heat',
-    charmm_topo_dir: TOPO_FILES,
+    charmm_topo_dir: config.charmmTopoDir,
     charmm_inp_file: 'heat.inp',
     charmm_out_file: 'heat.out',
     in_psf_file: DBjob.psf_file,
@@ -494,11 +494,11 @@ const runMolecularDynamics = async (
   MQjob: BullMQJob,
   DBjob: IBilboMDCRDJob
 ): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const params: CharmmMDParams = {
     out_dir: outputDir,
     charmm_template: 'dynamics',
-    charmm_topo_dir: TOPO_FILES,
+    charmm_topo_dir: config.charmmTopoDir,
     charmm_inp_file: '',
     charmm_out_file: '',
     in_psf_file: DBjob.psf_file,
@@ -540,7 +540,7 @@ const runMolecularDynamics = async (
 }
 
 const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
 
   const foxsParams: FoxsParams = {
     out_dir: outputDir,
@@ -553,7 +553,7 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
   const DCD2PDBParams: CharmmDCD2PDBParams = {
     out_dir: outputDir,
     charmm_template: 'dcd2pdb',
-    charmm_topo_dir: TOPO_FILES,
+    charmm_topo_dir: config.charmmTopoDir,
     charmm_inp_file: '',
     charmm_out_file: '',
     in_psf_file: DBjob.psf_file,
@@ -671,7 +671,7 @@ const runFoXSCalculations = async (
 }
 
 const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const multifoxsParams: MultiFoxsParams = {
     out_dir: outputDir,
     data_file: DBjob.data_file
@@ -719,7 +719,7 @@ const prepareResults = async (
   DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob
 ): Promise<void> => {
   try {
-    const outputDir = path.join(DATA_VOL, DBjob.uuid)
+    const outputDir = path.join(config.uploadDir, DBjob.uuid)
     const multiFoxsDir = path.join(outputDir, 'multifoxs')
     const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
     const resultsDir = path.join(outputDir, 'results')
@@ -905,7 +905,7 @@ const prepareResults = async (
 }
 
 const spawnRgyrDmaxScript = async (DBjob: IJob): Promise<void> => {
-  const jobDir = path.join(DATA_VOL, DBjob.uuid)
+  const jobDir = path.join(config.uploadDir, DBjob.uuid)
   const logFile = path.join(jobDir, 'rgyr_v_dmax.log')
   const errorFile = path.join(jobDir, 'rgyr_v_dmax_error.log')
   const logStream = fs.createWriteStream(logFile)
@@ -951,7 +951,7 @@ const spawnRgyrDmaxScript = async (DBjob: IJob): Promise<void> => {
 }
 
 const spawnFeedbackScript = async (DBjob: IJob): Promise<void> => {
-  const resultsDir = path.join(DATA_VOL, DBjob.uuid, 'results')
+  const resultsDir = path.join(config.uploadDir, DBjob.uuid, 'results')
   const logFile = path.join(resultsDir, 'feedback.log')
   const errorFile = path.join(resultsDir, 'feedback_error.log')
   const logStream = fs.createWriteStream(logFile)
