@@ -6,7 +6,7 @@ import { processBilboMDCRDJob } from '../services/pipelines/bilbomd-crd.js'
 import { processBilboMDJobNersc } from '../services/pipelines/bilbomd-nersc.js'
 import { processBilboMDPDBJob } from '../services/pipelines/bilbomd-pdb.js'
 import { processBilboMDSANSJob } from '../services/pipelines/bilbomd-sans.js'
-import { WorkerJob } from 'types/jobtypes.js'
+import { WorkerJob } from '../types/jobtypes.js'
 
 export const bilboMdHandler = async (job: Job<WorkerJob>) => {
   logger.info(`bilboMdHandler: ${JSON.stringify(job.data)}`)

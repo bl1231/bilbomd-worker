@@ -1,9 +1,10 @@
 import { Job as BullMQJob } from 'bullmq'
-import { Job } from '@bl1231/bilbomd-mongodb-schema'
+import { Job, IJob, IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../../helpers/loggers.js'
 import fs from 'fs-extra'
 import path from 'path'
 import { spawn } from 'node:child_process'
+import { updateStepStatus } from '../functions/mongo-utils.js'
 
 const uploadFolder = process.env.DATA_VOL ?? '/bilbomd/uploads'
 const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
@@ -20,25 +21,32 @@ const initializeJob = async (MQJob: BullMQJob) => {
   await MQJob.log('Init!')
 }
 
-const cleanupJob = async (MQjob: BullMQJob) => {
+const cleanupJob = async (MQJob: BullMQJob) => {
   logger.info('----------------------cleanupJob-----------------------')
-  await MQjob.log('Done!')
+  await MQJob.log('Done!')
 }
 
 const processPdb2CrdJob = async (MQJob: BullMQJob) => {
+  let status: IStepStatus = {
+    status: 'Running',
+    message: 'Convert PDB to CRD/PSF has started.'
+  }
+  let foundJob: IJob | null = null
+
   try {
     await MQJob.updateProgress(1)
+
     logger.info(`UUID: ${MQJob.data.uuid}`)
-    const foundJob = await Job.findOne({ uuid: MQJob.data.uuid }).populate('user').exec()
+    foundJob = await Job.findOne({ uuid: MQJob.data.uuid }).populate('user').exec()
 
     if (!foundJob) {
       logger.warn(
         `No MongoDB entry found for: ${MQJob.data.uuid}. Must be from PAE Jiffy.`
       )
-      // return // Consider if you want to continue or exit the function here
     } else {
       logger.info(`MongoDB entry for ${MQJob.data.type} Job found: ${foundJob.uuid}`)
     }
+    await updateStepStatus(foundJob, 'pdb2crd', status)
 
     // Initialize
     await initializeJob(MQJob)
@@ -66,7 +74,21 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
     await spawnPdb2CrdCharmm(MQJob, charmmInpFiles)
     await MQJob.log('end pdb2crd charmm meld')
     await MQJob.updateProgress(65)
+    status = {
+      status: 'Success',
+      message: 'Convert PDB to CRD/PSF has completed.'
+    }
+    await updateStepStatus(foundJob, 'pdb2crd', status)
   } catch (error) {
+    status = {
+      status: 'Error',
+      message: `Error during conversion PDB to CRD/PSF ${error.message}`
+    }
+
+    if (foundJob) {
+      await updateStepStatus(foundJob, 'pdb2crd', status)
+    }
+
     logger.error(`Failed processing PDB2CRD Job: ${error}`)
     await MQJob.log(`Error processing job: ${error}`)
   } finally {

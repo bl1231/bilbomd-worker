@@ -3,7 +3,7 @@ import { logger } from '../helpers/loggers.js'
 import { config } from '../config/config.js'
 import { processPdb2CrdJob } from '../services/pipelines/pdb-to-crd.js'
 import { processPdb2CrdJobNersc } from '../services/pipelines/pdb-to-crd-nersc.js'
-import { WorkerJob } from 'types/jobtypes.js'
+import { WorkerJob } from '../types/jobtypes.js'
 
 export const pdb2CrdHandler = async (job: Job<WorkerJob>) => {
   logger.info(`pdb2CrdHandler: ${JSON.stringify(job.data)}`)

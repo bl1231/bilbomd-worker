@@ -8,6 +8,8 @@ import { updateStepStatus } from './mongo-utils.js'
 import { generateDCD2PDBInpFile } from './bilbomd-step-functions.js'
 import { spawn, ChildProcess, exec } from 'node:child_process'
 import { CharmmParams } from '../../types/index.js'
+import { makeDir, makeFile } from './job-utils.js'
+import { config } from '../../config/config.js'
 
 const execPromise = promisify(exec)
 
@@ -53,21 +55,8 @@ interface Config {
   GA_inputs: GAInput[]
 }
 
-const DATA_VOL = process.env.DATA_VOL ?? '/bilbomd/uploads'
-const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
-const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
-
 function isBilboMDSANSJob(job: IJob): job is IBilboMDSANSJob {
   return (job as IBilboMDSANSJob).d2o_fraction !== undefined
-}
-
-const makeFile = async (file: string) => {
-  await fs.ensureFile(file)
-}
-
-const makeDir = async (directory: string) => {
-  await fs.ensureDir(directory)
-  logger.info(`Create Dir: ${directory}`)
 }
 
 const copyFiles = async ({
@@ -119,7 +108,7 @@ const spawnCharmm = (params: CharmmParams): Promise<void> => {
   const charmmOpts = { cwd: out_dir }
 
   return new Promise<void>((resolve, reject) => {
-    const charmm: ChildProcess = spawn(CHARMM_BIN, charmmArgs, charmmOpts)
+    const charmm: ChildProcess = spawn(config.charmmBin, charmmArgs, charmmOpts)
     let charmmOutput = '' // Create an empty string to capture stdout
 
     charmm.stdout?.on('data', (data) => {
@@ -301,11 +290,11 @@ const writeConfigFile = async (
 }
 
 const extractPDBFilesFromDCD = async (DBjob: IBilboMDSANSJob): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const DCD2PDBParams: CharmmDCD2PDBParams = {
     out_dir: outputDir,
     charmm_template: 'dcd2pdb-sans',
-    charmm_topo_dir: TOPO_FILES,
+    charmm_topo_dir: config.charmmTopoDir,
     charmm_inp_file: '',
     charmm_out_file: '',
     in_psf_file: 'bilbomd_pdb2crd.psf',
@@ -352,7 +341,7 @@ const extractPDBFilesFromDCD = async (DBjob: IBilboMDSANSJob): Promise<void> => 
 }
 
 const remediatePDBFiles = async (DBjob: IBilboMDSANSJob): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const analysisDir = path.join(outputDir, 'pepsisans')
   let status: IStepStatus = {
     status: 'Running',
@@ -386,7 +375,7 @@ const remediatePDBFiles = async (DBjob: IBilboMDSANSJob): Promise<void> => {
 }
 
 const runPepsiSANSOnPDBFiles = async (DBjob: IBilboMDSANSJob): Promise<void> => {
-  const workingDir = path.join(DATA_VOL, DBjob.uuid)
+  const workingDir = path.join(config.uploadDir, DBjob.uuid)
   const analysisDir = path.join(workingDir, 'pepsisans')
 
   try {
@@ -450,7 +439,7 @@ const runPepsiSANSOnPDBFiles = async (DBjob: IBilboMDSANSJob): Promise<void> => 
 }
 
 const runGASANS = async (DBjob: IBilboMDSANSJob): Promise<void> => {
-  const workingDir = path.join(DATA_VOL, DBjob.uuid)
+  const workingDir = path.join(config.uploadDir, DBjob.uuid)
   const gasansOpts = ['/app/scripts/sans/GASANS-dask.py']
 
   // Paths to log files
@@ -545,7 +534,7 @@ const prepareBilboMDSANSResults = async (DBjob: IBilboMDSANSJob): Promise<void> 
 
 const prepareResults = async (DBjob: IBilboMDSANSJob): Promise<void> => {
   try {
-    const outputDir = path.join(DATA_VOL, DBjob.uuid)
+    const outputDir = path.join(config.uploadDir, DBjob.uuid)
     // const multiFoxsDir = path.join(outputDir, 'multifoxs')
     // const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
     const resultsDir = path.join(outputDir, 'results')

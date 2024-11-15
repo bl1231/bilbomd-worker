@@ -1,4 +1,3 @@
-import Handlebars from 'handlebars'
 import { logger } from '../../helpers/loggers.js'
 import { config } from '../../config/config.js'
 import { spawn, ChildProcess } from 'node:child_process'
@@ -34,16 +33,16 @@ import {
   FileCopyParams
 } from '../../types/index.js'
 import { updateStepStatus } from './mongo-utils.js'
+import {
+  makeDir,
+  makeFile,
+  generateDCD2PDBInpFile,
+  generateInputFile,
+  spawnCharmm,
+  spawnFoXS
+} from './job-utils.js'
 
 const execPromise = promisify(exec)
-const TEMPLATES = '/app/build/templates/bilbomd'
-
-const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
-const FOXS_BIN = process.env.FOXS ?? '/usr/bin/foxs'
-const MULTIFOXS_BIN = process.env.MULTIFOXS ?? '/usr/bin/multi_foxs'
-const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
-const DATA_VOL = process.env.DATA_VOL ?? '/bilbomd/uploads'
-const BILBOMD_URL = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
 
 const handleError = async (
   error: Error | unknown,
@@ -78,7 +77,7 @@ const handleError = async (
   const recipientEmail = (DBjob.user as IUser).email
   if (MQjob.attemptsMade >= 3) {
     if (config.sendEmailNotifications) {
-      sendJobCompleteEmail(recipientEmail, BILBOMD_URL, DBjob.id, DBjob.title, true)
+      sendJobCompleteEmail(recipientEmail, config.bilbomdUrl, DBjob.id, DBjob.title, true)
       logger.warn(`email notification sent to ${recipientEmail}`)
       await MQjob.log(`email notification sent to ${recipientEmail}`)
     }
@@ -89,50 +88,6 @@ const handleError = async (
 const updateJobStatus = async (job: IJob, status: string): Promise<void> => {
   job.status = status
   await job.save()
-}
-
-const writeInputFile = async (template: string, params: CharmmParams): Promise<void> => {
-  try {
-    const outFile = path.join(params.out_dir, params.charmm_inp_file)
-    const templ = Handlebars.compile(template)
-    const content = templ(params)
-
-    logger.info(`Write Input File: ${outFile}`)
-    await fs.promises.writeFile(outFile, content)
-  } catch (error) {
-    logger.error(`Error in writeInputFile: ${error}`)
-    throw error
-  }
-}
-
-const readTemplate = async (templateName: string): Promise<string> => {
-  const templateFile = path.join(TEMPLATES, `${templateName}.handlebars`)
-  return fs.readFile(templateFile, 'utf8')
-}
-
-const generateInputFile = async (params: CharmmParams): Promise<void> => {
-  const templateString = await readTemplate(params.charmm_template)
-  await writeInputFile(templateString, params)
-}
-
-const generateDCD2PDBInpFile = async (
-  params: CharmmDCD2PDBParams,
-  rg: number,
-  run: number
-) => {
-  // params.charmm_template = 'dcd2pdb'
-  // params.in_pdb = 'heat_output.pdb'
-  params.in_dcd = `dynamics_rg${rg}_run${run}.dcd`
-  await generateInputFile(params)
-}
-
-const makeFile = async (file: string) => {
-  await fs.ensureFile(file)
-}
-
-const makeDir = async (directory: string) => {
-  await fs.ensureDir(directory)
-  logger.info(`Create Dir: ${directory}`)
 }
 
 const makeFoxsDatFileList = async (dir: string) => {
@@ -233,32 +188,6 @@ const concatenateAndSaveAsEnsemble = async (
   }
 }
 
-const spawnFoXS = async (foxsRunDir: string) => {
-  try {
-    const files = await fs.readdir(foxsRunDir)
-    logger.info(`Spawn FoXS jobs: ${foxsRunDir}`)
-    const foxsOpts = { cwd: foxsRunDir }
-
-    const spawnPromises = files.map(
-      (file) =>
-        new Promise<void>((resolve, reject) => {
-          const foxsArgs = ['-p', file]
-          const foxs: ChildProcess = spawn(FOXS_BIN, foxsArgs, foxsOpts)
-          foxs.on('exit', (code) => {
-            if (code === 0) {
-              resolve()
-            } else {
-              reject(new Error(`FoXS process exited with code ${code}`))
-            }
-          })
-        })
-    )
-    await Promise.all(spawnPromises)
-  } catch (error) {
-    logger.error(error)
-  }
-}
-
 const spawnMultiFoxs = (params: MultiFoxsParams): Promise<void> => {
   const multiFoxsDir = path.join(params.out_dir, 'multifoxs')
   const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
@@ -270,7 +199,7 @@ const spawnMultiFoxs = (params: MultiFoxsParams): Promise<void> => {
   const multiFoxOpts = { cwd: multiFoxsDir }
 
   return new Promise((resolve, reject) => {
-    const multiFoxs: ChildProcess = spawn(MULTIFOXS_BIN, multiFoxArgs, multiFoxOpts)
+    const multiFoxs: ChildProcess = spawn(config.multifoxsBin, multiFoxArgs, multiFoxOpts)
     multiFoxs.stdout?.on('data', (data) => {
       logStream.write(data.toString())
     })
@@ -300,35 +229,6 @@ const spawnMultiFoxs = (params: MultiFoxsParams): Promise<void> => {
           logger.error(`Error closing file streams: ${streamError}`)
           reject(streamError)
         })
-    })
-  })
-}
-
-const spawnCharmm = (params: CharmmParams): Promise<void> => {
-  const { charmm_inp_file: inputFile, charmm_out_file: outputFile, out_dir } = params
-  const charmmArgs = ['-o', outputFile, '-i', inputFile]
-  const charmmOpts = { cwd: out_dir }
-
-  return new Promise<void>((resolve, reject) => {
-    const charmm: ChildProcess = spawn(CHARMM_BIN, charmmArgs, charmmOpts)
-    let charmmOutput = '' // Create an empty string to capture stdout
-
-    charmm.stdout?.on('data', (data) => {
-      charmmOutput += data.toString()
-    })
-
-    charmm.on('error', (error) => {
-      reject(new Error(`CHARMM process encountered an error: ${error.message}`))
-    })
-
-    charmm.on('close', (code: number) => {
-      if (code === 0) {
-        logger.info(`CHARMM success: ${inputFile} exit code: ${code}`)
-        resolve()
-      } else {
-        logger.info(`CHARMM error: ${inputFile} exit code: ${code}`)
-        reject(new Error(charmmOutput))
-      }
     })
   })
 }
@@ -421,7 +321,7 @@ const runPaeToConstInp = async (
   MQjob: BullMQJob,
   DBjob: IBilboMDAutoJob
 ): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   // I'm struggling with Typescript here. Since a BilboMDAutoJob will not
   // have a CRD file when it is first created. I know it's not considered
   // safe, but I'm going to use type assertion for now.
@@ -450,7 +350,7 @@ const runPaeToConstInp = async (
 }
 
 const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const logFile = path.join(outputDir, 'autoRg.log')
   const errorFile = path.join(outputDir, 'autoRg_error.log')
   const autoRg_script = '/app/scripts/autorg.py'
@@ -527,11 +427,11 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
 }
 
 const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const params: CharmmParams = {
     out_dir: outputDir,
     charmm_template: 'minimize',
-    charmm_topo_dir: TOPO_FILES,
+    charmm_topo_dir: config.charmmTopoDir,
     charmm_inp_file: 'minimize.inp',
     charmm_out_file: 'minimize.out',
     in_psf_file: DBjob.psf_file,
@@ -556,11 +456,11 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<voi
 }
 
 const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const params: CharmmHeatParams = {
     out_dir: outputDir,
     charmm_template: 'heat',
-    charmm_topo_dir: TOPO_FILES,
+    charmm_topo_dir: config.charmmTopoDir,
     charmm_inp_file: 'heat.inp',
     charmm_out_file: 'heat.out',
     in_psf_file: DBjob.psf_file,
@@ -589,11 +489,11 @@ const runMolecularDynamics = async (
   MQjob: BullMQJob,
   DBjob: IBilboMDCRDJob
 ): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const params: CharmmMDParams = {
     out_dir: outputDir,
     charmm_template: 'dynamics',
-    charmm_topo_dir: TOPO_FILES,
+    charmm_topo_dir: config.charmmTopoDir,
     charmm_inp_file: '',
     charmm_out_file: '',
     in_psf_file: DBjob.psf_file,
@@ -635,7 +535,7 @@ const runMolecularDynamics = async (
 }
 
 const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
 
   const foxsParams: FoxsParams = {
     out_dir: outputDir,
@@ -648,7 +548,7 @@ const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
   const DCD2PDBParams: CharmmDCD2PDBParams = {
     out_dir: outputDir,
     charmm_template: 'dcd2pdb',
-    charmm_topo_dir: TOPO_FILES,
+    charmm_topo_dir: config.charmmTopoDir,
     charmm_inp_file: '',
     charmm_out_file: '',
     in_psf_file: DBjob.psf_file,
@@ -766,7 +666,7 @@ const runFoXSCalculations = async (
 }
 
 const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void> => {
-  const outputDir = path.join(DATA_VOL, DBjob.uuid)
+  const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const multifoxsParams: MultiFoxsParams = {
     out_dir: outputDir,
     data_file: DBjob.data_file
@@ -814,7 +714,7 @@ const prepareResults = async (
   DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob
 ): Promise<void> => {
   try {
-    const outputDir = path.join(DATA_VOL, DBjob.uuid)
+    const outputDir = path.join(config.uploadDir, DBjob.uuid)
     const multiFoxsDir = path.join(outputDir, 'multifoxs')
     const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
     const resultsDir = path.join(outputDir, 'results')
@@ -1000,7 +900,7 @@ const prepareResults = async (
 }
 
 const spawnRgyrDmaxScript = async (DBjob: IJob): Promise<void> => {
-  const jobDir = path.join(DATA_VOL, DBjob.uuid)
+  const jobDir = path.join(config.uploadDir, DBjob.uuid)
   const logFile = path.join(jobDir, 'rgyr_v_dmax.log')
   const errorFile = path.join(jobDir, 'rgyr_v_dmax_error.log')
   const logStream = fs.createWriteStream(logFile)
@@ -1046,7 +946,7 @@ const spawnRgyrDmaxScript = async (DBjob: IJob): Promise<void> => {
 }
 
 const spawnFeedbackScript = async (DBjob: IJob): Promise<void> => {
-  const resultsDir = path.join(DATA_VOL, DBjob.uuid, 'results')
+  const resultsDir = path.join(config.uploadDir, DBjob.uuid, 'results')
   const logFile = path.join(resultsDir, 'feedback.log')
   const errorFile = path.join(resultsDir, 'feedback_error.log')
   const logStream = fs.createWriteStream(logFile)
