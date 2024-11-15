@@ -8,6 +8,7 @@ import { updateStepStatus } from './mongo-utils.js'
 import { generateDCD2PDBInpFile } from './bilbomd-step-functions.js'
 import { spawn, ChildProcess, exec } from 'node:child_process'
 import { CharmmParams } from '../../types/index.js'
+import { makeDir, makeFile } from './job-utils.js'
 
 const execPromise = promisify(exec)
 
@@ -59,15 +60,6 @@ const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
 
 function isBilboMDSANSJob(job: IJob): job is IBilboMDSANSJob {
   return (job as IBilboMDSANSJob).d2o_fraction !== undefined
-}
-
-const makeFile = async (file: string) => {
-  await fs.ensureFile(file)
-}
-
-const makeDir = async (directory: string) => {
-  await fs.ensureDir(directory)
-  logger.info(`Create Dir: ${directory}`)
 }
 
 const copyFiles = async ({

@@ -1,4 +1,3 @@
-import Handlebars from 'handlebars'
 import { logger } from '../../helpers/loggers.js'
 import { config } from '../../config/config.js'
 import { spawn, ChildProcess } from 'node:child_process'
@@ -34,14 +33,19 @@ import {
   FileCopyParams
 } from '../../types/index.js'
 import { updateStepStatus } from './mongo-utils.js'
+import {
+  makeDir,
+  makeFile,
+  generateDCD2PDBInpFile,
+  generateInputFile,
+  spawnCharmm,
+  spawnFoXS
+} from './job-utils.js'
 
 const execPromise = promisify(exec)
-const TEMPLATES = '/app/build/templates/bilbomd'
 
 const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
-const FOXS_BIN = process.env.FOXS ?? '/usr/bin/foxs'
 const MULTIFOXS_BIN = process.env.MULTIFOXS ?? '/usr/bin/multi_foxs'
-const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
 const DATA_VOL = process.env.DATA_VOL ?? '/bilbomd/uploads'
 const BILBOMD_URL = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
 
@@ -89,50 +93,6 @@ const handleError = async (
 const updateJobStatus = async (job: IJob, status: string): Promise<void> => {
   job.status = status
   await job.save()
-}
-
-const writeInputFile = async (template: string, params: CharmmParams): Promise<void> => {
-  try {
-    const outFile = path.join(params.out_dir, params.charmm_inp_file)
-    const templ = Handlebars.compile(template)
-    const content = templ(params)
-
-    logger.info(`Write Input File: ${outFile}`)
-    await fs.promises.writeFile(outFile, content)
-  } catch (error) {
-    logger.error(`Error in writeInputFile: ${error}`)
-    throw error
-  }
-}
-
-const readTemplate = async (templateName: string): Promise<string> => {
-  const templateFile = path.join(TEMPLATES, `${templateName}.handlebars`)
-  return fs.readFile(templateFile, 'utf8')
-}
-
-const generateInputFile = async (params: CharmmParams): Promise<void> => {
-  const templateString = await readTemplate(params.charmm_template)
-  await writeInputFile(templateString, params)
-}
-
-const generateDCD2PDBInpFile = async (
-  params: CharmmDCD2PDBParams,
-  rg: number,
-  run: number
-) => {
-  // params.charmm_template = 'dcd2pdb'
-  // params.in_pdb = 'heat_output.pdb'
-  params.in_dcd = `dynamics_rg${rg}_run${run}.dcd`
-  await generateInputFile(params)
-}
-
-const makeFile = async (file: string) => {
-  await fs.ensureFile(file)
-}
-
-const makeDir = async (directory: string) => {
-  await fs.ensureDir(directory)
-  logger.info(`Create Dir: ${directory}`)
 }
 
 const makeFoxsDatFileList = async (dir: string) => {
@@ -233,32 +193,6 @@ const concatenateAndSaveAsEnsemble = async (
   }
 }
 
-const spawnFoXS = async (foxsRunDir: string) => {
-  try {
-    const files = await fs.readdir(foxsRunDir)
-    logger.info(`Spawn FoXS jobs: ${foxsRunDir}`)
-    const foxsOpts = { cwd: foxsRunDir }
-
-    const spawnPromises = files.map(
-      (file) =>
-        new Promise<void>((resolve, reject) => {
-          const foxsArgs = ['-p', file]
-          const foxs: ChildProcess = spawn(FOXS_BIN, foxsArgs, foxsOpts)
-          foxs.on('exit', (code) => {
-            if (code === 0) {
-              resolve()
-            } else {
-              reject(new Error(`FoXS process exited with code ${code}`))
-            }
-          })
-        })
-    )
-    await Promise.all(spawnPromises)
-  } catch (error) {
-    logger.error(error)
-  }
-}
-
 const spawnMultiFoxs = (params: MultiFoxsParams): Promise<void> => {
   const multiFoxsDir = path.join(params.out_dir, 'multifoxs')
   const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
@@ -300,35 +234,6 @@ const spawnMultiFoxs = (params: MultiFoxsParams): Promise<void> => {
           logger.error(`Error closing file streams: ${streamError}`)
           reject(streamError)
         })
-    })
-  })
-}
-
-const spawnCharmm = (params: CharmmParams): Promise<void> => {
-  const { charmm_inp_file: inputFile, charmm_out_file: outputFile, out_dir } = params
-  const charmmArgs = ['-o', outputFile, '-i', inputFile]
-  const charmmOpts = { cwd: out_dir }
-
-  return new Promise<void>((resolve, reject) => {
-    const charmm: ChildProcess = spawn(CHARMM_BIN, charmmArgs, charmmOpts)
-    let charmmOutput = '' // Create an empty string to capture stdout
-
-    charmm.stdout?.on('data', (data) => {
-      charmmOutput += data.toString()
-    })
-
-    charmm.on('error', (error) => {
-      reject(new Error(`CHARMM process encountered an error: ${error.message}`))
-    })
-
-    charmm.on('close', (code: number) => {
-      if (code === 0) {
-        logger.info(`CHARMM success: ${inputFile} exit code: ${code}`)
-        resolve()
-      } else {
-        logger.info(`CHARMM error: ${inputFile} exit code: ${code}`)
-        reject(new Error(charmmOutput))
-      }
     })
   })
 }
