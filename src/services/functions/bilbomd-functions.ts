@@ -15,7 +15,7 @@ import {
 import path from 'path'
 import { updateStepStatus } from './mongo-utils.js'
 import { CharmmDCD2PDBParams } from '../../types/index.js'
-import { config } from 'config/config.js'
+import { config } from '../../config/config.js'
 import { logger } from '../../helpers/loggers.js'
 import fs from 'fs-extra'
 
