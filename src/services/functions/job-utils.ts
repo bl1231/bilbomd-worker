@@ -4,9 +4,10 @@ import { logger } from '../../helpers/loggers.js'
 import { sendJobCompleteEmail } from '../../helpers/mailer.js'
 import { config } from '../../config/config.js'
 import fs from 'fs-extra'
-import { CharmmDCD2PDBParams, CharmmParams } from 'types/index.js'
+import { CharmmDCD2PDBParams, CharmmParams } from '../../types/index.js'
 import path from 'path'
 import { spawn, ChildProcess } from 'node:child_process'
+import Handlebars from 'handlebars'
 
 const BILBOMD_URL = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
 
