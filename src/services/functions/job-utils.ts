@@ -1,4 +1,4 @@
-import { User, IJob } from '@bl1231/bilbomd-mongodb-schema'
+import { User, IUser, IJob, IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
 import { Job as BullMQJob } from 'bullmq'
 import { logger } from '../../helpers/loggers.js'
 import { sendJobCompleteEmail } from '../../helpers/mailer.js'
@@ -8,8 +8,7 @@ import { CharmmDCD2PDBParams, CharmmParams } from '../../types/index.js'
 import path from 'path'
 import { spawn, ChildProcess } from 'node:child_process'
 import Handlebars from 'handlebars'
-
-const BILBOMD_URL = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
+import { updateStepStatus } from './mongo-utils.js'
 
 const initializeJob = async (MQJob: BullMQJob, DBjob: IJob): Promise<void> => {
   try {
@@ -35,27 +34,69 @@ const initializeJob = async (MQJob: BullMQJob, DBjob: IJob): Promise<void> => {
 
 const cleanupJob = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
   try {
-    // Update MongoDB job status and completion time
-    DBjob.status = 'Completed'
-    DBjob.time_completed = new Date()
-    await DBjob.save()
+    // Mark job as completed in the database
+    await markJobAsCompleted(DBjob)
 
-    // Retrieve the user email from the associated User model
-    const user = await User.findById(DBjob.user).lean().exec()
+    // Fetch user associated with the job
+    const user = await fetchJobUser(DBjob)
     if (!user) {
       logger.error(`No user found for: ${DBjob.uuid}`)
       return
     }
 
-    // Send job completion email and log the notification
-    if (config.sendEmailNotifications) {
-      sendJobCompleteEmail(user.email, BILBOMD_URL, DBjob.id, DBjob.title, false)
-      logger.info(`email notification sent to ${user.email}`)
-      await MQjob.log(`email notification sent to ${user.email}`)
-    }
+    // Handle email notifications
+    await handleJobEmailNotification(MQjob, DBjob, user)
   } catch (error) {
     logger.error(`Error in cleanupJob: ${error}`)
     throw error
+  }
+}
+
+// Mark job as completed
+const markJobAsCompleted = async (DBjob: IJob): Promise<void> => {
+  DBjob.status = 'Completed'
+  DBjob.time_completed = new Date()
+  await DBjob.save()
+}
+
+// Fetch user associated with the job
+const fetchJobUser = async (DBjob: IJob): Promise<IUser | null> => {
+  return User.findById(DBjob.user).lean<IUser>().exec()
+}
+
+// Handle email notifications
+const handleJobEmailNotification = async (
+  MQjob: BullMQJob,
+  DBjob: IJob,
+  user: IUser
+): Promise<void> => {
+  if (config.sendEmailNotifications) {
+    let status: IStepStatus = {
+      status: 'Running',
+      message: `Sending email to: ${user.email}`
+    }
+    await updateStepStatus(DBjob, 'email', status)
+
+    try {
+      sendJobCompleteEmail(user.email, config.bilbomdUrl, DBjob.id, DBjob.title, false)
+      logger.info(`Email notification sent to ${user.email}`)
+      await MQjob.log(`Email notification sent to ${user.email}`)
+
+      status = {
+        status: 'Success',
+        message: `Email sent to: ${user.email}`
+      }
+      await updateStepStatus(DBjob, 'email', status)
+    } catch (emailError) {
+      logger.error(`Failed to send email to ${user.email}: ${emailError.message}`)
+      status = {
+        status: 'Error',
+        message: `Failed to send email: ${emailError.message}`
+      }
+      await updateStepStatus(DBjob, 'email', status)
+    }
+  } else {
+    logger.info(`Skipping email notification for ${user.email}`)
   }
 }
 

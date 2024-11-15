@@ -44,11 +44,6 @@ import {
 
 const execPromise = promisify(exec)
 
-// const TOPO_FILES = process.env.CHARM_TOPOLOGY ?? 'bilbomd_top_par_files.str'
-// const MULTIFOXS_BIN = process.env.MULTIFOXS ?? '/usr/bin/multi_foxs'
-// const DATA_VOL = process.env.DATA_VOL ?? '/bilbomd/uploads'
-const BILBOMD_URL = process.env.BILBOMD_URL ?? 'https://bilbomd.bl1231.als.lbl.gov'
-
 const handleError = async (
   error: Error | unknown,
   MQjob: BullMQJob,
@@ -82,7 +77,7 @@ const handleError = async (
   const recipientEmail = (DBjob.user as IUser).email
   if (MQjob.attemptsMade >= 3) {
     if (config.sendEmailNotifications) {
-      sendJobCompleteEmail(recipientEmail, BILBOMD_URL, DBjob.id, DBjob.title, true)
+      sendJobCompleteEmail(recipientEmail, config.bilbomdUrl, DBjob.id, DBjob.title, true)
       logger.warn(`email notification sent to ${recipientEmail}`)
       await MQjob.log(`email notification sent to ${recipientEmail}`)
     }
