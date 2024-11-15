@@ -12,7 +12,7 @@ const getEnvVar = (name: string): string => {
 export const config = {
   sendEmailNotifications: process.env.SEND_EMAIL_NOTIFICATIONS === 'true',
   bilbomdUrl: getEnvVar('BILBOMD_URL'),
-  runOnNERSC: getEnvVar('RUN_ON_NERSC'),
+  runOnNERSC: process.env.USE_NERSC === 'true', // Explicit boolean conversion
   nerscBaseAPI: getEnvVar('SFAPI_URL'),
   nerscScriptDir: getEnvVar('SCRIPT_DIR'),
   nerscUploadDir: getEnvVar('UPLOAD_DIR'),
