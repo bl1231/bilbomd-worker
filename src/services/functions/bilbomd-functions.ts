@@ -36,7 +36,7 @@ const extractPDBFilesFromDCD = async (
     charmm_topo_dir: config.charmmTopoDir,
     charmm_inp_file: '',
     charmm_out_file: '',
-    in_psf_file: 'bilbomd_pdb2crd.psf',
+    in_psf_file: DBjob.psf_file,
     in_crd_file: '',
     inp_basename: '',
     in_dcd: '',
