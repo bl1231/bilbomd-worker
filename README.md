@@ -49,6 +49,9 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.11.1 (11/19/2024)
+  - Return `minimization_output_$datfileprefix.dat` in results.tar.gz file
+  - Update several dependencies
 - 1.11.0 (11/15/2024)
   - Add a PDB remediation step to non-NERSC pipelines
 - 1.10.1 (11/13/2024)
