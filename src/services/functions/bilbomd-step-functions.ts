@@ -714,10 +714,10 @@ const prepareResults = async (
   DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob
 ): Promise<void> => {
   try {
-    const outputDir = path.join(config.uploadDir, DBjob.uuid)
-    const multiFoxsDir = path.join(outputDir, 'multifoxs')
+    const jobDir = path.join(config.uploadDir, DBjob.uuid)
+    const multiFoxsDir = path.join(jobDir, 'multifoxs')
     const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
-    const resultsDir = path.join(outputDir, 'results')
+    const resultsDir = path.join(jobDir, 'results')
 
     // Create new empty results directory
     try {
@@ -730,7 +730,7 @@ const prepareResults = async (
 
     // Copy the minimized PDB
     await copyFiles({
-      source: `${outputDir}/minimization_output.pdb`,
+      source: `${jobDir}/minimization_output.pdb`,
       destination: resultsDir,
       filename: 'minimization_output.pdb',
       MQjob,
@@ -739,7 +739,7 @@ const prepareResults = async (
 
     // Copy the DAT file for the minimized PDB
     await copyFiles({
-      source: `${outputDir}/minimization_output.pdb.dat`,
+      source: `${jobDir}/minimization_output_${DBjob.data_file.split('.')[0]}.dat`,
       destination: resultsDir,
       filename: 'minimization_output.pdb.dat',
       MQjob,
@@ -812,7 +812,7 @@ const prepareResults = async (
     for (const { file, label } of filesToCopy) {
       if (file) {
         await copyFiles({
-          source: path.join(outputDir, file),
+          source: path.join(jobDir, file),
           destination: resultsDir,
           filename: label,
           MQjob,
@@ -836,9 +836,7 @@ const prepareResults = async (
         const ensembleFileContent = await fs.readFile(ensembleFile, 'utf8')
         const pdbFilesRelative = extractPdbPaths(ensembleFileContent)
 
-        const pdbFilesFullPath = pdbFilesRelative.map((item) =>
-          path.join(outputDir, item)
-        )
+        const pdbFilesFullPath = pdbFilesRelative.map((item) => path.join(jobDir, item))
         // Extract the first N PDB files to string[]
         const numToCopy = Math.min(pdbFilesFullPath.length, i)
         const ensembleModelFiles = pdbFilesFullPath.slice(0, numToCopy)
@@ -888,7 +886,7 @@ const prepareResults = async (
     try {
       const uuidPrefix = DBjob.uuid.split('-')[0]
       const archiveName = `results-${uuidPrefix}.tar.gz`
-      await execPromise(`tar czvf ${archiveName} results`, { cwd: outputDir })
+      await execPromise(`tar czvf ${archiveName} results`, { cwd: jobDir })
       MQjob.log(`created ${archiveName} file`)
     } catch (error) {
       logger.error(`Error creating tar file: ${error}`)
@@ -1029,7 +1027,9 @@ const createReadmeFile = async (
 - Original experimental SAXS data file: ${crdJob.data_file}
 - Original const.inp file: ${crdJob.const_inp_file}
 - Generated minimized PDB file: minimized_output.pdb
-- Generated minimized PDB DAT file: minimized_output.pdb.dat
+- Generated minimized PDB DAT file: minimization_output_${
+        crdJob.data_file.split('.')[0]
+      }.dat
 `
       break
     }
@@ -1042,7 +1042,9 @@ const createReadmeFile = async (
 - Original experimental SAXS data file: ${pdbJob.data_file}
 - Original const.inp file: ${pdbJob.const_inp_file}
 - Generated minimized PDB file: minimized_output.pdb
-- Generated minimized PDB DAT file: minimized_output.pdb.dat
+- Generated minimized PDB DAT file: minimization_output_${
+        pdbJob.data_file.split('.')[0]
+      }.dat
 `
       break
     }
@@ -1056,7 +1058,9 @@ const createReadmeFile = async (
 - Original experimental SAXS data file: ${autoJob.data_file}
 - Generated const.inp file: ${autoJob.const_inp_file}
 - Generated minimized PDB file: minimized_output.pdb
-- Generated minimized PDB DAT file: minimized_output.pdb.dat
+- Generated minimized PDB DAT file: minimization_output_${
+        autoJob.data_file.split('.')[0]
+      }.dat
 `
       break
     }
@@ -1071,7 +1075,9 @@ const createReadmeFile = async (
 - Generated PSF file: bilbomd_pdb2crd.psf
 - Generated const.inp file: const.inp
 - Generated minimized PDB file: minimized_output.pdb
-- Generated minimized PDB DAT file: minimized_output.pdb.dat
+- Generated minimized PDB DAT file: minimization_output_${
+        alphafoldJob.data_file.split('.')[0]
+      }.dat
 `
       break
     }
