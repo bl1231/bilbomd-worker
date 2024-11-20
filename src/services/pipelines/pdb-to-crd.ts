@@ -46,7 +46,11 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
     } else {
       logger.info(`MongoDB entry for ${MQJob.data.type} Job found: ${foundJob.uuid}`)
     }
-    await updateStepStatus(foundJob, 'pdb2crd', status)
+    if (foundJob) {
+      await updateStepStatus(foundJob, 'pdb2crd', status)
+    } else {
+      logger.warn('no mongodb entry found for job. processing pae jiffy job')
+    }
 
     // Initialize
     await initializeJob(MQJob)
@@ -78,7 +82,11 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
       status: 'Success',
       message: 'Convert PDB to CRD/PSF has completed.'
     }
-    await updateStepStatus(foundJob, 'pdb2crd', status)
+    if (foundJob) {
+      await updateStepStatus(foundJob, 'pdb2crd', status)
+    } else {
+      logger.warn('no mongodb entry found for job. processing pae jiffy job')
+    }
   } catch (error) {
     status = {
       status: 'Error',
@@ -87,6 +95,8 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
 
     if (foundJob) {
       await updateStepStatus(foundJob, 'pdb2crd', status)
+    } else {
+      logger.warn('no mongodb entry found for job. processing pae jiffy job')
     }
 
     logger.error(`Failed processing PDB2CRD Job: ${error}`)
