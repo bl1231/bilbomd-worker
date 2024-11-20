@@ -49,6 +49,8 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.11.2 (11/20/2024)
+  - Fix PAE Jiffy bug preventing it from working as expected.
 - 1.11.1 (11/19/2024)
   - Return `minimization_output_$datfileprefix.dat` in results.tar.gz file
   - Update several dependencies
