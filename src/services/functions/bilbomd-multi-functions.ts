@@ -60,4 +60,27 @@ const prepareMultiMDdatFileList = async (DBJob: IMultiJob): Promise<void> => {
   }
 }
 
-export { prepareMultiMDdatFileList }
+const processJobDetails = async (DBJob: IMultiJob) => {
+  try {
+    console.log(`Processing MultiJob: ${DBJob.title}`)
+
+    // Check if bilbomd_jobs is populated
+    if (!DBJob.bilbomd_jobs || DBJob.bilbomd_jobs.length === 0) {
+      console.log('No associated jobs found or bilbomd_jobs is not populated.')
+      return
+    }
+
+    // Iterate over the populated bilbomd_jobs and access fields
+    for (const job of DBJob.bilbomd_jobs) {
+      console.log(`Job UUID: ${job.uuid}`)
+      console.log(`Job Title: ${job.title}`)
+      console.log(`Job Status: ${job.status}`)
+      console.log(`SAXS data file: ${job.data_file}`)
+      // Add any additional logic here
+    }
+  } catch (error) {
+    console.error('Error processing jobs:', error)
+  }
+}
+
+export { prepareMultiMDdatFileList, processJobDetails }
