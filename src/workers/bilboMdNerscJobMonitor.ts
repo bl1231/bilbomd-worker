@@ -49,94 +49,91 @@ interface EmailMessage {
   error?: boolean
 }
 
+interface MonitoringError {
+  message: string
+}
+
+const fetchRunningOrPendingJobs = async (): Promise<IJob[]> => {
+  return DBJob.find({
+    'nersc.state': { $in: ['RUNNING', 'PENDING'] }, // Jobs in RUNNING or PENDING state
+    cleanup_in_progress: false // Ensure they are not being cleaned
+  }).exec()
+}
+
+const queryNERSCForJobState = async (job: IJob): Promise<INerscInfo | null> => {
+  try {
+    const nerscState = await fetchNERSCJobState(job.nersc?.jobid)
+    if (!nerscState) {
+      logger.warn(`Failed to fetch NERSC state for job ${job.nersc?.jobid}.`)
+      await handleStateFetchFailure(job)
+      return null
+    }
+    return nerscState
+  } catch (error) {
+    logger.error(`Error querying NERSC for job ${job.nersc?.jobid}: ${error.message}`)
+    await handleMonitoringError(job, error)
+    return null
+  }
+}
+
+const updateJobStateInMongoDB = async (
+  job: IJob,
+  nerscState: INerscInfo
+): Promise<void> => {
+  try {
+    await updateJobNerscState(job, nerscState) // Update state in MongoDB
+    const progress = await calculateProgress(job.toObject().steps) // Calculate progress
+    job.progress = progress
+    logger.info(`Progress for job ${job.nersc?.jobid}: ${progress}%`)
+    await job.save() // Save the updated job
+  } catch (error) {
+    logger.error(`Error updating job ${job.nersc?.jobid} in MongoDB: ${error.message}`)
+    await handleMonitoringError(job, error)
+  }
+}
+
+const handleCompletedJob = async (job: IJob): Promise<void> => {
+  try {
+    logger.info(`Job ${job.nersc?.jobid} is COMPLETED. Initiating cleanup.`)
+    job.cleanup_in_progress = true // Mark job as being cleaned
+    await job.save()
+
+    await performJobCleanup(job) // Perform the cleanup
+
+    job.status = 'Completed' // Mark job as completed
+    job.cleanup_in_progress = false // Reset cleanup flag
+    await job.save()
+    logger.info(`Cleanup completed for job ${job.nersc?.jobid}.`)
+  } catch (error) {
+    logger.error(`Error during cleanup for job ${job.nersc?.jobid}: ${error.message}`)
+    job.cleanup_in_progress = false // Reset flag in case of failure
+    await job.save()
+  }
+}
+
 const monitorAndCleanupJobs = async () => {
   try {
-    // Get all jobs with a defined NERSC state
-    const jobs: IJob[] = await DBJob.find({ 'nersc.state': { $ne: null } }).exec()
-    logger.info(`Found ${jobs.length} jobs with NERSC info.`)
+    logger.info('Starting job monitoring and cleanup...')
+
+    // Step 1: Fetch all jobs in RUNNING or PENDING state
+    const jobs = await fetchRunningOrPendingJobs()
+    logger.info(`Found ${jobs.length} jobs in RUNNING or PENDING state.`)
 
     for (const job of jobs) {
-      const jobId = job.nersc?.jobid
+      const nerscState = await queryNERSCForJobState(job)
+      if (!nerscState) continue // Skip if NERSC state could not be fetched
 
-      if (!jobId) {
-        logger.warn(`Job ${job.uuid} has no NERSC job ID.`)
-        continue // Skip jobs without a NERSC job ID
-      }
+      // Step 2: Update the job state in MongoDB
+      await updateJobStateInMongoDB(job, nerscState)
 
-      try {
-        // Fetch the current state from NERSC via SFAPI
-        const nerscState = await fetchNERSCJobState(jobId)
-
-        if (!nerscState) {
-          logger.warn(`Failed to fetch NERSC state for job ${jobId}.`)
-          await handleStateFetchFailure(job)
-          continue // Skip further processing if state fetch fails
-        }
-
-        // Update the job state in MongoDB
-        await updateJobNerscState(job, nerscState)
-
-        // Calculate and save progress only if the job is not already marked as Completed
-        if (job.status !== 'Completed') {
-          const jcopy = job.toObject() // Create a plain object for progress calculation
-          const progress = await calculateProgress(jcopy.steps)
-          job.progress = progress
-          logger.info(`Progress for job ${job.nersc.jobid}: ${progress}%`)
-          await job.save() // Save the updated progress
-        } else {
-          logger.info(`Skipping progress update for completed job ${job.nersc.jobid}.`)
-        }
-
-        // If job is no longer PENDING or RUNNING, perform cleanup
-        if (shouldCleanupJob(job)) {
-          try {
-            // Atomically check and set the cleanup_in_progress flag
-            const updatedJob = await DBJob.findOneAndUpdate(
-              { _id: job._id, cleanup_in_progress: false }, // Only pick jobs not already in progress
-              { cleanup_in_progress: true }, // Mark as in progress
-              { new: true } // Return the updated document
-            )
-
-            if (!updatedJob) {
-              logger.info(`Cleanup already in progress for job ${jobId}. Skipping.`)
-              continue // Skip to the next job
-            }
-
-            logger.info(
-              `Job ${updatedJob.nersc.jobid} state: ${updatedJob.nersc.state}. Initiating cleanup...`
-            )
-
-            // Perform cleanup
-            await performJobCleanup(updatedJob)
-
-            logger.info(`Cleanup complete for job ${updatedJob.nersc.jobid}.`)
-          } finally {
-            // Ensure the flag is reset regardless of success or failure
-            const resetJob = await DBJob.findOneAndUpdate(
-              { _id: job._id }, // Locate the job
-              { cleanup_in_progress: false }, // Reset the flag
-              { new: true } // Return the updated document
-            )
-
-            if (resetJob) {
-              logger.info(`Reset cleanup_in_progress flag for job ${jobId}.`)
-            } else {
-              logger.warn(`Failed to reset cleanup_in_progress flag for job ${jobId}.`)
-            }
-          }
-        }
-      } catch (error) {
-        logger.error(`Error monitoring job ${jobId}: ${error.message}`)
-        await handleMonitoringError(job, error)
+      // Step 3: Handle completed jobs
+      if (nerscState.state === 'COMPLETED') {
+        await handleCompletedJob(job)
       }
     }
   } catch (error) {
     logger.error(`Error during job monitoring: ${error.message}`)
   }
-}
-
-interface MonitoringError {
-  message: string
 }
 
 const handleMonitoringError = async (
@@ -148,14 +145,14 @@ const handleMonitoringError = async (
   await job.save()
 }
 
-const shouldCleanupJob = (job: IJob): boolean => {
-  const nerscState = job.nersc?.state
-  const jobStatus = job.status
+// const shouldCleanupJob = (job: IJob): boolean => {
+//   const nerscState = job.nersc?.state
+//   const jobStatus = job.status
 
-  // Check if the job is no longer PENDING or RUNNING on NERSC
-  // and is not already Completed overall
-  return !['PENDING', 'RUNNING'].includes(nerscState) && jobStatus !== 'Completed'
-}
+//   // Check if the job is no longer PENDING or RUNNING on NERSC
+//   // and is not already Completed overall
+//   return !['PENDING', 'RUNNING'].includes(nerscState) && jobStatus !== 'Completed'
+// }
 
 const updateJobNerscState = async (job: IJob, nerscState: INerscInfo) => {
   job.nersc.state = nerscState.state

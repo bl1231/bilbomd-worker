@@ -51,6 +51,7 @@ function isBilboMDAlphaFoldJob(job: IJob): job is IBilboMDAlphaFoldJob {
 }
 
 const updateNerscSpecificSteps = async (DBJob: IJob): Promise<void> => {
+  logger.info(`Updating NERSC-specific steps for job: ${DBJob.uuid}`)
   // Ensure the steps object exists
   if (!DBJob.steps) {
     DBJob.steps = {} as IBilboMDSteps
@@ -84,6 +85,7 @@ const updateNerscSpecificSteps = async (DBJob: IJob): Promise<void> => {
 
   // Save the job document to persist the changes
   await DBJob.save()
+  logger.info(`Updated NERSC-specific steps for job: ${DBJob.uuid}`)
 }
 
 const makeBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {

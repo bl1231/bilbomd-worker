@@ -129,14 +129,21 @@ if (config.runOnNERSC) {
 
   // Start monitoring and cleanup process
   logger.info('Starting the monitoring and cleanup process...')
+  let isMonitoring = false
   setInterval(async () => {
+    if (isMonitoring) {
+      logger.info('Monitoring already in progress, skipping this interval.')
+      return
+    }
+    isMonitoring = true
     try {
       await monitorAndCleanupJobs()
-      // logger.info('Monitoring and cleanup completed successfully.')
     } catch (error) {
       logger.error(`Monitoring and cleanup process failed: ${error.message}`)
+    } finally {
+      isMonitoring = false
     }
-  }, 60000) // Run every 1 minutes
+  }, 60000)
 }
 
 // Start the workers initially
