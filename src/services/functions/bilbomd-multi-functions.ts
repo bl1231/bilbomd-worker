@@ -343,6 +343,7 @@ const cleanupJob = async (DBjob: IMultiJob): Promise<void> => {
     // Mark job as completed in the database
     DBjob.status = 'Completed'
     DBjob.time_completed = new Date()
+    DBjob.progress = 100
     await DBjob.save()
 
     // Fetch user associated with the job

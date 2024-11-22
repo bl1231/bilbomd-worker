@@ -42,11 +42,8 @@ const processMultiMDJob = async (MQjob: BullMQJob) => {
 
   // Send results to user
   await cleanupJob(job)
-  job.progress = 95
-  await job.save()
 
-  job.progress = 100
-  await job.save()
+  // Update BullMQ job progress
   await MQjob.updateProgress(100)
 }
 
