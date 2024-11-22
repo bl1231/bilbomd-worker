@@ -48,7 +48,8 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 - Michal Hammel mhammel at lbl dot gov
 
 ## Version History
-
+- 1.12.0 (11/21/2024)
+  - Add BilboMD Multi pipeline
 - 1.11.2 (11/20/2024)
   - Fix PAE Jiffy bug preventing it from working as expected.
 - 1.11.1 (11/19/2024)
