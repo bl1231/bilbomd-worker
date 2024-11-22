@@ -53,71 +53,68 @@ const monitorAndCleanupJobs = async () => {
   try {
     logger.info('Starting job monitoring and cleanup...')
 
-    while (true) {
-      // Atomically find a job ready for cleanup and mark it as in progress
-      const job = await DBJob.findOneAndUpdate(
+    let job: IJob
+    do {
+      // Atomically find a job that is ready for cleanup and mark it as in progress
+      job = await DBJob.findOneAndUpdate(
         {
-          'nersc.state': { $ne: null }, // Ensure job has a defined NERSC state
-          cleanup_in_progress: false, // Only pick jobs not already in progress
+          'nersc.state': { $ne: null }, // Jobs with a defined NERSC state
+          cleanup_in_progress: false, // Ensure it's not already being cleaned
           status: { $ne: 'Completed' } // Exclude already completed jobs
         },
-        { $set: { cleanup_in_progress: true } }, // Mark the job as in progress
+        { $set: { cleanup_in_progress: true } }, // Mark as in progress
         { new: true } // Return the updated document
       ).exec()
 
-      if (!job) {
-        logger.info('No jobs available for monitoring or cleanup.')
-        break // Exit loop if no jobs are found
+      if (job) {
+        logger.info(`Processing job ${job.uuid} with NERSC job ID: ${job.nersc?.jobid}`)
+
+        try {
+          const jobId = job.nersc?.jobid
+          if (!jobId) {
+            logger.warn(`Job ${job.uuid} has no NERSC job ID. Skipping.`)
+            continue
+          }
+
+          // Fetch and update the NERSC job state
+          const nerscState = await fetchNERSCJobState(jobId)
+          if (!nerscState) {
+            logger.warn(`Failed to fetch NERSC state for job ${jobId}.`)
+            await handleStateFetchFailure(job)
+            continue
+          }
+          await updateJobNerscState(job, nerscState)
+
+          // Calculate progress
+          const progress = await calculateProgress(job.toObject().steps)
+          job.progress = progress
+          logger.info(`Progress for job ${job.nersc?.jobid}: ${progress}%`)
+          await job.save()
+
+          // Perform cleanup if required
+          if (shouldCleanupJob(job)) {
+            logger.info(`Initiating cleanup for job ${jobId}.`)
+            await performJobCleanup(job)
+
+            // Mark job as completed
+            job.status = 'Completed'
+            job.cleanup_in_progress = false // Reset the flag after cleanup
+            await job.save()
+            logger.info(`Cleanup completed for job ${jobId}.`)
+          }
+        } catch (error) {
+          logger.error(`Error processing job ${job.nersc?.jobid}: ${error.message}`)
+          await handleMonitoringError(job, error)
+
+          // Reset the cleanup flag to allow retry in the next interval
+          await DBJob.findOneAndUpdate(
+            { _id: job._id },
+            { $set: { cleanup_in_progress: false } },
+            { new: true }
+          )
+        }
       }
-
-      logger.info(`Processing job ${job.uuid} with NERSC job ID: ${job.nersc?.jobid}`)
-
-      try {
-        const jobId = job.nersc?.jobid
-
-        if (!jobId) {
-          logger.warn(`Job ${job.uuid} has no NERSC job ID. Skipping.`)
-          continue
-        }
-
-        // Fetch the current state from NERSC via SFAPI
-        const nerscState = await fetchNERSCJobState(jobId)
-
-        if (!nerscState) {
-          logger.warn(`Failed to fetch NERSC state for job ${jobId}.`)
-          await handleStateFetchFailure(job)
-          continue
-        }
-
-        // Update the job state in MongoDB
-        await updateJobNerscState(job, nerscState)
-
-        // Calculate and save progress
-        const progress = await calculateProgress(job.toObject().steps)
-        job.progress = progress
-        logger.info(`Progress for job ${job.nersc?.jobid}: ${progress}%`)
-        await job.save()
-
-        // Perform cleanup if the job is ready
-        if (shouldCleanupJob(job)) {
-          logger.info(`Initiating cleanup for job ${jobId}.`)
-          await performJobCleanup(job)
-          job.status = 'Completed' // Mark the job as completed after cleanup
-          logger.info(`Cleanup completed for job ${jobId}.`)
-        }
-      } catch (error) {
-        logger.error(`Error processing job ${job.nersc?.jobid}: ${error.message}`)
-        await handleMonitoringError(job, error)
-      } finally {
-        // Reset the cleanup_in_progress flag regardless of success or failure
-        await DBJob.findOneAndUpdate(
-          { _id: job._id },
-          { $set: { cleanup_in_progress: false } },
-          { new: true }
-        )
-        logger.info(`Reset cleanup_in_progress flag for job ${job.uuid}.`)
-      }
-    }
+    } while (job) // Continue until no more jobs are found
   } catch (error) {
     logger.error(`Error during job monitoring: ${error.message}`)
   }
