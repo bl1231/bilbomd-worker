@@ -3,42 +3,50 @@ import { MultiJob } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../../helpers/loggers.js'
 import {
   prepareMultiMDdatFileList,
-  processJobDetails
+  runMultiFoxs,
+  prepareMultiMDResults,
+  cleanupJob,
+  initializeJob
 } from '../functions/bilbomd-multi-functions.js'
 
 const processMultiMDJob = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(1)
-  const foundJob = await MultiJob.findOne({ _id: MQjob.data.jobid })
+  const job = await MultiJob.findOne({ _id: MQjob.data.jobid })
     .populate('user')
     .populate('bilbomd_jobs')
     .exec()
-  if (!foundJob) {
+  if (!job) {
     throw new Error(`No job found for: ${MQjob.data.jobid}`)
   }
-  logger.info(`Processing MultiJob: ${foundJob.uuid}`)
+  logger.info(`Processing MultiJob: ${job.uuid}`)
 
   // Initialize
+  await initializeJob(job)
+  job.progress = 5
+  await job.save()
 
   // create a file that references all .dat files
-  await prepareMultiMDdatFileList(foundJob)
-  foundJob.progress = 30
-  await foundJob.save()
-
-  // Calculate experimental SAXS profile to use
-  await processJobDetails(foundJob)
+  await prepareMultiMDdatFileList(job)
+  job.progress = 30
+  await job.save()
 
   // Run MultiFoXS
-  foundJob.progress = 40
-  await foundJob.save()
-  // Gather results
-  foundJob.progress = 50
-  await foundJob.save()
-  // Send results to user
-  foundJob.progress = 60
-  await foundJob.save()
+  await runMultiFoxs(job)
+  job.progress = 80
+  await job.save()
 
-  foundJob.progress = 100
-  await foundJob.save()
+  // Gather results
+  await prepareMultiMDResults(job)
+  job.progress = 90
+  await job.save()
+
+  // Send results to user
+  await cleanupJob(job)
+  job.progress = 95
+  await job.save()
+
+  job.progress = 100
+  await job.save()
   await MQjob.updateProgress(100)
 }
 
