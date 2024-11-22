@@ -7,6 +7,7 @@ import { config } from './config/config.js'
 import { createBilboMdWorker } from './workers/bilboMdWorker.js'
 import { createPdb2CrdWorker } from './workers/pdb2CrdWorker.js'
 import { createWebhooksWorker } from './workers/webhooksWorker.js'
+import { createMultiMDWorker } from './workers/multiMdWorker.js'
 import { checkNERSC } from './workers/workerControl.js'
 import { monitorAndCleanupJobs } from './workers/bilboMdNerscJobMonitor.js'
 
@@ -27,6 +28,7 @@ connectDB()
 let bilboMdWorker: Worker | null = null
 let pdb2CrdWorker: Worker | null = null
 let webhooksWorker: Worker | null = null
+let multimdWorker: Worker | null = null
 
 const redisConn = {
   host: 'redis',
@@ -50,12 +52,17 @@ const webhooksWorkerOptions: WorkerOptions = {
   concurrency: 1
 }
 
+const multimdWorkerOptions: WorkerOptions = {
+  connection: redisConn,
+  concurrency: 1
+}
+
 const startWorkers = async () => {
   const systemName = config.runOnNERSC ? 'NERSC' : 'Hyperion'
   logger.info(`Attempting to start workers on ${systemName}...`)
 
   // Create workers only if they are not already initialized
-  if (!bilboMdWorker || !pdb2CrdWorker || !webhooksWorker) {
+  if (!bilboMdWorker || !pdb2CrdWorker || !webhooksWorker || !multimdWorker) {
     // If running on NERSC, check credentials before starting workers
     if (config.runOnNERSC) {
       logger.info('Checking NERSC credentials...')
@@ -75,6 +82,9 @@ const startWorkers = async () => {
     logger.info(`PDB2CRD Worker started on ${systemName}`)
 
     webhooksWorker = createWebhooksWorker(webhooksWorkerOptions)
+    logger.info(`Webhooks Worker started on ${systemName}`)
+
+    multimdWorker = createMultiMDWorker(multimdWorkerOptions)
     logger.info(`Webhooks Worker started on ${systemName}`)
   } else {
     logger.info('Workers are already initialized')

@@ -1,8 +1,14 @@
-import { IJob, Job, IStepStatus, IBilboMDSteps } from '@bl1231/bilbomd-mongodb-schema'
+import {
+  IJob,
+  IMultiJob,
+  Job,
+  IStepStatus,
+  IBilboMDSteps
+} from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../../helpers/loggers.js'
 
 const updateStepStatus = async (
-  job: IJob,
+  job: IJob | IMultiJob,
   stepName: keyof IBilboMDSteps,
   status: IStepStatus
 ) => {

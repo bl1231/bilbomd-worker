@@ -42,6 +42,8 @@ import {
   spawnFoXS
 } from './job-utils.js'
 
+type JobStatusEnum = 'Submitted' | 'Pending' | 'Running' | 'Completed' | 'Error'
+
 const execPromise = promisify(exec)
 
 const handleError = async (
@@ -85,7 +87,7 @@ const handleError = async (
   throw new Error('BilboMD failed')
 }
 
-const updateJobStatus = async (job: IJob, status: string): Promise<void> => {
+const updateJobStatus = async (job: IJob, status: JobStatusEnum): Promise<void> => {
   job.status = status
   await job.save()
 }
