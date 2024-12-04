@@ -49,6 +49,9 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.12.2
+  - Update dependencies
+  - Run `npm audit fix`
 - 1.12.1 (11/22/2024)
   - Refactor src/workers/bilboMdNerscJobMonitor.ts to prevent multiple emails sent.
 - 1.12.0 (11/21/2024)
