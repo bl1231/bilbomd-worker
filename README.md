@@ -49,7 +49,10 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
-- 1.12.2
+- 1.12.3 (12/06/2024)
+  - Bump dockerfile from node20 to node22
+  - Syncronize changes to `pae_ratios.py` from `bilbomd-backend`
+- 1.12.2 (12/04/2024)
   - Update dependencies
   - Run `npm audit fix`
 - 1.12.1 (11/22/2024)
