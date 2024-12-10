@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { logger } from './loggers'
+import { logger } from './loggers.js'
 
 const {
   MONGO_USERNAME,

@@ -11,11 +11,18 @@ const getEnvVar = (name: string): string => {
 
 export const config = {
   sendEmailNotifications: process.env.SEND_EMAIL_NOTIFICATIONS === 'true',
-  runOnNERSC: process.env.USE_NERSC === 'true',
+  bilbomdUrl: getEnvVar('BILBOMD_URL'),
+  runOnNERSC: process.env.USE_NERSC === 'true', // Explicit boolean conversion
   nerscBaseAPI: getEnvVar('SFAPI_URL'),
   nerscScriptDir: getEnvVar('SCRIPT_DIR'),
   nerscUploadDir: getEnvVar('UPLOAD_DIR'),
   nerscWorkDir: getEnvVar('WORK_DIR'),
+  uploadDir: getEnvVar('DATA_VOL'),
+  charmmTopoDir: getEnvVar('CHARMM_TOPOLOGY'),
+  charmmTemplateDir: getEnvVar('CHARMM_TEMPLATES'),
+  charmmBin: getEnvVar('CHARMM'),
+  foxBin: getEnvVar('FOXS'),
+  multifoxsBin: getEnvVar('MULTIFOXS'),
   scripts: {
     prepareSlurmScript: getEnvVar('PREPARE_SLURM_SCRIPT'),
     copyFromScratchToCFSScript: getEnvVar('CP2CFS_SCRIPT'),

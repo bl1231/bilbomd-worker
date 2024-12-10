@@ -10,6 +10,10 @@ The directory contains all of the CHARMM topology and parameter files. They will
 
 This directory will contain various scripts used submitting NERSC jobs.
 
+## `/sans`
+
+This directory will contain various scripts used for BilboMD SANS jobs.
+
 ## Notes to build docker image on Perlmutter login node
 
 Since all jobs on Perlmutter will use Docker containers to run `python`, `charmm`, `foxs`, and `multi_foxs` in our well-defined container environment, we need to use [podman-hpc](https://docs.nersc.gov/development/containers/podman-hpc/podman-beginner-tutorial/#podman-hpc-for-beginners-tutorial) to build our container images, and then "deploy/migrate" them to `$SCRATCH`.

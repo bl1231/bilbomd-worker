@@ -1,9 +1,10 @@
 import { Job as BullMQJob } from 'bullmq'
-import { Job } from '@bl1231/bilbomd-mongodb-schema'
-import { logger } from '../../helpers/loggers'
+import { Job, IJob, IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
+import { logger } from '../../helpers/loggers.js'
 import fs from 'fs-extra'
 import path from 'path'
 import { spawn } from 'node:child_process'
+import { updateStepStatus } from '../functions/mongo-utils.js'
 
 const uploadFolder = process.env.DATA_VOL ?? '/bilbomd/uploads'
 const CHARMM_BIN = process.env.CHARMM ?? '/usr/local/bin/charmm'
@@ -14,30 +15,41 @@ interface Pdb2CrdCharmmInputData {
 }
 
 const initializeJob = async (MQJob: BullMQJob) => {
-  logger.info('-----------------initializeJob--------------------')
+  logger.info('---------------------initializeJob---------------------')
   // Clear the BullMQ Job logs
   await MQJob.clearLogs()
   await MQJob.log('Init!')
 }
 
-const cleanupJob = async (MQjob: BullMQJob) => {
-  logger.info('------------------cleanupJob-------------------')
-  await MQjob.log('Done!')
+const cleanupJob = async (MQJob: BullMQJob) => {
+  logger.info('----------------------cleanupJob-----------------------')
+  await MQJob.log('Done!')
 }
 
-const processPdb2CrdJobNersc = async (MQJob: BullMQJob) => {
+const processPdb2CrdJob = async (MQJob: BullMQJob) => {
+  let status: IStepStatus = {
+    status: 'Running',
+    message: 'Convert PDB to CRD/PSF has started.'
+  }
+  let foundJob: IJob | null = null
+
   try {
     await MQJob.updateProgress(1)
+
     logger.info(`UUID: ${MQJob.data.uuid}`)
-    const foundJob = await Job.findOne({ uuid: MQJob.data.uuid }).populate('user').exec()
+    foundJob = await Job.findOne({ uuid: MQJob.data.uuid }).populate('user').exec()
 
     if (!foundJob) {
       logger.warn(
         `No MongoDB entry found for: ${MQJob.data.uuid}. Must be from PAE Jiffy.`
       )
-      // return // Consider if you want to continue or exit the function here
     } else {
       logger.info(`MongoDB entry for ${MQJob.data.type} Job found: ${foundJob.uuid}`)
+    }
+    if (foundJob) {
+      await updateStepStatus(foundJob, 'pdb2crd', status)
+    } else {
+      logger.warn('no mongodb entry found for job. processing pae jiffy job')
     }
 
     // Initialize
@@ -66,7 +78,27 @@ const processPdb2CrdJobNersc = async (MQJob: BullMQJob) => {
     await spawnPdb2CrdCharmm(MQJob, charmmInpFiles)
     await MQJob.log('end pdb2crd charmm meld')
     await MQJob.updateProgress(65)
+    status = {
+      status: 'Success',
+      message: 'Convert PDB to CRD/PSF has completed.'
+    }
+    if (foundJob) {
+      await updateStepStatus(foundJob, 'pdb2crd', status)
+    } else {
+      logger.warn('no mongodb entry found for job. processing pae jiffy job')
+    }
   } catch (error) {
+    status = {
+      status: 'Error',
+      message: `Error during conversion PDB to CRD/PSF ${error.message}`
+    }
+
+    if (foundJob) {
+      await updateStepStatus(foundJob, 'pdb2crd', status)
+    } else {
+      logger.warn('no mongodb entry found for job. processing pae jiffy job')
+    }
+
     logger.error(`Failed processing PDB2CRD Job: ${error}`)
     await MQJob.log(`Error processing job: ${error}`)
   } finally {
@@ -98,12 +130,12 @@ const createPdb2CrdCharmmInpFiles = async (
 
     pdb2crd.stderr.on('data', (data: Buffer) => {
       const errorString = data.toString().trim()
-      logger.error(`createCharmmInpFile stderr: ${errorString}`)
+      logger.error('createCharmmInpFile stderr:', errorString)
       errorStream.write(errorString + '\n')
     })
 
     pdb2crd.on('error', (error) => {
-      logger.error(`createCharmmInpFile error: ${error}`)
+      logger.error('createCharmmInpFile error:', error)
       reject(error)
     })
 
@@ -120,7 +152,7 @@ const createPdb2CrdCharmmInpFiles = async (
             // Read the log file to extract the output filenames
             fs.readFile(logFile, 'utf8', (err, data) => {
               if (err) {
-                logger.error(`Failed to read log file: ${err}`)
+                logger.error('Failed to read log file:', err)
                 reject(new Error('Failed to read log file'))
                 return
               }
@@ -212,4 +244,4 @@ const spawnPdb2CrdCharmm = (
   return Promise.all(promises)
 }
 
-export { processPdb2CrdJobNersc }
+export { processPdb2CrdJob, createPdb2CrdCharmmInpFiles, spawnPdb2CrdCharmm }
