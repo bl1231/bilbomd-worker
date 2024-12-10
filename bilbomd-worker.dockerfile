@@ -10,7 +10,7 @@ RUN apt-get update && \
 # -----------------------------------------------------------------------------
 # Build CHARMM
 FROM install-dependencies AS build_charmm
-ARG CHARMM_VER=c48b2
+ARG CHARMM_VER=c49b1
 
 # Copy or Download CHARMM source code, extract, and remove the tarball
 # COPY ./charmm/${CHARMM_VER}.tar.gz /usr/local/src/
