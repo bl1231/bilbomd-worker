@@ -1,6 +1,8 @@
 import path from 'path'
 import fs from 'fs-extra'
+import csv from 'csv-parser'
 import { logger } from '../../helpers/loggers.js'
+import { glob } from 'glob'
 import { promisify } from 'util'
 import { IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
 import { IJob, IBilboMDSANSJob } from '@bl1231/bilbomd-mongodb-schema'
@@ -397,6 +399,20 @@ const runPepsiSANSOnPDBFiles = async (DBjob: IBilboMDSANSJob): Promise<void> => 
     // Filter out nulls (non-directory entries)
     const validDirs = pepsiSANSRunDirs.filter((dir) => dir !== null) as string[]
 
+    // -ms <max angle>,  --maximum_scattering_vector <max angle>
+    //  Maximum scattering vector in inverse Angstroms (max = 1.0 A-1),
+    //  default is 0.5 A-1
+    // -ns <number of points>,  --number_of_points <number of points>
+    //  Number of points in the scattering curve if experimental data is not
+    //  provided, default 101, max 5000
+    // --deut <Molecule deuteration>
+    //  Molecule deuteration
+    // --d2o <Buffer deuteration>
+    //  Buffer deuteration
+    // --deuterated <Deuterateed chains' IDs>
+    //  IDs of deuterated chains, single string. If omitted, everyhing is
+    //  assumed deuterated.
+
     // Pepsi-SANS options
     const pepsiSANSOpts = [
       '-ms',
@@ -404,11 +420,7 @@ const runPepsiSANSOnPDBFiles = async (DBjob: IBilboMDSANSJob): Promise<void> => 
       '-ns',
       '501',
       '--d2o',
-      DBjob.d2o_fraction.toString(),
-      '--deuterated',
-      'A',
-      '--deut',
-      '0.0'
+      DBjob.d2o_fraction.toString()
     ]
 
     // Process each directory in parallel
@@ -534,85 +546,55 @@ const prepareBilboMDSANSResults = async (DBjob: IBilboMDSANSJob): Promise<void> 
 
 const prepareResults = async (DBjob: IBilboMDSANSJob): Promise<void> => {
   try {
-    const outputDir = path.join(config.uploadDir, DBjob.uuid)
-    // const multiFoxsDir = path.join(outputDir, 'multifoxs')
-    // const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
-    const resultsDir = path.join(outputDir, 'results')
+    const jobDir = path.join(config.uploadDir, DBjob.uuid)
+    const pepsisansDir = path.join(jobDir, 'pepsisans')
+    const resultsDir = path.join(jobDir, 'results')
 
     // Create new empty results directory
-    try {
-      await makeDir(resultsDir)
-    } catch (error) {
-      logger.error(`Error creating results directory: ${error}`)
-    }
+    await makeDir(resultsDir)
 
     // Copy the minimized PDB
     await copyFiles({
-      source: `${outputDir}/minimization_output.pdb`,
+      source: `${jobDir}/minimization_output.pdb`,
       destination: resultsDir,
       filename: 'minimization_output.pdb',
       isCritical: false
     })
 
-    // Copy the DAT file for the minimized PDB
-    // await copyFiles({
-    //   source: `${outputDir}/minimization_output.pdb.dat`,
-    //   destination: resultsDir,
-    //   filename: 'minimization_output.pdb.dat',
-    //   isCritical: false
-    // })
-
-    // Copy ensemble_size_*.txt files
-    // await copyFiles({
-    //   source: `${multiFoxsDir}/ensembles_size*.txt`,
-    //   destination: resultsDir,
-    //   filename: 'ensembles_size*.txt',
-
-    //   isCritical: false
-    // })
-
-    // Copy multi_state_model_*_1_1.dat files
-    // await copyFiles({
-    //   source: `${multiFoxsDir}/multi_state_model_*_1_1.dat`,
-    //   destination: resultsDir,
-    //   filename: 'multi_state_model_*_1_1.dat',
-
-    //   isCritical: false
-    // })
-
     // Gather original uploaded files
-    const filesToCopy = [{ file: DBjob.data_file, label: 'data_file' }]
-
-    if ('pdb_file' in DBjob && DBjob.pdb_file) {
-      filesToCopy.push({ file: DBjob.pdb_file, label: 'pdb_file' })
-    }
-
-    if ('crd_file' in DBjob && DBjob.crd_file) {
-      filesToCopy.push({ file: DBjob.crd_file, label: 'crd_file' })
-    }
-
-    if ('psf_file' in DBjob && DBjob.psf_file) {
-      filesToCopy.push({ file: DBjob.psf_file, label: 'psf_file' })
-    }
-
-    if ('const_inp_file' in DBjob && DBjob.const_inp_file) {
-      filesToCopy.push({ file: DBjob.const_inp_file, label: 'const_inp_file' })
-    }
-
-    // Additional GASANS-specific files
-    const gasansEnsembleCsvFiles = [
-      'best_model_EnsembleSize2.csv',
-      'best_model_EnsembleSize3.csv',
-      'best_model_EnsembleSize4.csv'
+    const filesToCopy = [
+      { file: DBjob.data_file, label: 'data_file' },
+      ...(DBjob.pdb_file ? [{ file: DBjob.pdb_file, label: 'pdb_file' }] : []),
+      ...(DBjob.crd_file ? [{ file: DBjob.crd_file, label: 'crd_file' }] : []),
+      ...(DBjob.psf_file ? [{ file: DBjob.psf_file, label: 'psf_file' }] : []),
+      ...(DBjob.const_inp_file
+        ? [{ file: DBjob.const_inp_file, label: 'const_inp_file' }]
+        : [])
     ]
-    gasansEnsembleCsvFiles.forEach((file) => {
+
+    // Gather GASANS ensemble Scattering Data CSV files
+    const gasansCsvScatteringDataFiles = await glob('best_model_EnsembleSize*.csv', {
+      cwd: jobDir
+    })
+
+    gasansCsvScatteringDataFiles.forEach((file) => {
       filesToCopy.push({ file, label: file })
     })
 
+    // Gather GASANS ensemble summary CSV files
+    const gasansSummaryFiles = await glob('gasans_summary_EnsSize*.csv', {
+      cwd: jobDir
+    })
+
+    gasansSummaryFiles.forEach((file) => {
+      filesToCopy.push({ file, label: file })
+    })
+
+    // Copy all files to the results directory
     for (const { file, label } of filesToCopy) {
       if (file) {
         await copyFiles({
-          source: path.join(outputDir, file),
+          source: path.join(jobDir, file),
           destination: resultsDir,
           filename: label,
           isCritical: false
@@ -622,54 +604,114 @@ const prepareResults = async (DBjob: IBilboMDSANSJob): Promise<void> => {
       }
     }
 
-    // Only want to add N best PDBs equal to number_of_states N in logfile.
-    // const numEnsembles = await getNumEnsembles(logFile)
-    // logger.info(`prepareResults numEnsembles: ${numEnsembles}`)
-    // MQjob.log(`Gather ${numEnsembles} best ensembles`)
+    // Catenate the "best" N-state ensemble PDB files
+    for (const summaryFile of gasansSummaryFiles) {
+      const ensembleNumber = summaryFile.match(/\d+/)?.[0] // Extract ensemble number
+      logger.info(`Processing GASANS summary file for ensemble size ${ensembleNumber}`)
+      if (!ensembleNumber) continue
 
-    // if (numEnsembles) {
-    //   // Iterate through each ensembles_siz_*.txt file
-    //   for (let i = 1; i <= numEnsembles; i++) {
-    //     const ensembleFile = path.join(multiFoxsDir, `ensembles_size_${i}.txt`)
-    //     logger.info(`prepareResults ensembleFile: ${ensembleFile}`)
-    //     const ensembleFileContent = await fs.readFile(ensembleFile, 'utf8')
-    //     const pdbFilesRelative = extractPdbPaths(ensembleFileContent)
+      const summaryFilePath = path.join(jobDir, summaryFile)
+      const csvData = await parseCsvFile(summaryFilePath)
 
-    //     const pdbFilesFullPath = pdbFilesRelative.map((item) =>
-    //       path.join(outputDir, item)
-    //     )
-    //     // Extract the first N PDB files to string[]
-    //     const numToCopy = Math.min(pdbFilesFullPath.length, i)
-    //     const ensembleModelFiles = pdbFilesFullPath.slice(0, numToCopy)
-    //     const ensembleSize = ensembleModelFiles.length
-    //     await concatenateAndSaveAsEnsemble(ensembleModelFiles, ensembleSize, resultsDir)
+      if (csvData.length === 0) {
+        logger.warn(`No data found in ${summaryFile}`)
+        continue
+      }
 
-    //     MQjob.log(
-    //       `Gathered ${pdbFilesFullPath.length} PDB files from ensembles_size_${i}.txt`
-    //     )
-    //   }
-    // }
+      const bestEnsembleRow = csvData[0] // Get the first row of data (best ensemble)
 
-    // Create Job-specific README file.
-    try {
-      await createReadmeFile(DBjob, 4, resultsDir)
-    } catch (error) {
-      logger.error(`Error creating README file: ${error}`)
+      const pdbFilesToConcatenate: string[] = []
+      const pdbNamePrefix = `PDBNAME_`
+      const datDirectoryPrefix = `DAT_DIRECTORY_`
+
+      for (let i = 1; i <= parseInt(ensembleNumber); i++) {
+        const pdbFileName = bestEnsembleRow[`${pdbNamePrefix}${i}`]
+        const datDirectory = bestEnsembleRow[`${datDirectoryPrefix}${i}`]
+
+        if (pdbFileName && datDirectory) {
+          const pdbFilePath = path.join(pepsisansDir, datDirectory, pdbFileName)
+          pdbFilesToConcatenate.push(pdbFilePath)
+        } else {
+          logger.warn(
+            `Missing PDB file or directory for ensemble size ${ensembleNumber}, index ${i}`
+          )
+        }
+      }
+
+      if (pdbFilesToConcatenate.length > 0) {
+        const concatenatedPdbFile = path.join(
+          resultsDir,
+          `ensemble_size_${ensembleNumber}_model.pdb`
+        )
+
+        // Get the current date
+        const currentDate = new Intl.DateTimeFormat('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+          timeZoneName: 'short'
+        }).format(new Date())
+
+        // Generate the custom header
+        const header = [
+          `REMARK BilboMD SANS Best ${ensembleNumber}-State Ensemble`,
+          `REMARK BilboMD Job UUID: ${DBjob.uuid}`,
+          `REMARK Created on: ${currentDate}`,
+          `REMARK This file was generated by concatenating the following PDB files:`,
+          ...pdbFilesToConcatenate.map((filePath) => `REMARK ${filePath}`),
+          `REMARK`
+        ].join('\n')
+
+        // Read and concatenate the content of all PDB files in memory
+        const concatenatedContent = await Promise.all(
+          pdbFilesToConcatenate.map((filePath) => fs.promises.readFile(filePath, 'utf-8'))
+        ).then((contents) => contents.join('\n')) // Join all files' contents
+
+        // Filter out lines starting with "REMARK"
+        const filteredContent = concatenatedContent
+          .split('\n')
+          .filter((line) => !line.startsWith('REMARK'))
+          .join('\n')
+
+        // Combine the custom header and the filtered content
+        const finalContent = [header, filteredContent].join('\n')
+
+        // Write the final content to the output file
+        await fs.promises.writeFile(concatenatedPdbFile, finalContent, 'utf-8')
+
+        logger.info(
+          `Created filtered PDB file with custom header: ${concatenatedPdbFile}`
+        )
+      }
     }
+
+    // Create Job-specific README file
+    await createReadmeFile(DBjob, gasansSummaryFiles.length, resultsDir)
 
     // Create the results tar.gz file
-    try {
-      const uuidPrefix = DBjob.uuid.split('-')[0]
-      const archiveName = `results-${uuidPrefix}.tar.gz`
-      await execPromise(`tar czvf ${archiveName} results`, { cwd: outputDir })
-    } catch (error) {
-      logger.error(`Error creating tar file: ${error}`)
-      throw error // Critical error, rethrow or handle specifically if necessary
-    }
+    const uuidPrefix = DBjob.uuid.split('-')[0]
+    const archiveName = `results-${uuidPrefix}.tar.gz`
+    await execPromise(`tar czvf ${archiveName} results`, { cwd: jobDir })
   } catch (error) {
     logger.error(`Error preparing results: ${error}`)
-    // await handleError(error, MQjob, DBjob, 'results')
+    throw error // Rethrow to handle further up the call stack if needed
   }
+}
+
+const parseCsvFile = (filePath: string): Promise<Record<string, string>[]> => {
+  return new Promise((resolve, reject) => {
+    const results: Record<string, string>[] = []
+
+    fs.createReadStream(filePath)
+      .pipe(csv())
+      .on('data', (data) => results.push(data))
+      .on('end', () => resolve(results))
+      .on('error', (error) => reject(error))
+  })
 }
 
 const createReadmeFile = async (
@@ -677,16 +719,6 @@ const createReadmeFile = async (
   numEnsembles: number,
   resultsDir: string
 ): Promise<void> => {
-  const originalFiles = `
-- Original PDB file: ${DBjob.pdb_file}
-- Converted CRD file: ${DBjob.crd_file}
-- Converted PSF file: ${DBjob.psf_file}
-- Original experimental SANS data file: ${DBjob.data_file}
-- Original const.inp file: ${DBjob.const_inp_file}
-- Generated minimized PDB file: minimized_output.pdb
-- Generated minimized PDB DAT file: minimized_output.pdb.dat
-`
-
   const readmeContent = `
 # BilboMD SANS Job Results
 
@@ -699,59 +731,48 @@ This directory contains the results for your ${DBjob.title} BilboMD SANS job.
 - Completed:  ${new Date().toString()}
 
 ## Contents
-${originalFiles}
-The Ensemble files will be present in multiple copies. There is one file for each ensemble size.
 
-- Number of ensembles for this BilboMD run: ${numEnsembles}
+- Original PDB file: ${DBjob.pdb_file}
+- Converted CRD file: ${DBjob.crd_file}
+- Converted PSF file: ${DBjob.psf_file}
+- Original experimental SANS data file: ${DBjob.data_file}
+- Original const.inp file: ${DBjob.const_inp_file}
+- Generated minimized PDB file: minimized_output.pdb
+- Generated minimized PDB DAT file: minimized_output.pdb.dat
+
+The "best" N-state Ensemble PDB files will be present in multiple copies. There is one file for each ensemble size.
+
+- Number of ensembles for this BilboMD SANS run: ${numEnsembles}
 
 - Ensemble PDB file(s):  ensemble_size_N_model.pdb
-- Ensemble TXT file(s):  ensemble_size_N.txt
-- Ensemble DAT file(s):  multi_state_model_N_1_1.dat
+- Ensemble CSV file(s):  gasans_summary_EnsSizeN.csv
+- Ensemble DAT/CSV file(s):  best_model_EnsembleSizeN.csv
 
-## The ensemble_size_N.txt files
+### The ensemble_size_N_model.pdb files
 
-Here is an example from a hypothetical ensemble_size_3.txt file:
+These will be multi-model PDB files created by catenating the best ensemble of PDB files for each ensemble size.
 
-1 |  2.89 | x1 2.89 (0.99, -0.50)
-   70   | 0.418 (0.414, 0.011) | ../foxs/rg25_run3/dcd2pdb_rg25_run3_271500.pdb.dat (0.138)
-   87   | 0.508 (0.422, 0.101) | ../foxs/rg41_run1/dcd2pdb_rg41_run1_35500.pdb.dat (0.273)
-  184   | 0.074 (0.125, 0.024) | ../foxs/rg45_run1/dcd2pdb_rg45_run1_23000.pdb.dat (0.025)
-
-In this example we show only the "best" 3-state ensemble. Each ensemble_size_N.txt file will
-actually contain many possible N-state ensembles.
-
-The first line is a summary of scores and fit parameters for a particular multi-state model:
-    - The first column is a number/rank of the multi-state model (sorted by score)
-    - The second column is a Chi^2 value for the fit to SAXS profile (2.89)
-    - The third column repeats the Chi^2 value and also displays a pair of c1 (0.99) and c2 (-0.50)
-      values (in brackets) from the MultiFoXS optimized fit to data.
-
-After the model summary line the file contains information about the states (one line per state).
-In this example the best scoring 3-state model consists of conformation numbers 70, 87, and 184
-with weights of 0.418, 0.508, and 0.074 respectively. The numbers in brackets after the
-conformation weight are an average and a standard	deviation of the weight calculated for this
-conformation across all good scoring multi-state models of this size. The number in brackets
-after the filename is the fraction of good scoring multi-state models that contain this conformation.
-
-## The ensemble_size_N_model.pdb files
-
-In the case of N>2 These will be multi-model PDB files. For N=1 it will just be the best single conformer
-to fit your SAXS data.
-
-ensemble_size_1_model.pdb  - will contain the coordinates for the best 1-state model
 ensemble_size_2_model.pdb  - will contain the coordinates for the best 2-state model
 ensemble_size_3_model.pdb  - will contain the coordinates for the best 3-state model
+ensemble_size_4_model.pdb  - will contain the coordinates for the best 4-state model
 etc.
 
-## The multi_state_model_N_1_1.dat files
+### The gasans_summary_EnsSizeN.csv files
 
-These are the theoretical SAXS curves from MultiFoXS calculated for each of the ensemble_size_N_model.pdb models.
+TODO - Explain the contents of these CSV files
+
+### The best_model_EnsembleSizeN.csv files
+
+These are the theoretical SANS curves from Pepsi-SANS calculated for each of the ensemble_size_N_model.pdb models.
 
 If you use BilboMD in your research, please cite:
 
 Pelikan M, Hura GL, Hammel M. Structure and flexibility within proteins as identified through small angle X-ray scattering. Gen Physiol Biophys. 2009 Jun;28(2):174-89. doi: 10.4149/gpb_2009_02_174. PMID: ,19592714; PMCID: PMC3773563.
 
-Thank you for using BilboMD
+TODO - add citation for Pepsi-SANS
+TODO - add citation for GA-SANS
+
+Thank you for using BilboMD SANS
 `
   const readmePath = path.join(resultsDir, 'README.md')
   try {
