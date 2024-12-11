@@ -399,6 +399,20 @@ const runPepsiSANSOnPDBFiles = async (DBjob: IBilboMDSANSJob): Promise<void> => 
     // Filter out nulls (non-directory entries)
     const validDirs = pepsiSANSRunDirs.filter((dir) => dir !== null) as string[]
 
+    // -ms <max angle>,  --maximum_scattering_vector <max angle>
+    //  Maximum scattering vector in inverse Angstroms (max = 1.0 A-1),
+    //  default is 0.5 A-1
+    // -ns <number of points>,  --number_of_points <number of points>
+    //  Number of points in the scattering curve if experimental data is not
+    //  provided, default 101, max 5000
+    // --deut <Molecule deuteration>
+    //  Molecule deuteration
+    // --d2o <Buffer deuteration>
+    //  Buffer deuteration
+    // --deuterated <Deuterateed chains' IDs>
+    //  IDs of deuterated chains, single string. If omitted, everyhing is
+    //  assumed deuterated.
+
     // Pepsi-SANS options
     const pepsiSANSOpts = [
       '-ms',
