@@ -1,6 +1,8 @@
 import path from 'path'
 import fs from 'fs-extra'
+import csv from 'csv-parser'
 import { logger } from '../../helpers/loggers.js'
+import { glob } from 'glob'
 import { promisify } from 'util'
 import { IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
 import { IJob, IBilboMDSANSJob } from '@bl1231/bilbomd-mongodb-schema'
@@ -534,85 +536,44 @@ const prepareBilboMDSANSResults = async (DBjob: IBilboMDSANSJob): Promise<void> 
 
 const prepareResults = async (DBjob: IBilboMDSANSJob): Promise<void> => {
   try {
-    const outputDir = path.join(config.uploadDir, DBjob.uuid)
-    // const multiFoxsDir = path.join(outputDir, 'multifoxs')
-    // const logFile = path.join(multiFoxsDir, 'multi_foxs.log')
-    const resultsDir = path.join(outputDir, 'results')
+    const jobDir = path.join(config.uploadDir, DBjob.uuid)
+    const pepsisansDir = path.join(jobDir, 'pepsisans')
+    const resultsDir = path.join(jobDir, 'results')
 
     // Create new empty results directory
-    try {
-      await makeDir(resultsDir)
-    } catch (error) {
-      logger.error(`Error creating results directory: ${error}`)
-    }
+    await makeDir(resultsDir)
 
     // Copy the minimized PDB
     await copyFiles({
-      source: `${outputDir}/minimization_output.pdb`,
+      source: `${jobDir}/minimization_output.pdb`,
       destination: resultsDir,
       filename: 'minimization_output.pdb',
       isCritical: false
     })
 
-    // Copy the DAT file for the minimized PDB
-    // await copyFiles({
-    //   source: `${outputDir}/minimization_output.pdb.dat`,
-    //   destination: resultsDir,
-    //   filename: 'minimization_output.pdb.dat',
-    //   isCritical: false
-    // })
-
-    // Copy ensemble_size_*.txt files
-    // await copyFiles({
-    //   source: `${multiFoxsDir}/ensembles_size*.txt`,
-    //   destination: resultsDir,
-    //   filename: 'ensembles_size*.txt',
-
-    //   isCritical: false
-    // })
-
-    // Copy multi_state_model_*_1_1.dat files
-    // await copyFiles({
-    //   source: `${multiFoxsDir}/multi_state_model_*_1_1.dat`,
-    //   destination: resultsDir,
-    //   filename: 'multi_state_model_*_1_1.dat',
-
-    //   isCritical: false
-    // })
-
     // Gather original uploaded files
-    const filesToCopy = [{ file: DBjob.data_file, label: 'data_file' }]
-
-    if ('pdb_file' in DBjob && DBjob.pdb_file) {
-      filesToCopy.push({ file: DBjob.pdb_file, label: 'pdb_file' })
-    }
-
-    if ('crd_file' in DBjob && DBjob.crd_file) {
-      filesToCopy.push({ file: DBjob.crd_file, label: 'crd_file' })
-    }
-
-    if ('psf_file' in DBjob && DBjob.psf_file) {
-      filesToCopy.push({ file: DBjob.psf_file, label: 'psf_file' })
-    }
-
-    if ('const_inp_file' in DBjob && DBjob.const_inp_file) {
-      filesToCopy.push({ file: DBjob.const_inp_file, label: 'const_inp_file' })
-    }
-
-    // Additional GASANS-specific files
-    const gasansEnsembleCsvFiles = [
-      'best_model_EnsembleSize2.csv',
-      'best_model_EnsembleSize3.csv',
-      'best_model_EnsembleSize4.csv'
+    const filesToCopy = [
+      { file: DBjob.data_file, label: 'data_file' },
+      ...(DBjob.pdb_file ? [{ file: DBjob.pdb_file, label: 'pdb_file' }] : []),
+      ...(DBjob.crd_file ? [{ file: DBjob.crd_file, label: 'crd_file' }] : []),
+      ...(DBjob.psf_file ? [{ file: DBjob.psf_file, label: 'psf_file' }] : []),
+      ...(DBjob.const_inp_file
+        ? [{ file: DBjob.const_inp_file, label: 'const_inp_file' }]
+        : [])
     ]
-    gasansEnsembleCsvFiles.forEach((file) => {
+
+    // Gather all GASANS ensemble CSV files
+    const gasansCsvFiles = await glob('best_model_EnsembleSize*.csv', {
+      cwd: jobDir
+    })
+    gasansCsvFiles.forEach((file) => {
       filesToCopy.push({ file, label: file })
     })
 
     for (const { file, label } of filesToCopy) {
       if (file) {
         await copyFiles({
-          source: path.join(outputDir, file),
+          source: path.join(jobDir, file),
           destination: resultsDir,
           filename: label,
           isCritical: false
@@ -622,54 +583,108 @@ const prepareResults = async (DBjob: IBilboMDSANSJob): Promise<void> => {
       }
     }
 
-    // Only want to add N best PDBs equal to number_of_states N in logfile.
-    // const numEnsembles = await getNumEnsembles(logFile)
-    // logger.info(`prepareResults numEnsembles: ${numEnsembles}`)
-    // MQjob.log(`Gather ${numEnsembles} best ensembles`)
+    // Process GASANS summary CSV files
+    const gasansSummaryFiles = await glob('gasans_summary_EnsSize*.csv', {
+      cwd: jobDir
+    })
 
-    // if (numEnsembles) {
-    //   // Iterate through each ensembles_siz_*.txt file
-    //   for (let i = 1; i <= numEnsembles; i++) {
-    //     const ensembleFile = path.join(multiFoxsDir, `ensembles_size_${i}.txt`)
-    //     logger.info(`prepareResults ensembleFile: ${ensembleFile}`)
-    //     const ensembleFileContent = await fs.readFile(ensembleFile, 'utf8')
-    //     const pdbFilesRelative = extractPdbPaths(ensembleFileContent)
+    for (const summaryFile of gasansSummaryFiles) {
+      const ensembleNumber = summaryFile.match(/\d+/)?.[0] // Extract ensemble number
+      logger.info(`Processing GASANS summary file for ensemble size ${ensembleNumber}`)
+      if (!ensembleNumber) continue
 
-    //     const pdbFilesFullPath = pdbFilesRelative.map((item) =>
-    //       path.join(outputDir, item)
-    //     )
-    //     // Extract the first N PDB files to string[]
-    //     const numToCopy = Math.min(pdbFilesFullPath.length, i)
-    //     const ensembleModelFiles = pdbFilesFullPath.slice(0, numToCopy)
-    //     const ensembleSize = ensembleModelFiles.length
-    //     await concatenateAndSaveAsEnsemble(ensembleModelFiles, ensembleSize, resultsDir)
+      const summaryFilePath = path.join(jobDir, summaryFile)
+      const csvData = await parseCsvFile(summaryFilePath)
 
-    //     MQjob.log(
-    //       `Gathered ${pdbFilesFullPath.length} PDB files from ensembles_size_${i}.txt`
-    //     )
-    //   }
-    // }
+      if (csvData.length === 0) {
+        logger.warn(`No data found in ${summaryFile}`)
+        continue
+      }
 
-    // Create Job-specific README file.
-    try {
-      await createReadmeFile(DBjob, 4, resultsDir)
-    } catch (error) {
-      logger.error(`Error creating README file: ${error}`)
+      const bestEnsembleRow = csvData[0] // Get the first row of data (best ensemble)
+
+      const pdbFilesToConcatenate: string[] = []
+      const pdbNamePrefix = `PDBNAME_`
+      const datDirectoryPrefix = `DAT_DIRECTORY_`
+
+      for (let i = 1; i <= parseInt(ensembleNumber); i++) {
+        const pdbFileName = bestEnsembleRow[`${pdbNamePrefix}${i}`]
+        const datDirectory = bestEnsembleRow[`${datDirectoryPrefix}${i}`]
+
+        if (pdbFileName && datDirectory) {
+          const pdbFilePath = path.join(pepsisansDir, datDirectory, pdbFileName)
+          pdbFilesToConcatenate.push(pdbFilePath)
+        } else {
+          logger.warn(
+            `Missing PDB file or directory for ensemble size ${ensembleNumber}, index ${i}`
+          )
+        }
+      }
+
+      if (pdbFilesToConcatenate.length > 0) {
+        const concatenatedPdbFile = path.join(
+          resultsDir,
+          `ensemble_size_${ensembleNumber}_model.pdb`
+        )
+
+        // Get the current date
+        const currentDate = new Date().toISOString()
+
+        // Generate the custom header
+        const header = [
+          `REMARK BilboMD SANS Best ${ensembleNumber}-State Ensemble`,
+          `REMARK BilboMD Job UUID: ${DBjob.uuid}`,
+          `REMARK Created on: ${currentDate}`,
+          `REMARK This file was generated by concatenating the following PDB files:`,
+          ...pdbFilesToConcatenate.map((filePath) => `REMARK ${filePath}`)
+        ].join('\n')
+
+        // Read and concatenate the content of all PDB files in memory
+        const concatenatedContent = await Promise.all(
+          pdbFilesToConcatenate.map((filePath) => fs.promises.readFile(filePath, 'utf-8'))
+        ).then((contents) => contents.join('\n')) // Join all files' contents
+
+        // Filter out lines starting with "REMARK"
+        const filteredContent = concatenatedContent
+          .split('\n')
+          .filter((line) => !line.startsWith('REMARK'))
+          .join('\n')
+
+        // Combine the custom header and the filtered content
+        const finalContent = [header, filteredContent].join('\n')
+
+        // Write the final content to the output file
+        await fs.promises.writeFile(concatenatedPdbFile, finalContent, 'utf-8')
+
+        logger.info(
+          `Created filtered PDB file with custom header: ${concatenatedPdbFile}`
+        )
+      }
     }
+
+    // Create Job-specific README file
+    await createReadmeFile(DBjob, 4, resultsDir)
 
     // Create the results tar.gz file
-    try {
-      const uuidPrefix = DBjob.uuid.split('-')[0]
-      const archiveName = `results-${uuidPrefix}.tar.gz`
-      await execPromise(`tar czvf ${archiveName} results`, { cwd: outputDir })
-    } catch (error) {
-      logger.error(`Error creating tar file: ${error}`)
-      throw error // Critical error, rethrow or handle specifically if necessary
-    }
+    const uuidPrefix = DBjob.uuid.split('-')[0]
+    const archiveName = `results-${uuidPrefix}.tar.gz`
+    await execPromise(`tar czvf ${archiveName} results`, { cwd: jobDir })
   } catch (error) {
     logger.error(`Error preparing results: ${error}`)
-    // await handleError(error, MQjob, DBjob, 'results')
+    throw error // Rethrow to handle further up the call stack if needed
   }
+}
+
+const parseCsvFile = (filePath: string): Promise<Record<string, string>[]> => {
+  return new Promise((resolve, reject) => {
+    const results: Record<string, string>[] = []
+
+    fs.createReadStream(filePath)
+      .pipe(csv())
+      .on('data', (data) => results.push(data))
+      .on('end', () => resolve(results))
+      .on('error', (error) => reject(error))
+  })
 }
 
 const createReadmeFile = async (
