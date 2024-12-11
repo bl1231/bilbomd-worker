@@ -420,11 +420,7 @@ const runPepsiSANSOnPDBFiles = async (DBjob: IBilboMDSANSJob): Promise<void> => 
       '-ns',
       '501',
       '--d2o',
-      DBjob.d2o_fraction.toString(),
-      '--deuterated',
-      'A',
-      '--deut',
-      '0.0'
+      DBjob.d2o_fraction.toString()
     ]
 
     // Process each directory in parallel
