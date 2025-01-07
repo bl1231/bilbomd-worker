@@ -49,6 +49,8 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.12.5 (1/7/2025)
+  - Update dependencies
 - 1.12.4 (12/11/2024)
   - Refactor `prepareResults` for BilboMD SANS
   - Improve README for BilboMD SANS
