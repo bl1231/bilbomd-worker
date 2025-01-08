@@ -65,7 +65,7 @@ ENV PATH="/miniforge3/bin/:${PATH}"
 RUN conda install --yes --name base -c conda-forge numpy scipy matplotlib \
     pillow numba h5py cython reportlab \
     dbus-python fabio pyfai hdf5plugin \
-    mmcif_pdbx svglib python-igraph && \
+    mmcif_pdbx svglib python-igraph biopython && \
     conda clean -afy
 
 # -----------------------------------------------------------------------------
