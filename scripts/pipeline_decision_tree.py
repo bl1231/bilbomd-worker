@@ -20,6 +20,7 @@ import json
 import argparse
 from typing import List
 
+from pdb_utils import calculate_molecular_weight
 import bioxtasraw.RAWAPI as raw
 
 
@@ -127,42 +128,61 @@ def calculate_residual(prof1, prof2):
 
 def best_chi_square_i(cs_models, multi_state_models):
     """
-    Selects the "best" chi-square from all multi state files in the input folder
+    Selects the best chi-square from all multi-state files in the input folder.
 
-    Returns the index of the best chi-square in cs_models
+    Returns the index of the best chi-square in cs_models.
 
-    Goes through the list and selects the first chi-square that is high error
-      (< 20%) with the previous value
+    Chooses the first chi-square with less than 20% error compared to the next value.
+    If no such chi-square exists, returns the index of the minimum chi-square.
     """
     print_debug("Comparing chi-squares of all multistates")
+
+    # Round and print for debug purposes
     cs_models_rounded = [round(cs, 2) for cs in cs_models]
     print_debug(cs_models_rounded)
+
     csm_err_threshold = 0.2
-    i = 0
+
+    # Handle single value case immediately
     if len(cs_models) == 1:
-        best_cs = cs_models[0]
-    else:
-        while i < (len(cs_models) - 1):
-            csm_err = abs(cs_models[i + 1] - cs_models[i]) / cs_models[i]
-            if csm_err <= csm_err_threshold:
-                best_cs = cs_models[i]
-                break
-            elif i == (len(cs_models) - 2):
-                best_cs = min(cs_models)
-                break
-            else:
-                i = i + 1
-    multi_states_file = multi_state_models[cs_models.index(best_cs)]
-    multi_states_num_i = multi_states_file.find("multi_state_model_")
-    multi_states_num = multi_states_file[multi_states_num_i + 18]
+        return 0
+
+    # Iterate over pairs of chi-square values
+    for _, (cs_current, cs_next) in enumerate(zip(cs_models, cs_models[1:])):
+        csm_err = abs(cs_next - cs_current) / cs_current
+
+        if csm_err <= csm_err_threshold:
+            return _log_and_return_best(cs_current, cs_models, multi_state_models)
+
+    # If no chi-square meets the threshold, return the smallest one
+    best_cs = min(cs_models)
+    return _log_and_return_best(best_cs, cs_models, multi_state_models)
+
+
+def _log_and_return_best(best_cs, cs_models, multi_state_models):
+    """
+    Logs and returns the index of the best chi-square value.
+    """
+    best_index = cs_models.index(best_cs)
+    multi_states_file = multi_state_models[best_index]
+
+    # Extract the multi-state number
+    multi_states_num = _extract_model_number(multi_states_file)
+
     print_debug(
-        "The best chi-square is "
-        + str(round(best_cs, 2))
-        + " ("
-        + multi_states_num
-        + " multi states)"
+        f"The best chi-square is {round(best_cs, 2)} "
+        f"({multi_states_num} multi states)"
     )
-    return cs_models.index(best_cs)
+    return best_index
+
+
+def _extract_model_number(filename):
+    """
+    Extracts the multi-state model number from the filename.
+    Assumes the pattern 'multi_state_model_#'.
+    """
+    start = filename.find("multi_state_model_") + 18
+    return filename[start]
 
 
 def calculate_regional_chi_square_values(
@@ -363,6 +383,11 @@ def load_multi_state_models(folder):
     return sorted(glob.glob(folder + "/multi_state_model_*", recursive=True))
 
 
+def load_ensemble_model_files(folder):
+    """Load and return all ensemble_size_#_model.pdb files from the results folder."""
+    return sorted(glob.glob(folder + "/ensemble_size_*.pdb", recursive=True))
+
+
 def calculate_chi_squares(models):
     """Calculate chi-square for each model."""
     chi_square_of_models = []
@@ -373,11 +398,12 @@ def calculate_chi_squares(models):
     return chi_square_of_models
 
 
-def evaluate_model_fit(eprof, mprof, q_ranges):
+def evaluate_model_fit(eprof, mprof, q_ranges, mw_model):
     """Perform MW Bayesian calculation, chi-square analysis, and gather feedback."""
-    e_mw, m_mw, mw_err = calculate_mw_bayes(eprof, mprof)
+    mw_exp = mw_bayes(eprof)
+    mw_err = abs((mw_exp - mw_model) / mw_model)
     overall_chi_square = calculate_chi_square(eprof, mprof)
-    print_debug(f"Overall chi-square: {round(overall_chi_square, 2)}")
+    print_debug(f"Overall chi-square: {round(overall_chi_square, 2)} MW: {mw_exp}")
 
     chi_squares_of_regions = calculate_regional_chi_square_values(
         q_ranges, eprof, mprof
@@ -385,12 +411,12 @@ def evaluate_model_fit(eprof, mprof, q_ranges):
     residuals_of_regions = calculate_regional_residual_values(q_ranges, eprof, mprof)
 
     feedback = generate_feedback(
-        e_mw, m_mw, mw_err, overall_chi_square, chi_squares_of_regions, q_ranges
+        mw_exp, mw_model, mw_err, overall_chi_square, chi_squares_of_regions, q_ranges
     )
 
-    return {
-        "e_mw": e_mw,
-        "m_mw": m_mw,
+    evaluation_results = {
+        "e_mw": mw_exp,
+        "m_mw": mw_model,
         "mw_err": mw_err,
         "overall_chi_square": overall_chi_square,
         "chi_squares_of_regions": chi_squares_of_regions,
@@ -398,14 +424,7 @@ def evaluate_model_fit(eprof, mprof, q_ranges):
         "feedback": feedback,
     }
 
-
-def calculate_mw_bayes(eprof, mprof):
-    """Calculate MW using Bayesian methods and return errors."""
-    e_mw = mw_bayes(eprof)
-    m_mw = mw_bayes(mprof)
-    mw_err = abs((e_mw - m_mw) / e_mw)
-    print_debug(f"Experimental MW: {e_mw}, Model MW: {m_mw}, MW Error: {mw_err}")
-    return e_mw, m_mw, mw_err
+    return evaluation_results
 
 
 def generate_feedback(
@@ -662,6 +681,7 @@ def main():
     args = parse_args()
 
     multi_state_models = load_multi_state_models(args.results)
+    ensemble_pdb_files = load_ensemble_model_files(args.results)
 
     if not multi_state_models:
         raise FileNotFoundError("No multi-state models found in the specified folder")
@@ -670,12 +690,29 @@ def main():
 
     # Load best chi-square model
     best_model_idx = best_chi_square_i(cs_models, multi_state_models)
-    print_debug("Model names in multi_state_models:")
+
+    print_debug("multi_state_model_*.dat files:")
     for model in multi_state_models:
         filename = os.path.basename(model)
         print_debug(filename)
+    print_debug("ensemble_size_#_model.pdb files:")
+    # for ensemble in ensemble_pdb_files:
+    #     mw = calculate_molecular_weight(ensemble)
+    #     filename = os.path.basename(ensemble)
+    #     print(filename, mw)
+
     # Extract the best model filename
-    best_model = os.path.basename(multi_state_models[best_model_idx])
+
+    best_model_dat_file = os.path.basename(multi_state_models[best_model_idx])
+
+    # Assume that teh first file in this array is the 1-state model
+    single_model_ensemble = ensemble_pdb_files[0]
+    best_ensemble_pdb_file = os.path.basename(single_model_ensemble)
+
+    mw_model = round(calculate_molecular_weight(single_model_ensemble) / 1000, 2)
+    print_debug(
+        f"Best ensemble model: {os.path.basename(single_model_ensemble)}, MW: {mw_model}"
+    )
     profs = load_file(multi_state_models[best_model_idx])
     # Extract profiles and run evaluation
     eprof, mprof = profs[0], profs[1]
@@ -685,14 +722,15 @@ def main():
     q_ranges = [q_min, 0.1, 0.2, q_max]
 
     # Evaluate fit and gather results
-    evaluation_result = evaluate_model_fit(eprof, mprof, q_ranges)
+    evaluation_result = evaluate_model_fit(eprof, mprof, q_ranges, mw_model)
 
     # Prepare output data and save to JSON
     output_dict = {
-        "mw_saxs": round(evaluation_result["e_mw"], 2),
-        "mw_model": round(evaluation_result["m_mw"], 2),
-        "mw_err": round(evaluation_result["mw_err"], 1),
-        "best_model": best_model,
+        "mw_saxs": round(evaluation_result["e_mw"], 4),
+        "mw_model": mw_model,
+        "mw_err": round(evaluation_result["mw_err"], 4),
+        "best_model_dat_file": best_model_dat_file,
+        "best_ensemble_pdb_file": best_ensemble_pdb_file,
         "overall_chi_square": round(evaluation_result["overall_chi_square"], 2),
         "q_ranges": q_ranges,
         "chi_squares_of_regions": [

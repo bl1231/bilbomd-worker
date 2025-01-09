@@ -121,3 +121,5 @@ scripts/nersc/workdir
 scripts/nersc/test-scripts
 atsas/*.run
 atsas/*.lic
+bioxtas/*.zip
+bioxtas/bioxtasraw-master
