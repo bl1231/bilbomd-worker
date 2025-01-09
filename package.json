@@ -19,7 +19,7 @@
   "author": "Scott Classen",
   "license": "ISC",
   "dependencies": {
-    "@bl1231/bilbomd-mongodb-schema": "^1.4.7",
+    "@bl1231/bilbomd-mongodb-schema": "^1.4.8",
     "axios": "^1.7.9",
     "axios-retry": "^4.5.0",
     "bullmq": "^5.34.8",
