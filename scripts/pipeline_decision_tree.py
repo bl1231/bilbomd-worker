@@ -131,38 +131,20 @@ def best_chi_square_i(cs_models, multi_state_models):
     Selects the best chi-square from all multi-state files in the input folder.
 
     Returns the index of the best chi-square in cs_models.
-
+    ["1.7", "1.8", "1.9", "2.5"]
+    ["multi_state_model_1_1_1.dat", "multi_state_model_2_1_1.dat]
     Selects the highest cs that is <= 2. If they are all > 2, select the lowest.
     """
     print_debug("Comparing chi-squares of all multistates")
 
-    # Round and print for debug purposes
-    cs_models_rounded = [round(cs, 2) for cs in cs_models]
-    print_debug(cs_models_rounded)
-    
     if len(cs_models) == 1:
         best_cs = cs_models[0]
     elif any (cs < 2 for cs in cs_models):
         best_cs = max((cs for cs in cs_models if cs < 2))
     else:
         best_cs = min(cs_models)
-    multi_states_file = multi_state_models[cs_models.index(best_cs)]
-    multi_states_num_i = multi_states_file.find("multi_state_model_")
-    multi_states_num = multi_states_file[multi_states_num_i + 18]
-    print_debug(
-        f"The best chi-square is {round(best_cs, 2)} "
-        f"({multi_states_num} multi states)"
-    )
-    return best_index
 
-
-def _extract_model_number(filename):
-    """
-    Extracts the multi-state model number from the filename.
-    Assumes the pattern 'multi_state_model_#'.
-    """
-    start = filename.find("multi_state_model_") + 18
-    return filename[start]
+    return best_cs
 
 
 def calculate_regional_chi_square_values(
