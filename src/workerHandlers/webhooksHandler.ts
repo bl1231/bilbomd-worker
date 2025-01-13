@@ -1,7 +1,7 @@
 import { Job } from 'bullmq'
-import { logger } from '../helpers/loggers'
-import { processDockerBuildJob } from '../services/process/webhooks-nersc'
-import { WorkerJob } from 'types/jobtypes'
+import { logger } from '../helpers/loggers.js'
+import { processDockerBuildJob } from '../services/pipelines/webhooks-nersc.js'
+import { WorkerJob } from '../types/jobtypes.js'
 
 export const webhooksHandler = async (job: Job<WorkerJob>) => {
   try {

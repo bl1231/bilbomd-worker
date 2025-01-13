@@ -1,95 +1,116 @@
 import { Job as BullMQJob } from 'bullmq'
-import { BilboMdPDBJob } from '@bl1231/bilbomd-mongodb-schema'
+import { BilboMdCRDJob } from '@bl1231/bilbomd-mongodb-schema'
 import {
-  runPdb2Crd,
   runMinimize,
   runHeat,
   runMolecularDynamics,
-  runFoxs,
   runMultiFoxs
-} from '../functions/bilbomd-step-functions'
-import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc'
-import { initializeJob, cleanupJob } from '../functions/job-utils'
-import { runSingleFoXS } from '../functions/foxs-analysis'
+} from '../functions/bilbomd-step-functions.js'
+import {
+  extractPDBFilesFromDCD,
+  remediatePDBFiles,
+  runFoXS
+} from '../functions/bilbomd-functions.js'
+import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc.js'
+import { initializeJob, cleanupJob } from '../functions/job-utils.js'
+import { runSingleFoXS } from '../functions/foxs-analysis.js'
 
-const processBilboMDJobTest = async (MQjob: BullMQJob) => {
-  const foundJob = await BilboMdPDBJob.findOne({ _id: MQjob.data.jobid })
-    .populate('user')
-    .exec()
-  if (!foundJob) {
-    throw new Error(`No job found for: ${MQjob.data.jobid}`)
-  }
-
-  await initializeJob(MQjob, foundJob)
-  await cleanupJob(MQjob, foundJob)
-}
-
-const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
+const processBilboMDCRDJob = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(1)
 
-  const foundJob = await BilboMdPDBJob.findOne({ _id: MQjob.data.jobid })
+  const foundJob = await BilboMdCRDJob.findOne({ _id: MQjob.data.jobid })
     .populate('user')
     .exec()
   if (!foundJob) {
     throw new Error(`No job found for: ${MQjob.data.jobid}`)
   }
   await MQjob.updateProgress(5)
+  foundJob.progress = 5
+  await foundJob.save()
 
   // Initialize
   await initializeJob(MQjob, foundJob)
   await MQjob.updateProgress(10)
-
-  // PDB to CRD/PSF for 'pdb' mode
-  await MQjob.log('start pdb2crd')
-  await runPdb2Crd(MQjob, foundJob)
-  await MQjob.log('end pdb2crd')
-  await MQjob.updateProgress(15)
+  foundJob.progress = 10
+  await foundJob.save()
 
   // CHARMM minimization
   await MQjob.log('start minimize')
   await runMinimize(MQjob, foundJob)
   await MQjob.log('end minimize')
   await MQjob.updateProgress(25)
+  foundJob.progress = 25
+  await foundJob.save()
 
   // FoXS calculations on minimization_output.pdb
   await MQjob.log('start initfoxs')
   await runSingleFoXS(foundJob)
   await MQjob.log('end initfoxs')
   await MQjob.updateProgress(30)
+  foundJob.progress = 30
+  await foundJob.save()
 
   // CHARMM heating
   await MQjob.log('start heat')
   await runHeat(MQjob, foundJob)
   await MQjob.log('end heat')
   await MQjob.updateProgress(40)
+  foundJob.progress = 40
+  await foundJob.save()
 
   // CHARMM molecular dynamics
   await MQjob.log('start md')
   await runMolecularDynamics(MQjob, foundJob)
   await MQjob.log('end md')
+  await MQjob.updateProgress(50)
+  foundJob.progress = 50
+  await foundJob.save()
+
+  // Extract PDBs from DCDs
+  await MQjob.log('start dcd2pdb')
+  await extractPDBFilesFromDCD(foundJob)
+  await MQjob.log('end dcd2pdb')
   await MQjob.updateProgress(60)
+  foundJob.progress = 60
+  await foundJob.save()
+
+  // Remediate PDB files
+  await MQjob.log('start remediate')
+  await remediatePDBFiles(foundJob)
+  await MQjob.log('end remediate')
+  await MQjob.updateProgress(70)
+  foundJob.progress = 70
+  await foundJob.save()
 
   // Calculate FoXS profiles
   await MQjob.log('start foxs')
-  await runFoxs(MQjob, foundJob)
+  await runFoXS(foundJob)
   await MQjob.log('end foxs')
   await MQjob.updateProgress(80)
+  foundJob.progress = 80
+  await foundJob.save()
 
   // MultiFoXS
   await MQjob.log('start multifoxs')
   await runMultiFoxs(MQjob, foundJob)
   await MQjob.log('end multifoxs')
   await MQjob.updateProgress(95)
+  foundJob.progress = 95
+  await foundJob.save()
 
   // Prepare results
   await MQjob.log('start results')
   await prepareBilboMDResults(MQjob, foundJob)
   await MQjob.log('end results')
   await MQjob.updateProgress(99)
+  foundJob.progress = 99
+  await foundJob.save()
 
   // Cleanup & send email
   await cleanupJob(MQjob, foundJob)
   await MQjob.updateProgress(100)
+  foundJob.progress = 100
+  await foundJob.save()
 }
 
-export { processBilboMDPDBJob, processBilboMDJobTest }
+export { processBilboMDCRDJob }

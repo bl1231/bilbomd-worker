@@ -2,13 +2,11 @@ import { spawn, ChildProcess } from 'node:child_process'
 import { IJob, IBilboMDAutoJob } from '@bl1231/bilbomd-mongodb-schema'
 import fs from 'fs-extra'
 import path from 'node:path'
-import { logger } from '../../helpers/loggers'
+import { logger } from '../../helpers/loggers.js'
 import { createInterface } from 'readline'
 import { IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
-import { updateStepStatus } from './mongo-utils'
-
-const DATA_VOL = process.env.DATA_VOL ?? '/bilbomd/uploads'
-const FOXS_BIN = process.env.FOXS ?? '/usr/bin/foxs'
+import { updateStepStatus } from './mongo-utils.js'
+import { config } from '../../config/config.js'
 
 const countDataPoints = async (filePath: string): Promise<number> => {
   const fileStream = fs.createReadStream(filePath)
@@ -36,7 +34,7 @@ const runSingleFoXS = async (DBjob: IJob | IBilboMDAutoJob): Promise<void> => {
   }
   try {
     await updateStepStatus(DBjob, 'initfoxs', status)
-    const jobDir = path.join(DATA_VOL, DBjob.uuid)
+    const jobDir = path.join(config.uploadDir, DBjob.uuid)
     const logFile = path.join(jobDir, 'initial_foxs_analysis.log')
     const errorFile = path.join(jobDir, 'initial_foxs_analysis_error.log')
     const logStream = fs.createWriteStream(logFile)
@@ -59,7 +57,7 @@ const runSingleFoXS = async (DBjob: IJob | IBilboMDAutoJob): Promise<void> => {
 
     const foxsProcess = () =>
       new Promise<void>((resolve, reject) => {
-        const foxs: ChildProcess = spawn(FOXS_BIN, foxsArgs, foxsOpts)
+        const foxs: ChildProcess = spawn(config.foxBin, foxsArgs, foxsOpts)
 
         foxs.stdout?.on('data', (data) => {
           logStream.write(data.toString())

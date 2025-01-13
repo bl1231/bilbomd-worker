@@ -1,6 +1,6 @@
-import { webhooksHandler } from '../workerHandlers/webhooksHandler'
+import { webhooksHandler } from '../workerHandlers/webhooksHandler.js'
 import { Worker, WorkerOptions } from 'bullmq'
-import { logger } from '../helpers/loggers'
+import { logger } from '../helpers/loggers.js'
 
 let webhooksActiveJobsCount = 0
 

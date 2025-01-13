@@ -2,12 +2,17 @@ import path from 'path'
 import axios from 'axios'
 import axiosRetry from 'axios-retry'
 import qs from 'qs'
-import { logger } from '../../helpers/loggers'
-import { config } from '../../config/config'
-import { IBilboMDSteps, IJob, IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
-import { ensureValidToken } from './nersc-api-token-functions'
-import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc'
-import { updateStepStatus } from './mongo-utils'
+import { logger } from '../../helpers/loggers.js'
+import { config } from '../../config/config.js'
+import {
+  IBilboMDSteps,
+  IJob,
+  IStepStatus,
+  StepStatusEnum
+} from '@bl1231/bilbomd-mongodb-schema'
+import { ensureValidToken } from './nersc-api-token-functions.js'
+import { TaskStatusResponse, JobStatusResponse } from '../../types/nersc.js'
+import { updateStepStatus } from './mongo-utils.js'
 import { Job as BullMQJob } from 'bullmq'
 
 const environment: string = process.env.NODE_ENV || 'development'
@@ -334,7 +339,7 @@ const updateStatus = async (MQjob: BullMQJob, DBJob: IJob) => {
     if (step in DBJob.steps) {
       const key = step as keyof IBilboMDSteps // Assert that step is a valid key of IBilboMDSteps
       DBJob.steps[key] = {
-        status: status,
+        status: status as StepStatusEnum,
         message: status
       }
     }
@@ -351,15 +356,43 @@ const updateStatus = async (MQjob: BullMQJob, DBJob: IJob) => {
 }
 
 const calculateProgress = (steps: IBilboMDSteps): number => {
+  if (!steps || Object.keys(steps).length === 0) {
+    logger.warn('Steps are empty or undefined.')
+    return 20 // Minimum progress
+  }
+
+  logger.info('Printing all steps and their statuses:')
+  for (const [step, value] of Object.entries(steps)) {
+    logger.info(
+      `Step: ${step}, Status: ${value?.status || 'Undefined'}, Message: ${
+        value?.message || 'None'
+      }`
+    )
+  }
+
   const totalWeight = Object.values(stepWeights).reduce((acc, weight) => acc + weight, 0)
+  if (totalWeight === 0) {
+    logger.error('Total weight is zero. Check stepWeights configuration.')
+    return 20 // Minimum progress
+  }
+
   let completedWeight = 0
 
-  for (const [step, status] of Object.entries(steps)) {
-    if (status?.status === 'Success') {
-      completedWeight += stepWeights[step] || 0
+  // Iterate only over valid keys in `steps` that exist in `stepWeights`
+  for (const step of Object.keys(steps).filter((key) => key in stepWeights)) {
+    const status = steps[step as keyof IBilboMDSteps]?.status
+
+    logger.info(`Step: ${step}, Status: ${status}`)
+
+    if (status === 'Success') {
+      const weight = stepWeights[step] || 0
+      completedWeight += weight
     }
   }
 
+  logger.info(`Completed Weight: ${completedWeight}, Total Weight: ${totalWeight}`)
+
+  // Calculate progress
   const progress = (completedWeight / totalWeight) * 70 + 20 // Scale between 20% and 90%
   return Math.min(progress, 90) // Ensure it doesn't exceed 90%
 }
@@ -369,5 +402,7 @@ export {
   submitJobToNersc,
   monitorTaskAtNERSC,
   monitorJobAtNERSC,
-  getSlurmOutFile
+  getSlurmOutFile,
+  getSlurmStatusFile,
+  calculateProgress
 }

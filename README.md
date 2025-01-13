@@ -49,6 +49,44 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.12.6 (1/9/2025)
+  - Calculate model molecular weight (MW) from initial PDB model.
+- 1.12.5 (1/7/2025)
+  - Update dependencies
+- 1.12.4 (12/11/2024)
+  - Refactor `prepareResults` for BilboMD SANS
+  - Improve README for BilboMD SANS
+  - Update dependencies
+- 1.12.3 (12/06/2024)
+  - Bump dockerfile from node20 to node22
+  - Syncronize changes to `pae_ratios.py` from `bilbomd-backend`
+- 1.12.2 (12/04/2024)
+  - Update dependencies
+  - Run `npm audit fix`
+- 1.12.1 (11/22/2024)
+  - Refactor src/workers/bilboMdNerscJobMonitor.ts to prevent multiple emails sent.
+- 1.12.0 (11/21/2024)
+  - Add BilboMD Multi pipeline
+- 1.11.2 (11/20/2024)
+  - Fix PAE Jiffy bug preventing it from working as expected.
+- 1.11.1 (11/19/2024)
+  - Return `minimization_output_$datfileprefix.dat` in results.tar.gz file
+  - Update several dependencies
+- 1.11.0 (11/15/2024)
+  - Add a PDB remediation step to non-NERSC pipelines
+- 1.10.1 (11/13/2024)
+  - Update job progress in Mongo Job entry for all non-NERSC jobs
+- 1.10.0 (11/08/2024)
+  - Decouple job submission from job monitoring on NERSC
+  - Add the step to calculate Rgyr vs. Dmax consolodated json file
+- 1.9.4 (11/04/2024)
+  - Simplify package name from `bilbomd-worker/bilbomd-worker` to `bilbomd-worker`
+- 1.9.3 (11/04/2024)
+  - Changes required to migrate from CJS to ESM
+- 1.9.2
+  - Update dependencies
+- 1.9.1
+  - Add feedback analysis sub-step for BilboMD Classic PDB (others will be added later)
 - 1.9.0
   - Add BilboMD SANS capabilities
   - Refactor BullMQ worker code to make it more modular

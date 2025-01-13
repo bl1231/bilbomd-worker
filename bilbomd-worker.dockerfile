@@ -32,7 +32,7 @@ COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/
 FROM copy-charmm-binary AS install-node
 RUN apt-get update && \
     apt-get install -y curl && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -65,7 +65,7 @@ ENV PATH="/miniforge3/bin/:${PATH}"
 RUN conda install --yes --name base -c conda-forge numpy scipy matplotlib \
     pillow numba h5py cython reportlab \
     dbus-python fabio pyfai hdf5plugin \
-    mmcif_pdbx svglib python-igraph && \
+    mmcif_pdbx svglib python-igraph biopython && \
     conda clean -afy
 
 # -----------------------------------------------------------------------------
@@ -159,9 +159,6 @@ RUN groupadd -g $GROUP_ID bilbomd && \
 # Change ownership of directories to the user and group
 RUN chown -R bilbo:bilbomd /app /bilbomd/uploads /bilbomd/logs /home/bilbo
 
-# Update NPM
-RUN npm install -g npm@10.8.3
-
 # Switch to the non-root user
 USER bilbo:bilbomd
 
@@ -172,7 +169,7 @@ COPY --chown=bilbo:bilbomd package*.json .
 RUN echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" > /home/bilbo/.npmrc
 
 # Install dependencies
-RUN npm ci --no-audit
+RUN npm ci
 
 # Remove .npmrc file for security
 RUN rm /home/bilbo/.npmrc

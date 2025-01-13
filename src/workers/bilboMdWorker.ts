@@ -1,6 +1,6 @@
-import { bilboMdHandler } from '../workerHandlers/bilboMdHandler'
+import { bilboMdHandler } from '../workerHandlers/bilboMdHandler.js'
 import { Worker, WorkerOptions } from 'bullmq'
-import { logger } from '../helpers/loggers'
+import { logger } from '../helpers/loggers.js'
 
 let bilboMdActiveJobsCount = 0
 

@@ -16,12 +16,19 @@ on:
 
 jobs:
   build-and-push-image:
+    if: ${{ github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
     steps:
+      - name: Debug GitHub Event
+        run: |
+          echo "Actor: ${{ github.actor }}"
+          echo "Event Name: ${{ github.event_name }}"
+          echo "Event Payload: ${{ toJSON(github.event) }}"
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -91,7 +98,7 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ghcr.io/${{ github.repository }}/bilbomd-worker:latest
+            ghcr.io/${{ github.repository }}:latest
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             USER_ID=${{ vars.USER_ID }}
@@ -111,7 +118,7 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ghcr.io/${{ github.repository }}/bilbomd-worker:${{ env.VERSION }}
+            ghcr.io/${{ github.repository }}:${{ env.VERSION }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             USER_ID=${{ vars.USER_ID }}

@@ -1,4 +1,4 @@
-import { config } from '../../config/config'
+import { config } from '../../config/config.js'
 import { Job as BullMQJob } from 'bullmq'
 import {
   IJob,
@@ -7,18 +7,19 @@ import {
   IBilboMDCRDJob,
   IBilboMDAutoJob,
   IBilboMDAlphaFoldJob,
-  IBilboMDSteps
+  IBilboMDSteps,
+  StepStatusEnum
 } from '@bl1231/bilbomd-mongodb-schema'
-import { logger } from '../../helpers/loggers'
-import { updateStepStatus } from './mongo-utils'
+import { logger } from '../../helpers/loggers.js'
+import { updateStepStatus } from './mongo-utils.js'
 import {
   executeNerscScript,
   submitJobToNersc,
   monitorTaskAtNERSC,
   monitorJobAtNERSC
-} from './nersc-api-functions'
-import { prepareResults } from './bilbomd-step-functions'
-import { cleanupJob } from './job-utils'
+} from './nersc-api-functions.js'
+import { prepareResults } from './bilbomd-step-functions.js'
+import { cleanupJob } from './job-utils.js'
 
 interface INerscTaskResult {
   id: string
@@ -47,6 +48,44 @@ function isBilboMDAutoJob(job: IJob): job is IBilboMDAutoJob {
 
 function isBilboMDAlphaFoldJob(job: IJob): job is IBilboMDAlphaFoldJob {
   return (job as IBilboMDAlphaFoldJob).alphafold_entities !== undefined
+}
+
+const updateNerscSpecificSteps = async (DBJob: IJob): Promise<void> => {
+  logger.info(`Updating NERSC-specific steps for job: ${DBJob.uuid}`)
+  // Ensure the steps object exists
+  if (!DBJob.steps) {
+    DBJob.steps = {} as IBilboMDSteps
+  }
+
+  // Add NERSC-specific steps if they are missing
+  DBJob.steps.nersc_prepare_slurm_batch = DBJob.steps.nersc_prepare_slurm_batch || {
+    status: 'Waiting',
+    message: 'Step not started'
+  }
+
+  DBJob.steps.nersc_submit_slurm_batch = DBJob.steps.nersc_submit_slurm_batch || {
+    status: 'Waiting',
+    message: 'Step not started'
+  }
+
+  DBJob.steps.nersc_job_status = DBJob.steps.nersc_job_status || {
+    status: 'Waiting',
+    message: 'Step not started'
+  }
+
+  DBJob.steps.nersc_copy_results_to_cfs = DBJob.steps.nersc_copy_results_to_cfs || {
+    status: 'Waiting',
+    message: 'Waiting until job is completed'
+  }
+
+  DBJob.steps.copy_results_to_cfs = DBJob.steps.copy_results_to_cfs || {
+    status: 'Waiting',
+    message: 'Waiting until job is completed'
+  }
+
+  // Save the job document to persist the changes
+  await DBJob.save()
+  logger.info(`Updated NERSC-specific steps for job: ${DBJob.uuid}`)
 }
 
 const makeBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
@@ -132,6 +171,16 @@ const submitBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob): Promise<string
     const submitResultObject = JSON.parse(submitResult.result)
     const jobID = submitResultObject.jobid
     logger.info(`JOBID: ${jobID}`)
+
+    // Populate the `nersc` field in the `DBjob`
+    DBjob.nersc = {
+      jobid: jobID,
+      state: 'PENDING',
+      qos: undefined,
+      time_submitted: new Date(),
+      time_started: undefined,
+      time_completed: undefined
+    }
 
     await updateJobStatus(DBjob, stepName, 'Success', `NERSC JobID ${jobID}`)
     await MQjob.log('end nersc submit slurm batch')
@@ -298,7 +347,7 @@ const sendBilboMDEmail = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> =>
 const updateJobStatus = async (
   job: IJob,
   stepName: keyof IBilboMDSteps,
-  status: string,
+  status: StepStatusEnum,
   message: string
 ): Promise<void> => {
   const stepStatus: IStepStatus = {
@@ -309,10 +358,15 @@ const updateJobStatus = async (
 }
 
 export {
+  updateNerscSpecificSteps,
   makeBilboMDSlurm,
   submitBilboMDSlurm,
   monitorBilboMDJob,
   copyBilboMDResults,
   prepareBilboMDResults,
-  sendBilboMDEmail
+  sendBilboMDEmail,
+  isBilboMDCRDJob,
+  isBilboMDPDBJob,
+  isBilboMDAutoJob,
+  isBilboMDAlphaFoldJob
 }

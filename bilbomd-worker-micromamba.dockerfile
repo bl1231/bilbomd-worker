@@ -54,13 +54,17 @@ RUN apt-get update && \
 USER mambauser
 
 # Install BioXTAS dependencies
-RUN micromamba install --yes --name base -c conda-forge numpy=1.26.4 scipy=1.13.1 matplotlib \
-    pillow numba h5py cython reportlab \
-    dbus-python fabio pyfai hdf5plugin \
-    mmcif_pdbx svglib python-igraph
+RUN micromamba install --yes --name base -c conda-forge numpy=1.26.4 scipy=1.13.1 matplotlib 
+RUN micromamba install --yes --name base -c conda-forge pillow numba h5py cython reportlab 
+RUN micromamba install --yes --name base -c conda-forge dbus-python fabio pyfai hdf5plugin 
+RUN micromamba install --yes --name base -c conda-forge mmcif_pdbx svglib python-igraph
 # RUN micromamba install --yes --name base pip
 
-USER root
+# Create the directory and set world-writable permissions
+RUN mkdir -p /home/mambauser/.cache/matplotlib && \
+    chmod 777 /home/mambauser/.cache/matplotlib
+
+    USER root
 
 WORKDIR /home/mambauser
 # Download or Copy the BioXTAS RAW master zip file using wget
@@ -123,8 +127,10 @@ RUN apt-get update && \
     libxcb-keysyms1 libxcb-shape0 libc6 libgcc1 libquadmath0 libstdc++6 libxml2 libtiff5 liblzma5 libgfortran5 libicu70 libharfbuzz0b && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /tmp
-COPY atsas/ATSAS-4.0.1-1-Linux-Ubuntu-22.run .
-COPY atsas/atsas.lic .
+# COPY atsas/ATSAS-4.0.1-1-Linux-Ubuntu-22.run .
+# COPY atsas/atsas.lic .
+RUN wget https://bl1231.als.lbl.gov/pickup/atsas/ATSAS-4.0.1-1-Linux-Ubuntu-22.run -O ATSAS-4.0.1-1-Linux-Ubuntu-22.run
+RUN wget https://bl1231.als.lbl.gov/pickup/atsas/atsas.lic -O atsas.lic
 RUN mkdir /root/.local && chmod +x ATSAS-4.0.1-1-Linux-Ubuntu-22.run && \
     ./ATSAS-4.0.1-1-Linux-Ubuntu-22.run --accept-licenses --auto-answer \
     AutomaticRuntimeDependencyResolution=Yes --root /usr/local/ATSAS-4.0.1 --file-query KeyFilePath=/tmp/atsas.lic \
