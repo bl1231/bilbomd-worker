@@ -1,28 +1,28 @@
 {
-    "mw_saxs": 65.45,
-    "mw_model": 62.35,
+    "mw_saxs": 67.08,
+    "mw_model": 67.08,
     "mw_err": 0.0,
-    "best_model": "multi_state_model_1_1_1.dat",
-    "overall_chi_square": 3.81,
+    "best_model": "multi_state_model_4_1_1.dat",
+    "overall_chi_square": 2.14,
     "q_ranges": [
-        0.0111,
+        0.011985,
         0.1,
         0.2,
-        0.28400001
+        0.499587
     ],
     "chi_squares_of_regions": [
-        7.0,
-        2.47,
-        2.06
+        1.7,
+        2.25,
+        2.24
     ],
     "residuals_of_regions": [
-        0.744,
-        -0.819,
-        0.216
+        -0.117,
+        0.166,
+        -0.037
     ],
-    "mw_feedback": "The difference between the model MW (62.35) and the SAXS MW (65.45) is within acceptable error (4.7%).",
-    "overall_chi_square_feedback": "The overall chi-square of this fit is 3.81. Poor.",
-    "highest_chi_square_feedback": "The chi-square is highest (7.0) in the region where (0.01 < q < 0.1).",
-    "second_highest_chi_square_feedback": "The chi-square is also high (2) in the region where (0.1 < q < 0.2).",
-    "regional_chi_square_feedback": "Between the model and experiment, there is likely a large difference in sequence, oligomerization, etc. The movement of flexible regions in the model also do not seem to improve the fitting."
+    "mw_feedback": "The difference between the model MW (67.075) and the SAXS MW (67.075) is within acceptable error (0.0%).",
+    "overall_chi_square_feedback": "The overall chi-square of this fit is 2.14. Poor.",
+    "highest_chi_square_feedback": "The chi-square is highest (2.25) in the region where (0.1 < q < 0.2).",
+    "second_highest_chi_square_feedback": "The chi-square is also high (2) in the region where (0.2 < q < 0.5).",
+    "regional_chi_square_feedback": "The flexible regions in the model cannot find a fit with the SAXS. Try adjusting the flexible regions in the const.inp file using the PAE Jiffy. There are also background subtraction problems."
 }

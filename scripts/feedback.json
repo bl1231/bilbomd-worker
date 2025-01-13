@@ -1,28 +1,28 @@
 {
-    "mw_saxs": 31.65,
-    "mw_model": 34.58,
-    "mw_err": 0.1,
+    "mw_saxs": 58.15,
+    "mw_model": 59.5,
+    "mw_err": 0.0,
     "best_model": "multi_state_model_2_1_1.dat",
-    "overall_chi_square": 7.79,
+    "overall_chi_square": 1.86,
     "q_ranges": [
-        0.00709,
+        0.009046,
         0.1,
         0.2,
-        0.40778741
+        0.36925301
     ],
     "chi_squares_of_regions": [
-        25.71,
-        4.72,
-        1.29
+        2.65,
+        1.86,
+        1.44
     ],
     "residuals_of_regions": [
-        -0.986,
-        0.641,
-        -0.425
+        -0.086,
+        0.003,
+        0.058
     ],
-    "mw_feedback": "The difference between the model MW (34.575) and the SAXS MW (31.65) is within acceptable error (9.2%).",
-    "overall_chi_square_feedback": "The overall chi-square of this fit is 7.79. Poor.",
-    "highest_chi_square_feedback": "The chi-square is highest (25.71) in the region where (0.01 < q < 0.1).",
-    "second_highest_chi_square_feedback": "The chi-square is also high (5) in the region where (0.1 < q < 0.2).",
-    "regional_chi_square_feedback": "Between the model and experiment, there is likely a large difference in sequence, oligomerization, etc. The movement of flexible regions in the model also do not seem to improve the fitting."
+    "mw_feedback": "The difference between the model MW (59.5) and the SAXS MW (58.15) is within acceptable error (2.3%).",
+    "overall_chi_square_feedback": "The overall chi-square of this fit is 1.86. Moderate.",
+    "highest_chi_square_feedback": "The chi-square is highest (2.65) in the region where (0.01 < q < 0.1).",
+    "second_highest_chi_square_feedback": "The 2nd highest chi-square (1.86) is in the region where 0.1 < q < 0.2, but this is okay.",
+    "regional_chi_square_feedback": "The overall structure of the PDB model needs improvement. This may come from a sequence that is off, or the presence of oligomerization states in the sample."
 }

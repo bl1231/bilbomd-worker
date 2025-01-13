@@ -601,7 +601,7 @@ def handle_poor_fit(
         if second_highest_chi_square_flag == "mid_q_err":
             feedback += (
                 " The movement of flexible regions in the model also do not seem to "
-                "improve the fitting."
+                "improve the fit."
             )
         elif second_highest_chi_square_flag == "high_q_err":
             feedback += " There are also background subtraction problems."
@@ -627,7 +627,7 @@ def handle_poor_fit(
         elif second_highest_chi_square_flag == "mid_q_err":
             feedback += (
                 " The movement of flexible regions in the model also do not seem to "
-                "improve the fitting."
+                "improve the fit."
             )
     else:
         feedback = (
