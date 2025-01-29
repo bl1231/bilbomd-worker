@@ -25,7 +25,7 @@ import bioxtasraw.RAWAPI as raw
 
 
 # Global constants
-MW_ERR_CUTOFF = 0.10
+MW_ERR_CUTOFF = 0.20
 CHI2_CUTOFF_EXCELLENT = 1.0
 CHI2_CUTOFF_MODERATE = 2.0
 PRINT_FLAG = True
@@ -126,7 +126,7 @@ def calculate_residual(prof1, prof2):
     return sum(residuals) / len(residuals)
 
 
-def best_chi_square_i(cs_models, multi_state_models):
+def best_chi_square_i(cs_models):
     """
     Selects the best chi-square from all multi-state files in the input folder.
 
@@ -134,6 +134,7 @@ def best_chi_square_i(cs_models, multi_state_models):
     ["1.7", "1.8", "1.9", "2.5"]
     ["multi_state_model_1_1_1.dat", "multi_state_model_2_1_1.dat]
     Selects the highest cs that is <= 2. If they are all > 2, select the lowest.
+
     """
     print_debug("Comparing chi-squares of all multistates")
 
@@ -143,8 +144,8 @@ def best_chi_square_i(cs_models, multi_state_models):
         best_cs = max((cs for cs in cs_models if cs < 2))
     else:
         best_cs = min(cs_models)
-
-    return best_cs
+    best_cs_i = cs_models.index(best_cs)
+    return best_cs_i
 
 
 def calculate_regional_chi_square_values(
@@ -651,7 +652,7 @@ def main():
     cs_models = calculate_chi_squares(multi_state_models)
 
     # Load best chi-square model
-    best_model_idx = best_chi_square_i(cs_models, multi_state_models)
+    best_model_idx = best_chi_square_i(cs_models)
 
     print_debug("multi_state_model_*.dat files:")
     for model in multi_state_models:
