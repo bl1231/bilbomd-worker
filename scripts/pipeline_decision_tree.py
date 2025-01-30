@@ -126,26 +126,63 @@ def calculate_residual(prof1, prof2):
     return sum(residuals) / len(residuals)
 
 
-def best_chi_square_i(cs_models):
+def best_chi_square_i(cs_models, multi_state_models):
     """
     Selects the best chi-square from all multi-state files in the input folder.
 
     Returns the index of the best chi-square in cs_models.
-    ["1.7", "1.8", "1.9", "2.5"]
-    ["multi_state_model_1_1_1.dat", "multi_state_model_2_1_1.dat]
-    Selects the highest cs that is <= 2. If they are all > 2, select the lowest.
 
+    Chooses the first chi-square with less than 20% error compared to the next value.
+    If no such chi-square exists, returns the index of the minimum chi-square.
     """
     print_debug("Comparing chi-squares of all multistates")
 
+    # Round and print for debug purposes
+    cs_models_rounded = [round(cs, 2) for cs in cs_models]
+    print_debug(cs_models_rounded)
+
+    csm_err_threshold = 0.2
+
+    # Handle single value case immediately
     if len(cs_models) == 1:
-        best_cs = cs_models[0]
-    elif any (cs < 2 for cs in cs_models):
-        best_cs = max((cs for cs in cs_models if cs < 2))
-    else:
-        best_cs = min(cs_models)
-    best_cs_i = cs_models.index(best_cs)
-    return best_cs_i
+        return 0
+
+    # Iterate over pairs of chi-square values
+    for _, (cs_current, cs_next) in enumerate(zip(cs_models, cs_models[1:])):
+        csm_err = abs(cs_next - cs_current) / cs_current
+
+        if csm_err <= csm_err_threshold:
+            return _log_and_return_best(cs_current, cs_models, multi_state_models)
+
+    # If no chi-square meets the threshold, return the smallest one
+    best_cs = min(cs_models)
+    return _log_and_return_best(best_cs, cs_models, multi_state_models)
+
+
+def _log_and_return_best(best_cs, cs_models, multi_state_models):
+    """
+    Logs and returns the index of the best chi-square value.
+    """
+    best_index = cs_models.index(best_cs)
+    multi_states_file = multi_state_models[best_index]
+
+    # Extract the multi-state number
+    multi_states_num = _extract_model_number(multi_states_file)
+
+    print_debug(
+        f"The best chi-square is {round(best_cs, 2)} "
+        f"({multi_states_num} multi states)"
+    )
+    return best_index
+
+
+def _extract_model_number(filename):
+    """
+    Extracts the multi-state model number from the filename.
+    Assumes the pattern 'multi_state_model_#'.
+    """
+    start = filename.find("multi_state_model_") + 18
+    return filename[start]
 
 
 def calculate_regional_chi_square_values(
@@ -652,7 +689,7 @@ def main():
     cs_models = calculate_chi_squares(multi_state_models)
 
     # Load best chi-square model
-    best_model_idx = best_chi_square_i(cs_models)
+    best_model_idx = best_chi_square_i(cs_models, multi_state_models)
 
     print_debug("multi_state_model_*.dat files:")
     for model in multi_state_models:
