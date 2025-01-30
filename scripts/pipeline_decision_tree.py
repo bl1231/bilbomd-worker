@@ -25,7 +25,8 @@ import bioxtasraw.RAWAPI as raw
 
 
 # Global constants
-MW_ERR_CUTOFF = 0.20
+MW_ERR_CUTOFF = 0.15
+MW_DIFF_CUTOFF = 3
 CHI2_CUTOFF_EXCELLENT = 1.0
 CHI2_CUTOFF_MODERATE = 2.0
 PRINT_FLAG = True
@@ -402,6 +403,7 @@ def evaluate_model_fit(eprof, mprof, q_ranges, mw_model):
     """Perform MW Bayesian calculation, chi-square analysis, and gather feedback."""
     mw_exp = mw_bayes(eprof)
     mw_err = abs((mw_exp - mw_model) / mw_model)
+    mw_diff = abs((mw_exp - mw_model))
     overall_chi_square = calculate_chi_square(eprof, mprof)
     print_debug(f"Overall chi-square: {round(overall_chi_square, 2)} MW: {mw_exp}")
 
@@ -411,7 +413,7 @@ def evaluate_model_fit(eprof, mprof, q_ranges, mw_model):
     residuals_of_regions = calculate_regional_residual_values(q_ranges, eprof, mprof)
 
     feedback = generate_feedback(
-        mw_exp, mw_model, mw_err, overall_chi_square, chi_squares_of_regions, q_ranges
+        mw_exp, mw_model, mw_err, mw_diff, overall_chi_square, chi_squares_of_regions, q_ranges
     )
 
     evaluation_results = {
@@ -428,10 +430,10 @@ def evaluate_model_fit(eprof, mprof, q_ranges, mw_model):
 
 
 def generate_feedback(
-    e_mw, m_mw, mw_err, overall_chi_square, chi_squares_of_regions, q_ranges
+    e_mw, m_mw, mw_err, mw_diff, overall_chi_square, chi_squares_of_regions, q_ranges
 ):
     """Generate feedback based on MW and chi-square analysis."""
-    mw_feedback = generate_mw_feedback(e_mw, m_mw, mw_err)
+    mw_feedback = generate_mw_feedback(e_mw, m_mw, mw_err, mw_diff)
     overall_chi_square_feedback = generate_overall_chi_square_feedback(
         overall_chi_square, mw_err
     )
@@ -459,18 +461,21 @@ def generate_feedback(
     }
 
 
-def generate_mw_feedback(e_mw, m_mw, mw_err):
-    """Return feedback for MW error."""
-    if mw_err > MW_ERR_CUTOFF:
+def generate_mw_feedback(e_mw, m_mw, mw_err, mw_diff):
+    """
+    Return feedback for MW error. 
+    MW error that is < 15% OR < 3 kDa total is acceptable
+    """
+    if mw_err < MW_ERR_CUTOFF or mw_diff < MW_DIFF_CUTOFF:
         return (
             f"The difference between the model MW ({m_mw}) and the "
-            f"SAXS MW ({e_mw}) is large ({round(100 * mw_err, 1)}%), "
-            "sequence or oligomerization state is likely incorrect."
+            f"SAXS MW ({e_mw}) is within acceptable error "
+            f"({round(100 * mw_err, 1)}%)."
         )
     return (
         f"The difference between the model MW ({m_mw}) and the "
-        f"SAXS MW ({e_mw}) is within acceptable error "
-        f"({round(100 * mw_err, 1)}%)."
+        f"SAXS MW ({e_mw}) is large ({round(100 * mw_err, 1)}%), "
+        "sequence or oligomerization state is likely incorrect."
     )
 
 
