@@ -448,6 +448,7 @@ def generate_feedback(
         highest_chi_square_flag,
         second_highest_chi_square_flag,
         mw_err,
+        mw_diff,
         chi_squares_of_regions,
     )
     print_debug(f"Regional feedback: {regional_chi_square_feedback}")
@@ -508,11 +509,12 @@ def generate_regional_feedback(
     highest_chi_square_flag: str,
     second_highest_chi_square_flag: str,
     mw_err: float,
+    mw_diff: float,
     chi_squares_of_regions: list,
 ) -> str:
     """Generate feedback based on chi-square analysis in different q regions."""
 
-    if mw_err > MW_ERR_CUTOFF:
+    if mw_err > MW_ERR_CUTOFF and mw_diff > MW_DIFF_CUTOFF:
         return "Please revisit sequence and oligomerization state before examining flexibility."
 
     if all_regions_chi_square_good(chi_squares_of_regions):
