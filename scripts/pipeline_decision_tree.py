@@ -471,11 +471,12 @@ def generate_mw_feedback(e_mw, m_mw, mw_err, mw_diff):
         return (
             f"The difference between the model MW ({m_mw}) and the "
             f"SAXS MW ({e_mw}) is within acceptable error "
-            f"({round(100 * mw_err, 1)}%)."
+            f"({round(100 * mw_err, 1)}%, {round(mw_diff, 1)} kDa)."
         )
     return (
         f"The difference between the model MW ({m_mw}) and the "
-        f"SAXS MW ({e_mw}) is large ({round(100 * mw_err, 1)}%), "
+        f"SAXS MW ({e_mw}) is large ({round(100 * mw_err, 1)}%, "
+        f"{round(mw_diff, 1)} kDa),"
         "sequence or oligomerization state is likely incorrect."
     )
 
