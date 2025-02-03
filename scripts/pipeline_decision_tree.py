@@ -451,6 +451,8 @@ def generate_feedback(
         mw_diff,
         chi_squares_of_regions,
     )
+    print_debug(f"MW feedback: {mw_feedback}")
+    print_debug(f"Overall chi2 feedback: {overall_chi_square_feedback}")
     print_debug(f"Regional feedback: {regional_chi_square_feedback}")
 
     return {
@@ -471,13 +473,14 @@ def generate_mw_feedback(e_mw, m_mw, mw_err, mw_diff):
         return (
             f"The difference between the model MW ({m_mw}) and the "
             f"SAXS MW ({e_mw}) is within acceptable error "
-            f"({round(100 * mw_err, 1)}%, {round(mw_diff, 1)} kDa)."
+            f"({round(100 * mw_err, 1)}% err, {round(mw_diff, 1)} kDa diff.)."
         )
     return (
         f"The difference between the model MW ({m_mw}) and the "
-        f"SAXS MW ({e_mw}) is large ({round(100 * mw_err, 1)}%, "
-        f"{round(mw_diff, 1)} kDa),"
+        f"SAXS MW ({e_mw}) is large ({round(100 * mw_err, 1)}% err, "
+        f"{round(mw_diff, 1)} kDa diff),"
         "sequence or oligomerization state is likely incorrect."
+    
     )
 
 
