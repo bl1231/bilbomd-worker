@@ -1,8 +1,8 @@
-interface JobResult {
-  status: string
-  jobid: string
-  error: string
-}
+// interface JobResult {
+//   status: string
+//   jobid: string
+//   error: string
+// }
 
 interface TaskStatusResponse {
   id: string
@@ -28,56 +28,56 @@ interface NerscAccessToken {
 }
 
 // when ?sacct=false
-interface JobStatusOutput {
-  account: 'm4659_g'
-  tres_per_node: 'N/A'
-  min_cpus: '1'
-  min_tmp_disk: '0'
-  end_time: 'N/A'
-  features: 'gpu&a100'
-  group: '62704'
-  over_subscribe: 'NO'
-  jobid: '25145969'
-  name: 'bilbomd.slurm'
-  comment: '(null)'
-  time_limit: '30:00'
-  min_memory: '0'
-  req_nodes: ''
-  command: '/pscratch/sd/s/sclassen/bilbmod/aefbbbd5-2167-4c77-843f-f7a1ab62a7c9/bilbomd.slurm'
-  priority: '69119'
-  qos: 'gpu_debug'
-  reason: 'Priority'
-  st: 'PD'
-  user: 'sclassen'
-  reservation: '(null)'
-  wckey: '(null)'
-  exc_nodes: ''
-  nice: '0'
-  's:c:t': '*:*:*'
-  exec_host: 'n/a'
-  cpus: '1'
-  nodes: '1'
-  dependency: '(null)'
-  array_job_id: '25145969'
-  sockets_per_node: '*'
-  cores_per_socket: '*'
-  threads_per_core: '*'
-  array_task_id: 'N/A'
-  time_left: '30:00'
-  time: '0:00'
-  nodelist: ''
-  contiguous: '0'
-  partition: 'gpu_ss11'
-  'nodelist(reason)': '(Priority)'
-  start_time: 'N/A'
-  state: 'PENDING'
-  uid: '62704'
-  submit_time: '2024-05-03T19:23:34'
-  licenses: 'cfs:1,scratch:1,u2:1'
-  core_spec: 'N/A'
-  schednodes: '(null)'
-  work_dir: '/global/u2/s/sclassen'
-}
+// interface JobStatusOutput {
+//   account: 'm4659_g'
+//   tres_per_node: 'N/A'
+//   min_cpus: '1'
+//   min_tmp_disk: '0'
+//   end_time: 'N/A'
+//   features: 'gpu&a100'
+//   group: '62704'
+//   over_subscribe: 'NO'
+//   jobid: '25145969'
+//   name: 'bilbomd.slurm'
+//   comment: '(null)'
+//   time_limit: '30:00'
+//   min_memory: '0'
+//   req_nodes: ''
+//   command: '/pscratch/sd/s/sclassen/bilbmod/aefbbbd5-2167-4c77-843f-f7a1ab62a7c9/bilbomd.slurm'
+//   priority: '69119'
+//   qos: 'gpu_debug'
+//   reason: 'Priority'
+//   st: 'PD'
+//   user: 'sclassen'
+//   reservation: '(null)'
+//   wckey: '(null)'
+//   exc_nodes: ''
+//   nice: '0'
+//   's:c:t': '*:*:*'
+//   exec_host: 'n/a'
+//   cpus: '1'
+//   nodes: '1'
+//   dependency: '(null)'
+//   array_job_id: '25145969'
+//   sockets_per_node: '*'
+//   cores_per_socket: '*'
+//   threads_per_core: '*'
+//   array_task_id: 'N/A'
+//   time_left: '30:00'
+//   time: '0:00'
+//   nodelist: ''
+//   contiguous: '0'
+//   partition: 'gpu_ss11'
+//   'nodelist(reason)': '(Priority)'
+//   start_time: 'N/A'
+//   state: 'PENDING'
+//   uid: '62704'
+//   submit_time: '2024-05-03T19:23:34'
+//   licenses: 'cfs:1,scratch:1,u2:1'
+//   core_spec: 'N/A'
+//   schednodes: '(null)'
+//   work_dir: '/global/u2/s/sclassen'
+// }
 
 // when ?sacct=true
 interface JobStatusOutputSacct {
