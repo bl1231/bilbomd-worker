@@ -109,11 +109,11 @@ const makeFoxsDatFileList = async (dir: string) => {
 
     // Wait for both streams to finish writing and closing
     await Promise.all([
-      new Promise((resolve, reject) =>
-        stdoutStream.on('finish', resolve).on('error', reject)
+      new Promise<void>((resolve, reject) =>
+        stdoutStream.on('finish', () => resolve()).on('error', (err) => reject(err))
       ),
-      new Promise((resolve, reject) =>
-        errorStream.on('finish', resolve).on('error', reject)
+      new Promise<void>((resolve, reject) =>
+        errorStream.on('finish', () => resolve()).on('error', (err) => reject(err))
       )
     ])
   } catch (error) {
