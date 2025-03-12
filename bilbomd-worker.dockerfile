@@ -127,7 +127,7 @@ COPY scripts/sans /usr/local/sans
 FROM install-sans-tools AS install-atsas
 RUN apt-get update && \
     apt-get install -y shared-mime-info libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
-    libxcb-keysyms1 libxcb-shape0 libc6 libgcc1 libquadmath0 libstdc++6 libxml2 libtiff5 liblzma5 libgfortran5 libicu70 libharfbuzz0b && \
+    libxcb-keysyms1 libxcb-shape0 libc6 libgcc-s1 libstdc++6 libxml2 libtiff5 liblzma5 libgfortran5 libicu70 libharfbuzz0b && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /tmp
 # COPY atsas/ATSAS-4.0.1-1-Linux-Ubuntu-22.run .
