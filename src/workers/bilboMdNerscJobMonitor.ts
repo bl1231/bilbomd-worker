@@ -94,19 +94,35 @@ const updateJobStateInMongoDB = async (
 
 const handleCompletedJob = async (job: IJob): Promise<void> => {
   try {
+    // Skip if already completed or cleanup is already in progress
+    if (job.status === 'Completed') {
+      logger.info(
+        `Job ${job.nersc?.jobid} is already marked as Completed. Skipping cleanup.`
+      )
+      return
+    }
+
+    if (job.cleanup_in_progress) {
+      logger.info(`Cleanup already in progress for job ${job.nersc?.jobid}. Skipping.`)
+      return
+    }
+
     logger.info(`Job ${job.nersc?.jobid} is COMPLETED. Initiating cleanup.`)
-    job.cleanup_in_progress = true // Mark job as being cleaned
+    job.cleanup_in_progress = true
     await job.save()
 
-    await performJobCleanup(job) // Perform the cleanup
+    await performJobCleanup(job)
 
-    job.status = 'Completed' // Mark job as completed
-    job.cleanup_in_progress = false // Reset cleanup flag
+    job.status = 'Completed'
+    job.cleanup_in_progress = false
     await job.save()
+
     logger.info(`Cleanup completed for job ${job.nersc?.jobid}.`)
   } catch (error) {
     logger.error(`Error during cleanup for job ${job.nersc?.jobid}: ${error.message}`)
-    job.cleanup_in_progress = false // Reset flag in case of failure
+
+    // Make sure to reset the flag so it's not stuck forever
+    job.cleanup_in_progress = false
     await job.save()
   }
 }
