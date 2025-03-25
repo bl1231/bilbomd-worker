@@ -1,7 +1,7 @@
 import { Job as BullMQJob } from 'bullmq'
 import { Job } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../../helpers/loggers.js'
-import { initializeJob } from '../functions/job-utils.js'
+// import { initializeNerscJob } from '../functions/job-utils.js'
 import {
   updateNerscSpecificSteps,
   makeBilboMDSlurm,
@@ -20,7 +20,7 @@ const processBilboMDJobNersc = async (MQjob: BullMQJob) => {
 
     // Initialize
     try {
-      await initializeJob(MQjob, foundJob)
+      // await initializeNerscJob(MQjob, foundJob)
       await MQjob.updateProgress(10)
     } catch (error) {
       logger.error(`Failed to initialize job: ${MQjob.data.uuid}`)
@@ -45,10 +45,10 @@ const processBilboMDJobNersc = async (MQjob: BullMQJob) => {
     }
 
     // Submit bilbomd.slurm to the queueing system
-    let jobID: string
+    let nerscJobID: string
     try {
-      jobID = await submitBilboMDSlurm(MQjob, foundJob)
-      logger.info(`Submitted bilbomd.slurm: ${MQjob.data.uuid} with jobID: ${jobID}`)
+      nerscJobID = await submitBilboMDSlurm(MQjob, foundJob)
+      logger.info(`Submitted bilbomd.slurm: ${MQjob.data.uuid} with jobID: ${nerscJobID}`)
       await MQjob.updateProgress(100)
     } catch (error) {
       logger.error(`Failed to submit bilbomd.slurm: ${MQjob.data.uuid}`)
