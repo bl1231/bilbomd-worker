@@ -213,12 +213,12 @@ const monitorAndCleanupJobs = async () => {
           break
 
         case 'PENDING':
-          logger.info(`Job ${job.nersc?.jobid} is still pending.`)
+          // logger.info(`Job ${job.nersc?.jobid} is still pending.`)
           await markJobAsPending(job)
           break
 
         case 'RUNNING':
-          logger.info(`Job ${job.nersc?.jobid} is still in running `)
+          // logger.info(`Job ${job.nersc?.jobid} is still in running `)
           break
 
         case 'SUSPENDED':
