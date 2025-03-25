@@ -84,7 +84,9 @@ const updateJobStateInMongoDB = async (
     await updateJobNerscState(job, nerscState) // Update state in MongoDB
     const progress = await calculateProgress(job.toObject().steps) // Calculate progress
     job.progress = progress
-    logger.info(`Progress for job ${job.nersc?.jobid}: ${progress}%`)
+    logger.info(
+      `Job: ${job.nersc.jobid} State: ${job.nersc.state} Progress: ${progress}%`
+    )
     await job.save() // Save the updated job
   } catch (error) {
     logger.error(`Error updating job ${job.nersc?.jobid} in MongoDB: ${error.message}`)
@@ -159,6 +161,21 @@ const markJobAsCancelled = async (job: IJob) => {
   }
 }
 
+const markJobAsPending = async (job: IJob) => {
+  try {
+    logger.info(`Marking job ${job.nersc?.jobid} as PENDING`)
+
+    // job.nersc.state = nerscState.state
+    // job.nersc.time_completed = nerscState.time_completed || new Date()
+
+    job.status = 'Pending'
+
+    await job.save()
+  } catch (err) {
+    logger.error(`Error marking job ${job.nersc?.jobid} as PENDING: ${err.message}`)
+  }
+}
+
 const monitorAndCleanupJobs = async () => {
   try {
     logger.info('Starting job monitoring and cleanup...')
@@ -175,6 +192,7 @@ const monitorAndCleanupJobs = async () => {
       // Step 2: Update the job state in MongoDB
       await updateJobStateInMongoDB(job, nerscState)
 
+      // Step 3: Handle the job based on its NERSC state
       switch (nerscState.state) {
         case 'COMPLETED':
           await handleCompletedJob(job)
@@ -195,8 +213,12 @@ const monitorAndCleanupJobs = async () => {
           break
 
         case 'PENDING':
+          logger.info(`Job ${job.nersc?.jobid} is still pending.`)
+          await markJobAsPending(job)
+          break
+
         case 'RUNNING':
-          logger.info(`Job ${job.nersc?.jobid} is still in progress: ${nerscState.state}`)
+          logger.info(`Job ${job.nersc?.jobid} is still in running `)
           break
 
         case 'SUSPENDED':
