@@ -117,6 +117,7 @@ const handleCompletedJob = async (job: IJob): Promise<void> => {
 
     job.status = 'Completed'
     job.cleanup_in_progress = false
+    job.progress = 100
     await job.save()
 
     logger.info(`Cleanup completed for job ${job.nersc?.jobid}.`)
@@ -163,7 +164,7 @@ const markJobAsCancelled = async (job: IJob) => {
 
 const markJobAsPending = async (job: IJob) => {
   try {
-    logger.info(`Marking job ${job.nersc?.jobid} as PENDING`)
+    // logger.info(`Marking job ${job.nersc?.jobid} as PENDING`)
 
     // job.nersc.state = nerscState.state
     // job.nersc.time_completed = nerscState.time_completed || new Date()
