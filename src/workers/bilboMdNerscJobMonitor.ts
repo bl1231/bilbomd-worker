@@ -98,9 +98,9 @@ const handleCompletedJob = async (job: IJob): Promise<void> => {
   try {
     // Skip if already completed or cleanup is already in progress
     if (job.status === 'Completed') {
-      logger.info(
-        `Job ${job.nersc?.jobid} is already marked as Completed. Skipping cleanup.`
-      )
+      // logger.info(
+      //   `Job ${job.nersc?.jobid} is already marked as Completed. Skipping cleanup.`
+      // )
       return
     }
 
