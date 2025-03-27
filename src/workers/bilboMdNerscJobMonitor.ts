@@ -9,6 +9,8 @@ import {
   IBilboMDAutoJob,
   IBilboMDAlphaFoldJob,
   StepStatusEnum,
+  NerscStatus,
+  NerscStatusEnum,
   JobStatus,
   INerscInfo
 } from '@bl1231/bilbomd-mongodb-schema'
@@ -150,7 +152,6 @@ const markJobAsFailed = async (job: IJob) => {
 
     job.status = 'Failed'
     await job.save()
-
   } catch (err) {
     logger.error(`Error marking job ${job.nersc?.jobid} as FAILED: ${err.message}`)
   }
@@ -165,7 +166,6 @@ const markJobAsCancelled = async (job: IJob) => {
 
     job.status = 'Cancelled'
     await job.save()
-
   } catch (err) {
     logger.error(`Error marking job ${job.nersc?.jobid} as CANCELLED: ${err.message}`)
   }
@@ -180,7 +180,6 @@ const markJobAsPending = async (job: IJob) => {
 
     job.status = 'Pending'
     await job.save()
-
   } catch (err) {
     logger.error(`Error marking job ${job.nersc?.jobid} as PENDING: ${err.message}`)
   }
@@ -278,6 +277,25 @@ const updateJobNerscState = async (job: IJob, nerscState: INerscInfo) => {
   await updateJobStepsFromSlurmStatusFile(job)
 }
 
+// Helper: Parse and normalize Slurm job state
+const cleanSlurmState = (
+  rawState: string | undefined,
+  jobID: string
+): NerscStatusEnum | null => {
+  if (!rawState) return null
+
+  const trimmed = rawState.split(' ')[0].toUpperCase()
+
+  const allowedStates = Object.values(NerscStatus) as string[]
+
+  if (allowedStates.includes(trimmed)) {
+    return trimmed as NerscStatusEnum
+  } else {
+    logger.warn(`Unknown or unexpected state "${rawState}" for NERSC job ${jobID}`)
+    return NerscStatus.UNKNOWN
+  }
+}
+
 const fetchNERSCJobState = async (jobID: string): Promise<INerscInfo> => {
   const url = `${config.nerscBaseAPI}/compute/jobs/perlmutter/${jobID}?sacct=true`
   // logger.info(`Fetching state for NERSC job: ${jobID} from URL: ${url}`)
@@ -295,7 +313,7 @@ const fetchNERSCJobState = async (jobID: string): Promise<INerscInfo> => {
       const jobDetails: JobStatusOutputSacct = response.data.output[0]
 
       // Log the entire jobDetails object for debugging
-      // logger.info(`Job Details for ${jobID}: ${JSON.stringify(jobDetails, null, 2)}`)
+      logger.info(`Job Details for ${jobID}: ${JSON.stringify(jobDetails, null, 2)}`)
       const parseDate = (dateStr: string | undefined): Date | null => {
         const parsedDate = dateStr ? new Date(dateStr) : null
         return parsedDate instanceof Date && !isNaN(parsedDate.getTime())
@@ -305,7 +323,7 @@ const fetchNERSCJobState = async (jobID: string): Promise<INerscInfo> => {
 
       return {
         jobid: jobID,
-        state: jobDetails.state || null,
+        state: cleanSlurmState(jobDetails.state, jobID),
         qos: jobDetails.qos || null,
         time_submitted: parseDate(jobDetails.submit),
         time_started: parseDate(jobDetails.start),
