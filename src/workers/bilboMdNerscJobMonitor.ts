@@ -9,6 +9,7 @@ import {
   IBilboMDAutoJob,
   IBilboMDAlphaFoldJob,
   StepStatusEnum,
+  JobStatus,
   INerscInfo
 } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../helpers/loggers.js'
@@ -53,10 +54,17 @@ interface MonitoringError {
   message: string
 }
 
-const fetchJobs = async (): Promise<IJob[]> => {
+// const fetchNonNullJobs = async (): Promise<IJob[]> => {
+//   return DBJob.find({
+//     'nersc.state': { $ne: null }, // Jobs with a non-null NERSC state
+//     cleanup_in_progress: false // Ensure they are not being cleaned
+//   }).exec()
+// }
+
+const fetchIncompleteJobs = async (): Promise<IJob[]> => {
   return DBJob.find({
-    'nersc.state': { $ne: null }, // Jobs with a non-null NERSC state
-    cleanup_in_progress: false // Ensure they are not being cleaned
+    status: { $ne: JobStatus.Completed }, // Jobs with a non-Completed status
+    cleanup_in_progress: false
   }).exec()
 }
 
@@ -101,6 +109,8 @@ const handleCompletedJob = async (job: IJob): Promise<void> => {
       // logger.info(
       //   `Job ${job.nersc?.jobid} is already marked as Completed. Skipping cleanup.`
       // )
+      job.progress = 100
+      await job.save()
       return
     }
 
@@ -138,10 +148,9 @@ const markJobAsFailed = async (job: IJob) => {
     // job.nersc.state = nerscState.state
     // job.nersc.time_completed = nerscState.time_completed || new Date()
 
-    // Update your job status field if you have one
-    job.status = 'Failed' // or whatever your schema expects
-
+    job.status = 'Failed'
     await job.save()
+
   } catch (err) {
     logger.error(`Error marking job ${job.nersc?.jobid} as FAILED: ${err.message}`)
   }
@@ -155,8 +164,8 @@ const markJobAsCancelled = async (job: IJob) => {
     // job.nersc.time_completed = nerscState.time_completed || new Date()
 
     job.status = 'Cancelled'
-
     await job.save()
+
   } catch (err) {
     logger.error(`Error marking job ${job.nersc?.jobid} as CANCELLED: ${err.message}`)
   }
@@ -170,8 +179,8 @@ const markJobAsPending = async (job: IJob) => {
     // job.nersc.time_completed = nerscState.time_completed || new Date()
 
     job.status = 'Pending'
-
     await job.save()
+
   } catch (err) {
     logger.error(`Error marking job ${job.nersc?.jobid} as PENDING: ${err.message}`)
   }
@@ -183,8 +192,8 @@ const monitorAndCleanupJobs = async () => {
 
     // Step 1: Fetch all jobs where nersc.state is not null
     //  from MongoDB
-    const jobs = await fetchJobs()
-    logger.info(`Found ${jobs.length} jobs in with non-null state.`)
+    const jobs = await fetchIncompleteJobs()
+    logger.info(`Found ${jobs.length} jobs in with non-Completed state.`)
 
     for (const job of jobs) {
       const nerscState = await queryNERSCForJobState(job)
