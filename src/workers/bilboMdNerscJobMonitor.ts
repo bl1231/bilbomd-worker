@@ -313,7 +313,7 @@ const fetchNERSCJobState = async (jobID: string): Promise<INerscInfo> => {
       const jobDetails: JobStatusOutputSacct = response.data.output[0]
 
       // Log the entire jobDetails object for debugging
-      logger.info(`Job Details for ${jobID}: ${JSON.stringify(jobDetails, null, 2)}`)
+      // logger.info(`Job Details for ${jobID}: ${JSON.stringify(jobDetails, null, 2)}`)
       const parseDate = (dateStr: string | undefined): Date | null => {
         const parsedDate = dateStr ? new Date(dateStr) : null
         return parsedDate instanceof Date && !isNaN(parsedDate.getTime())
