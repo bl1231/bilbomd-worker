@@ -21,9 +21,10 @@ const initializeJob = async (MQJob: BullMQJob, DBjob: IJob): Promise<void> => {
     // Clear the BullMQ Job logs in the case this job is being re-run
     await MQJob.clearLogs()
 
-    // Set MongoDB status to Running and update the start time
+    // Set MongoDB status to Running when we are submitting to Slurm at NERSC
+    // Does this need to be set to Running when we are running locally?6
     DBjob.status = 'Running'
-    DBjob.time_started = new Date()
+    // DBjob.time_started = new Date()
     await DBjob.save()
   } catch (error) {
     // Handle and log the error
@@ -31,6 +32,28 @@ const initializeJob = async (MQJob: BullMQJob, DBjob: IJob): Promise<void> => {
     throw error
   }
 }
+
+// const initializeNerscJob = async (MQJob: BullMQJob, DBjob: IJob): Promise<void> => {
+//   try {
+//     // Make sure the user exists in MongoDB
+//     const foundUser = await User.findById(DBjob.user).lean().exec()
+//     if (!foundUser) {
+//       throw new Error(`No user found for: ${DBjob.uuid}`)
+//     }
+
+//     // Clear the BullMQ Job logs in the case this job is being re-run
+//     await MQJob.clearLogs()
+
+//     // Set MongoDB status to Pending when we are submitting to Slurm at NERSC
+//     DBjob.status = 'Pending'
+//     // DBjob.time_started = new Date()
+//     await DBjob.save()
+//   } catch (error) {
+//     // Handle and log the error
+//     logger.error(`Error in initializeJob: ${error}`)
+//     throw error
+//   }
+// }
 
 const cleanupJob = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
   try {
