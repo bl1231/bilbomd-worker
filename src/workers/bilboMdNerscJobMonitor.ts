@@ -277,21 +277,35 @@ const updateJobNerscState = async (job: IJob, nerscState: INerscInfo) => {
   await updateJobStepsFromSlurmStatusFile(job)
 }
 
-// Helper: Parse and normalize Slurm job state
+// Normalizes raw Slurm state to your internal enum
+const normalizeState = (state: string): NerscStatusEnum => {
+  const map: Record<string, NerscStatusEnum> = {
+    NODE_FAIL: NerscStatus.FAILED,
+    OUT_OF_MEMORY: NerscStatus.FAILED,
+    PREEMPTED: NerscStatus.FAILED
+  }
+
+  return (
+    map[state] || (NerscStatus[state as keyof typeof NerscStatus] ?? NerscStatus.UNKNOWN)
+  )
+}
+
+// Cleans and validates Slurm state string (main helper)
 const cleanSlurmState = (
   rawState: string | undefined,
   jobID: string
-): NerscStatusEnum | null => {
-  if (!rawState) return null
+): NerscStatusEnum => {
+  if (!rawState) return NerscStatus.UNKNOWN
 
   const trimmed = rawState.split(' ')[0].toUpperCase()
+  const normalized = normalizeState(trimmed)
 
-  const allowedStates = Object.values(NerscStatus) as string[]
-
-  if (allowedStates.includes(trimmed)) {
-    return trimmed as NerscStatusEnum
+  if (Object.values(NerscStatus).includes(normalized)) {
+    return normalized
   } else {
-    logger.warn(`Unknown or unexpected state "${rawState}" for NERSC job ${jobID}`)
+    logger.warn(
+      `Unknown or unexpected state "${rawState}" (normalized to "${normalized}") for NERSC job ${jobID}`
+    )
     return NerscStatus.UNKNOWN
   }
 }
