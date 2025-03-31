@@ -49,6 +49,8 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.13.0 (3/31/2025)
+  - Improve the NERSC worker logic
 - 1.12.6 (1/9/2025)
   - Calculate model molecular weight (MW) from initial PDB model.
 - 1.12.5 (1/7/2025)
