@@ -169,12 +169,13 @@ const submitBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob): Promise<string
     logger.info(`submitResult: ${JSON.stringify(submitResult)}`)
 
     const submitResultObject = JSON.parse(submitResult.result)
-    const jobID = submitResultObject.jobid
-    logger.info(`JOBID: ${jobID}`)
+    const nerscJobID = submitResultObject.jobid
+    logger.info(`NERSC JOBID: ${nerscJobID}`)
 
     // Populate the `nersc` field in the `DBjob`
+    // Setting nersc.status to 'PENDING' will allow the job to be monitored
     DBjob.nersc = {
-      jobid: jobID,
+      jobid: nerscJobID,
       state: 'PENDING',
       qos: undefined,
       time_submitted: new Date(),
@@ -182,9 +183,9 @@ const submitBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob): Promise<string
       time_completed: undefined
     }
 
-    await updateJobStatus(DBjob, stepName, 'Success', `NERSC JobID ${jobID}`)
+    await updateJobStatus(DBjob, stepName, 'Success', `NERSC JobID ${nerscJobID}`)
     await MQjob.log('end nersc submit slurm batch')
-    return jobID
+    return nerscJobID
   } catch (error) {
     let errorMessage = 'Unknown error'
     if (error instanceof Error) {
