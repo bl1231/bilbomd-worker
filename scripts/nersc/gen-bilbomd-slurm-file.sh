@@ -17,7 +17,7 @@ UUID=$1
 
 project="m4659"
 queue="regular"
-constraint="gpu"
+constraint="gpu&hbm80g"
 nodes="1"
 # walltime="00:90:00"
 mailtype="end,fail"
@@ -25,10 +25,10 @@ mailuser="sclassen@lbl.gov"
 
 # Might use core number to dynamically write our slurm script and maximize
 # the use of assigned node(s)
-if [ "$constraint" = "gpu" ]; then
+if [[ "$constraint" == gpu* ]]; then
     # NUM_CORES=128
     NUM_CORES=120
-elif [ "$constraint" = "cpu" ]; then
+elif [[ "$constraint" = "cpu" ]]; then
     NUM_CORES=240
 else
     echo "Unknown constraint: $constraint"
@@ -489,12 +489,14 @@ generate_bilbomd_slurm_header() {
 #SBATCH --nodes=${nodes}
 #SBATCH --time=${walltime}
 #SBATCH --licenses=cfs,scratch
-#SBATCH --constraint=${constraint}
+#SBATCH --constraint="${constraint}"
 #SBATCH --account=${project}
 #SBATCH --output=${WORKDIR}/slurm-%j.out
 #SBATCH --error=${WORKDIR}/slurm-%j.err
 #SBATCH --mail-type=${mailtype}
 #SBATCH --mail-user=${mailuser}
+
+export PODMANHPC_PODMAN_BIN=/global/common/shared/das/podman-4.7.0/bin/podman
 
 # OpenMP settings:
 export OMP_NUM_THREADS=$1
