@@ -180,6 +180,9 @@ RUN unset GITHUB_TOKEN
 # Copy the app code
 COPY --chown=bilbo:bilbomd . .
 
+# Make entrypoint script executable
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Use the ARG to set the environment variable
 ENV BILBOMD_WORKER_GIT_HASH=${BILBOMD_WORKER_GIT_HASH}
 ENV BILBOMD_WORKER_VERSION=${BILBOMD_WORKER_VERSION}
@@ -189,6 +192,8 @@ ENV ATSAS=/usr/local/ATSAS-4.0.1
 ENV PATH="${ATSAS}/bin:${PATH}"
 
 EXPOSE 3000
+
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 # Fire that bad boy up.
 CMD ["npm", "start"]
