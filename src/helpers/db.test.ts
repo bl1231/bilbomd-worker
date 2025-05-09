@@ -8,8 +8,6 @@ vi.mock('mongoose', () => ({
     connection: {}
   }
 }))
-// console.log('here')
-// console.log(mongoose.connect)
 import { describe, it, expect, beforeEach } from 'vitest'
 import mongoose from 'mongoose'
 
