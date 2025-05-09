@@ -13,7 +13,8 @@
     "dev:start": "npm-run-all build start",
     "dev": "nodemon --watch src --ext ts,ejs --exec npm run start",
     "start": "npm run build && node build/worker.js",
-    "test": "NODE_ENV=test jest --testTimeout=5000 --runInBand --verbose --detectOpenHandles"
+    "test": "vitest",
+    "test:ui": "vitest --ui"
   },
   "keywords": [],
   "author": "Scott Classen",
@@ -49,6 +50,7 @@
     "@types/nodemailer-express-handlebars": "^4.0.5",
     "@types/shelljs": "^0.8.16",
     "@typescript-eslint/eslint-plugin": "^8.32.0",
+    "@vitest/ui": "^3.1.3",
     "copyfiles": "^2.4.1",
     "eslint": "^9.26.0",
     "fs-extra": "^11.3.0",
@@ -60,7 +62,8 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.32.0"
+    "typescript-eslint": "^8.32.0",
+    "vitest": "^3.1.3"
   },
   "_moduleAliases": {
     "@services": "build/services",
