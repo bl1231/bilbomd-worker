@@ -49,6 +49,10 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.14.1 (5/9/2025)
+  - Upgrade dependencies
+  - Add `vitest` testing framework
+  - Switch from `build` to `dist` for transpiled code
 - 1.14.0 (4/10/2025)
   - Upgrade from Express v4 to v5
   - Refactor NERSC job monitoring code
