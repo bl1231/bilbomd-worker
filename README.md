@@ -49,6 +49,10 @@ podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-
 
 ## Version History
 
+- 1.14.2 (5/12/2025)
+  - Fix bugs introduced by moving from `build` to `dist`
+  - Add better `rg_min` calculation for SAXS datasets with "low" Rg values.
+  - Fixed bug with the way we passed d2o fraction to PEPSI-SANS
 - 1.14.1 (5/9/2025)
   - Upgrade dependencies
   - Add `vitest` testing framework
