@@ -6,7 +6,7 @@ import { logger } from './loggers.js'
 const user = process.env.SEND_EMAIL_USER
 const name = process.env.BILBOMD_FQDN
 // const viewPath = path.resolve(__dirname, '../templates/mailer/')
-const viewPath = '/app/build/templates/mailer/'
+const viewPath = '/app/dist/templates/mailer/'
 
 const transporter = nodemailer.createTransport({
   name: name,
