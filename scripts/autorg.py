@@ -32,6 +32,14 @@ def calculate_rg(file_path, output_file):
     """
     Calculate Radius of Gyration (Rg)
     """
+
+    # Constants for scale factor transition
+    SCALE_FACTOR_START = 0.95
+    SCALE_FACTOR_END = 0.80
+    SCALE_FACTOR_RANGE = SCALE_FACTOR_START - SCALE_FACTOR_END  # 0.15
+    SCALE_TRANSITION_START = 25  # Angstrom
+    SCALE_TRANSITION_WIDTH = 40  # Angstrom
+
     try:
         profiles = raw.load_profiles(file_path)
         gi_profile = profiles[0]
@@ -54,7 +62,13 @@ def calculate_rg(file_path, output_file):
         # For Rg ≤ 25, use a conservative factor of 0.95 to prevent rg_min from being too small.
         # For Rg ≥ 65, taper down to a factor of 0.80 for broader exploration in larger structures.
         # The transition occurs smoothly between Rg 25–65 to balance flexibility and stability.
-        scale_factor = 0.95 - min(max((rg - 25) / 40, 0), 1) * 0.15
+        #
+        # Smooth transition of scale factor from 0.95 to 0.80 as rg goes from 25 to 65
+        scale_factor = (
+            SCALE_FACTOR_START
+            - min(max((rg - SCALE_TRANSITION_START) / SCALE_TRANSITION_WIDTH, 0), 1)
+            * SCALE_FACTOR_RANGE
+        )
         rg_min = round(max(10, min(100, rg * scale_factor)))
         rg_max = round(rg * 1.5)
 
