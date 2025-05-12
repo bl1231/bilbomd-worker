@@ -50,7 +50,12 @@ def calculate_rg(file_path, output_file):
             r_sqr,
         ) = guinier_results
 
-        rg_min = round(rg * 0.8)
+        # Dynamically adjust scale factor for rg_min based on Rg value.
+        # For Rg ≤ 25, use a conservative factor of 0.95 to prevent rg_min from being too small.
+        # For Rg ≥ 65, taper down to a factor of 0.80 for broader exploration in larger structures.
+        # The transition occurs smoothly between Rg 25–65 to balance flexibility and stability.
+        scale_factor = 0.95 - min(max((rg - 25) / 40, 0), 1) * 0.15
+        rg_min = round(max(10, min(100, rg * scale_factor)))
         rg_max = round(rg * 1.5)
 
         # Clamp rg_min to be no less than 10 and no more than 100
