@@ -1,10 +1,10 @@
 # bilbomd-worker
 
-Processes BilboMD jobs and run CHARMM, FoXS, and MultiFoXS
+Depending on where it is deployed, `bilbomd-worker` will process BilboMD jobs and run CHARMM, FoXS, and MultiFoXS or it will coordinate the running of your jobs on NERSC/Perlmutter via the SLURM queueing system.
 
 ## `bilbomd-worker` Description
 
-`bilbomd-worker` is a simple [Typescript](https://www.typescriptlang.org/) NodeJS "worker" app that watches a BullMQ queue for incoming jobs. When a new job appears in the queue it will launch a sequence of processing tasks using CHARMM, FoXS, and MultiFoXS. The results will then be bundled up as a `results.tar.gz` file. The job progress will be updated in the main MongoDB database as well as in the BullMQ system (which uses Redis behind the scenes to store queue data).
+`bilbomd-worker` is a simple [Typescript](https://www.typescriptlang.org/) NodeJS "worker" app that watches a BullMQ queue for incoming jobs. When a new job appears in the queue it will launch a sequence of processing tasks using CHARMM, FoXS, and MultiFoXS. The results will then be bundled up as a `results.tar.gz` file. The job progress will be updated in the main MongoDB database as well as in the BullMQ system (which uses Redis behind the scenes to store queue data). If deployed to NERSC, it will use the [Superfacility API](https://docs.nersc.gov/services/sfapi/) to submit and monitor jobs on Perlmutter.
 
 ## BilboMD processing pipeline
 
@@ -14,9 +14,9 @@ Processes BilboMD jobs and run CHARMM, FoXS, and MultiFoXS
 
 In order to build the docker images you will need to obtain the source codes for CHARMM, BioXTAS, and OpenMPI and place them in the appropriate folders prior to running any `docker build` commands.
 
-### Deploy via `docker compose` on Hyperion
+## Deploy via `docker compose` on Hyperion
 
-To build the Docker image from the command line.
+In general, all of the build steps are performed as part of the Continuous Integration steps coordinated by GitHub Actions. If you need to build the Docker images manually do something like this:
 
 ```bash
 git clone git@github.com:bl1231/bilbomd-worker.git
@@ -24,22 +24,32 @@ cd bilbomd-worker
 docker build --build-arg USER_ID=$UID -t bl1231/bilbomd-worker -f bilbomd-worker.dockerfile .
 ```
 
-### Deploy via Rancher/SPIN at NERSC
+## Deploy via Rancher/SPIN at NERSC
 
 At the moment there are two versions of the `bilbomd-worker` needed for deploying **BilboMD** at NERSC. One version for doing the work on a perlmutter compute node and a second version that does no real "work", but is deployed to SPIN where it monitors for jobs and uses the Superfacility API to prepare and launch jobs via slurm batch scripts.
 
-In general, all of the build steps are performed as part of the Continuous Integration steps coordinated by GitHub Actions. If you need to buidl the Docker images manually you will need to build two images. To build `bilbomd-perlmutter-worker` which is the podman-hpc runtime for performing the Molecular Dynamics steps on Perlmutter compute nodes:
+In general, all of the build steps for `bilbomd-worker` that runs on SPIN are performed as part of the Continuous Integration steps coordinated by GitHub Actions. The exact same Docekr image can be used on Hyperion and on SPIN. However, at the moment the version of `bilbomd-worker` that does the real work on Perlmutter must be built manually on a Perlmutter login node.
+
+To build `bilbomd-perlmutter-worker` which is the podman-hpc runtime for performing the Molecular Dynamics steps on Perlmutter compute nodes use teh following commsnd. I have not yet implemented semver for teh image container versions.... just bump as you see fit.
 
 ```bash
 cd bilbomd-worker
-podman-hpc build --build-arg USER_ID=$UID -t bilbomd/bilbomd-perlmutter-worker -f bilbomd-perlmutter-worker.dockerfile .
+podman-hpc build --build-arg USER_ID=$UID -t bilbomd/bilbomd-perlmutter-worker:0.0.20 -f bilbomd-perlmutter-worker.dockerfile .
 ```
 
-To build `bilbomd-spin-worker` for running on the SPIN Kubernetes cluster. The `$GITHUB_TOKEN` comes from GitHub... ask me if you need to know about this.
+This results in a local version of the image on the specific login node you are connected to. In order to make the image availabel to all compute node you must migrate it:
 
 ```bash
-cd bilbomd-worker
-podman-hpc build --build-arg GITHUB_TOKEN=$GITHUB_TOKEN -t bilbomd/bilbomd-spin-worker -f bilbomd-spin-worker.dockerfile .
+docker migrate bilbomd/bilbomd-perlmutter-worker:0.0.20
+```
+
+and you can confirm that it has been migrated successfully my observing the R/O status. The migrated version will show up as R/O = true.
+
+```bash
+(nersc-python) [15:27]sclassen@login08:~/projects/bilbomd/bilbomd-worker$docker images
+REPOSITORY                                   TAG                       IMAGE ID      CREATED         SIZE        R/O
+localhost/bilbomd/bilbomd-perlmutter-worker  0.0.20                    4e3ef0f8d271  14 minutes ago  11.8 GB     false
+localhost/bilbomd/bilbomd-perlmutter-worker  0.0.20                    4e3ef0f8d271  14 minutes ago  11.8 GB     true
 ```
 
 ## Authors
