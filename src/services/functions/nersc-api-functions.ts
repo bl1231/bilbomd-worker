@@ -55,6 +55,7 @@ const executeNerscScript = async (
     Authorization: `Bearer ${token}`
   }
   const scriptBaseName = path.basename(scriptName)
+  // /global/homes/${username_first_letter}/${username}/script-logs/${scriptBaseName}-${new Date().toISOString()}.log
   const logFile = `/global/homes/s/sclassen/script-logs/${scriptBaseName}-${new Date().toISOString()}.log`
   const cmd = `ENVIRONMENT=${environment} ${scriptName} ${scriptArgs} > ${logFile} 2>&1`
   logger.info(`Executing command: ${cmd}`)

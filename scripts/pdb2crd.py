@@ -79,6 +79,9 @@ def determine_molecule_type(lines):
             "VAL",
             "TRP",
             "TYR",
+            "SEP",
+            "TPO",
+            "PTR",
         ]
     )
     dna_residues = set(["DA", "DC", "DG", "DT", "DI", "ADE", "CYT", "GUA", "THY"])
@@ -185,6 +188,9 @@ def apply_charmm_residue_names(lines):
     """
     residue_replacements = {
         "HIS": "HSD ",
+        "SEP": "SP1 ",
+        "TPO": "THP1",
+        "PTR": "TP1 ",
         "C  ": "CYT ",
         "G  ": "GUA ",
         "A  ": "ADE ",
@@ -253,47 +259,6 @@ def replace_hetatm(lines):
             line = line.replace("HETATM", "ATOM  ")
 
         processed_lines.append(line)
-
-    return processed_lines
-
-
-def renumber_residues(lines):
-    """
-    Renumber residues so they always begin with 1 for each chain.
-
-    :param lines: The list of lines (strings) from the PDB file for a specific chain.
-    :return: A list of lines with renumbered residues.
-    """
-    processed_lines = []
-    current_residue_number = 1
-    last_chain_id = None
-    last_residue_seq_number = None
-
-    for line in lines:
-        if line.startswith(("ATOM", "HETATM")):
-            chain_id = line[21]
-            residue_seq_number = line[22:26].strip()
-
-            # Check if this is a new chain or a new residue in the same chain
-            if (
-                chain_id != last_chain_id
-                or residue_seq_number != last_residue_seq_number
-            ):
-                if chain_id != last_chain_id:
-                    current_residue_number = 1  # Reset numbering for a new chain
-                else:
-                    current_residue_number += (
-                        1  # Increment for a new residue in the same chain
-                    )
-
-                last_chain_id = chain_id
-                last_residue_seq_number = residue_seq_number
-
-            # Reconstruct line with the new residue number
-            new_line = f"{line[:22]}{str(current_residue_number).rjust(4)}{line[26:]}"
-            processed_lines.append(new_line)
-        else:
-            processed_lines.append(line)
 
     return processed_lines
 
@@ -509,12 +474,13 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
     with open(pdb_file_path, "r", encoding="utf-8") as pdb_file:
         for line in pdb_file:
             if line.startswith(("ATOM", "HETATM")):
-                record_type = line[:6].strip()  # ATOM or HETATM
+                # record_type = line[:6].strip()  # ATOM or HETATM
                 chain_id = line[21]  # Chain ID
 
                 # Create a unique key for each chain that includes both chain ID and
                 #  record type
-                unique_chain_key = f"{record_type}_{chain_id}"
+                # unique_chain_key = f"{record_type}_{chain_id}"
+                unique_chain_key = f"pdb2crd_chain_{chain_id}"
 
                 # Initialize the chain in the dictionary if not already present
                 if unique_chain_key not in chains:
@@ -537,25 +503,12 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
         processed_lines = remove_water(chain_data["lines"])
         processed_lines = remove_alt_conformers(processed_lines)
         processed_lines = apply_charmm_residue_names(processed_lines)
-        processed_lines = replace_hetatm(processed_lines)
-        # commenting this out since we really shouldn't be renumbering peoples input
-        # PDB files...
-        # processed_lines = renumber_residues(processed_lines)
 
-        # if processed_lines:  # Check if there are any lines after processing
-        #     first_line = processed_lines[0]
-        #     last_line = processed_lines[-1]
-        #     start_res_num = first_line[22:26]
-        #     end_res_num = last_line[22:26]
+        # replacing HETATM with ATOM breaks the phosphorylation patches
+        # processed_lines = replace_hetatm(processed_lines)
 
         chain_filename = get_chain_filename(chain_id, pdb_file_path)
-        # DEBUG ONLY
-        # print(
-        #     f"Writing processed chain to: {chain_filename} "
-        #     f"chainID: {chain_data['chainid']} "
-        #     f"type: {chain_data['type']} "
-        #     f"start: {start_res_num} end: {end_res_num}"
-        # )
+
         with open(
             output_dir + "/" + chain_filename, "w", encoding="utf-8"
         ) as chain_file:
