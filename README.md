@@ -59,6 +59,9 @@ localhost/bilbomd/bilbomd-perlmutter-worker  0.0.20                    4e3ef0f8d
 
 ## Version History
 
+- 1.14.3 (6/2/2025)
+  - Update dependencies
+  - Add support for phosphorylated Serine, Threonine, and Tyrosine
 - 1.14.2 (5/12/2025)
   - Fix bugs introduced by moving from `build` to `dist`
   - Add better `rg_min` calculation for SAXS datasets with "low" Rg values.
