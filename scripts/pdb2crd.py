@@ -505,7 +505,7 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
         processed_lines = apply_charmm_residue_names(processed_lines)
 
         # replacing HETATM with ATOM breaks the phosphorylation patches
-        # processed_lines = replace_hetatm(processed_lines)
+        processed_lines = replace_hetatm(processed_lines)
 
         chain_filename = get_chain_filename(chain_id, pdb_file_path)
 
