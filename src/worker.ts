@@ -39,7 +39,9 @@ const redisConn = {
 const workerOptions: WorkerOptions = {
   connection: redisConn,
   concurrency: config.runOnNERSC ? 50 : 1,
-  lockDuration: config.runOnNERSC ? 9000000 : 9000000
+  // lockDuration: config.runOnNERSC ? 9000000 : 9000000
+  lockDuration: 60_000,
+  lockRenewTime: 30_000
 }
 
 const pdb2crdWorkerOptions: WorkerOptions = {
