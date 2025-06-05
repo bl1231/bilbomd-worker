@@ -77,7 +77,7 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
 
   // Extract PDBs from DCDs
   await MQjob.log('start dcd2pdb')
-  await extractPDBFilesFromDCD(foundJob)
+  await extractPDBFilesFromDCD(MQjob, foundJob)
   await MQjob.log('end dcd2pdb')
   await MQjob.updateProgress(60)
   foundJob.progress = 60
@@ -93,7 +93,7 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
 
   // Calculate FoXS profiles
   await MQjob.log('start foxs')
-  await runFoXS(foundJob)
+  await runFoXS(MQjob, foundJob)
   await MQjob.log('end foxs')
   await MQjob.updateProgress(80)
   foundJob.progress = 80

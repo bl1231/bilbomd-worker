@@ -33,28 +33,6 @@ const initializeJob = async (MQJob: BullMQJob, DBjob: IJob): Promise<void> => {
   }
 }
 
-// const initializeNerscJob = async (MQJob: BullMQJob, DBjob: IJob): Promise<void> => {
-//   try {
-//     // Make sure the user exists in MongoDB
-//     const foundUser = await User.findById(DBjob.user).lean().exec()
-//     if (!foundUser) {
-//       throw new Error(`No user found for: ${DBjob.uuid}`)
-//     }
-
-//     // Clear the BullMQ Job logs in the case this job is being re-run
-//     await MQJob.clearLogs()
-
-//     // Set MongoDB status to Pending when we are submitting to Slurm at NERSC
-//     DBjob.status = 'Pending'
-//     // DBjob.time_started = new Date()
-//     await DBjob.save()
-//   } catch (error) {
-//     // Handle and log the error
-//     logger.error(`Error in initializeJob: ${error}`)
-//     throw error
-//   }
-// }
-
 const cleanupJob = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
   try {
     // Mark job as completed in the database
@@ -165,24 +143,41 @@ const generateInputFile = async (params: CharmmParams): Promise<void> => {
   await writeInputFile(templateString, params)
 }
 
-const spawnCharmm = (params: CharmmParams): Promise<void> => {
+const spawnCharmm = (params: CharmmParams, MQjob: BullMQJob): Promise<void> => {
   const { charmm_inp_file: inputFile, charmm_out_file: outputFile, out_dir } = params
   const charmmArgs = ['-o', outputFile, '-i', inputFile]
   const charmmOpts = { cwd: out_dir }
 
   return new Promise<void>((resolve, reject) => {
     const charmm: ChildProcess = spawn(config.charmmBin, charmmArgs, charmmOpts)
-    let charmmOutput = '' // Create an empty string to capture stdout
+    let charmmOutput = ''
+    let heartbeat: NodeJS.Timeout | null = null
+
+    // Start a heartbeat timer (e.g., every 20 seconds)
+    if (MQjob) {
+      heartbeat = setInterval(() => {
+        MQjob.updateProgress({ status: 'running', timestamp: Date.now() })
+        MQjob.log(`Heartbeat: still running ${inputFile}`)
+        logger.info(
+          `CHARMM Heartbeat: still running ${inputFile} at ${new Date().toLocaleString(
+            'en-US',
+            { timeZone: 'America/Los_Angeles' }
+          )}`
+        )
+      }, 10_000)
+    }
 
     charmm.stdout?.on('data', (data) => {
       charmmOutput += data.toString()
     })
 
     charmm.on('error', (error) => {
+      if (heartbeat) clearInterval(heartbeat)
       reject(new Error(`CHARMM process encountered an error: ${error.message}`))
     })
 
     charmm.on('close', (code: number) => {
+      if (heartbeat) clearInterval(heartbeat)
       if (code === 0) {
         logger.info(`CHARMM success: ${inputFile} exit code: ${code}`)
         resolve()
@@ -194,29 +189,44 @@ const spawnCharmm = (params: CharmmParams): Promise<void> => {
   })
 }
 
-const spawnFoXS = async (foxsRunDir: string) => {
+const spawnFoXS = async (foxsRunDir: string, MQjob: BullMQJob): Promise<void> => {
   try {
     const files = await fs.readdir(foxsRunDir)
     logger.info(`Spawn FoXS jobs: ${foxsRunDir}`)
     const foxsOpts = { cwd: foxsRunDir }
 
-    const spawnPromises = files.map(
-      (file) =>
-        new Promise<void>((resolve, reject) => {
-          const foxsArgs = ['-p', file]
-          const foxs: ChildProcess = spawn(config.foxBin, foxsArgs, foxsOpts)
-          foxs.on('exit', (code) => {
-            if (code === 0) {
-              resolve()
-            } else {
-              reject(new Error(`FoXS process exited with code ${code}`))
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+
+      await new Promise<void>((resolve, reject) => {
+        const foxsArgs = ['-p', file]
+        const foxs: ChildProcess = spawn(config.foxBin, foxsArgs, foxsOpts)
+
+        foxs.on('exit', (code) => {
+          if (code === 0) {
+            // Log every N files
+            if (MQjob && i % 20 === 0) {
+              MQjob.updateProgress({
+                status: `FoXS processing: ${i + 1}/${files.length}`,
+                timestamp: Date.now()
+              })
+              MQjob.log(`FoXS progress: ${i + 1}/${files.length}`)
+              logger.info(`FoXS progress: ${i + 1}/${files.length}`)
             }
-          })
+            resolve()
+          } else {
+            reject(new Error(`FoXS process for ${file} exited with code ${code}`))
+          }
         })
-    )
-    await Promise.all(spawnPromises)
+
+        foxs.on('error', (error) => {
+          reject(new Error(`FoXS process error for ${file}: ${error.message}`))
+        })
+      })
+    }
   } catch (error) {
-    logger.error(error)
+    logger.error(`FoXS error in ${foxsRunDir}: ${error}`)
+    throw error
   }
 }
 

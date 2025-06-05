@@ -18,6 +18,7 @@ import { CharmmDCD2PDBParams } from '../../types/index.js'
 import { config } from '../../config/config.js'
 import { logger } from '../../helpers/loggers.js'
 import fs from 'fs-extra'
+import { Job as BullMQJob } from 'bullmq'
 
 interface FoxsRunDir {
   dir: string
@@ -26,6 +27,7 @@ interface FoxsRunDir {
 }
 
 const extractPDBFilesFromDCD = async (
+  MQjob: BullMQJob,
   DBjob: IBilboMDPDBJob | IBilboMDCRDJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob
 ): Promise<void> => {
   const outputDir = path.join(config.uploadDir, DBjob.uuid)
@@ -66,9 +68,12 @@ const extractPDBFilesFromDCD = async (
     await Promise.all(foxsRunDirs.map(({ dir }) => makeDir(dir)))
 
     // Process each directory
-    for (const dirInfo of foxsRunDirs) {
-      await processFoxsRunDir(dirInfo, DCD2PDBParams)
+    const DCD2PDBjobs = []
+    for (const foxsDirInfo of foxsRunDirs) {
+      const runParams = { ...DCD2PDBParams }
+      DCD2PDBjobs.push(processFoxsRunDir(foxsDirInfo, runParams, MQjob))
     }
+    await Promise.all(DCD2PDBjobs)
 
     status = {
       status: 'Success',
@@ -104,7 +109,8 @@ const generateFoxsRunDirs = (
 
 const processFoxsRunDir = async (
   foxsRunDirInfo: FoxsRunDir,
-  DCD2PDBParams: CharmmDCD2PDBParams
+  DCD2PDBParams: CharmmDCD2PDBParams,
+  MQJob?: BullMQJob
 ): Promise<void> => {
   const { rg, run } = foxsRunDirInfo
 
@@ -116,7 +122,7 @@ const processFoxsRunDir = async (
 
   // Process the directory
   await generateDCD2PDBInpFile(DCD2PDBParams, rg, run)
-  await spawnCharmm(DCD2PDBParams) // Run CHARMM to extract PDB
+  await spawnCharmm(DCD2PDBParams, MQJob) // Run CHARMM to extract PDB
 }
 
 const remediatePDBFiles = async (
@@ -195,13 +201,14 @@ const writeSegidToChainid = async (inputFile: string): Promise<void> => {
 }
 
 const runFoXS = async (
+  MQjob: BullMQJob,
   DBjob: IBilboMDPDBJob | IBilboMDCRDJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob
 ): Promise<void> => {
   let status: IStepStatus = {
     status: 'Running',
     message: 'FoXS Calculations have started.'
   }
-
+  let heartbeat: NodeJS.Timeout | null = null
   try {
     // Update the initial status
     await updateStepStatus(DBjob, 'foxs', status)
@@ -210,8 +217,21 @@ const runFoXS = async (
     const analysisDir = path.join(config.uploadDir, DBjob.uuid, 'foxs')
     const foxsRunDirs = generateFoxsRunDirs(analysisDir, DBjob)
 
+    // Set up the heartbeat for monitoring
+    if (MQjob) {
+      heartbeat = setInterval(() => {
+        MQjob.updateProgress({ status: 'running', timestamp: Date.now() })
+        MQjob.log(`Heartbeat: still running runFoXS`)
+        logger.info(
+          `runFoXS Heartbeat: still running FoXS for: ${
+            DBjob.title
+          } at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}`
+        )
+      }, 1000)
+    }
+
     // Run FoXS on each directory
-    const allFoxsJobs = foxsRunDirs.map(({ dir }) => spawnFoXS(dir))
+    const allFoxsJobs = foxsRunDirs.map(({ dir }) => spawnFoXS(dir, MQjob))
 
     // Wait for all FoXS jobs to complete
     await Promise.all(allFoxsJobs)
@@ -230,6 +250,8 @@ const runFoXS = async (
     }
     await updateStepStatus(DBjob, 'foxs', status)
     logger.error(`FoXS calculations failed: ${error.message}`)
+  } finally {
+    if (heartbeat) clearInterval(heartbeat)
   }
 }
 
