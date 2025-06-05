@@ -188,9 +188,9 @@ def apply_charmm_residue_names(lines):
     """
     residue_replacements = {
         "HIS": "HSD ",
-        "SEP": "SP1 ",
-        "TPO": "THP1",
-        "PTR": "TP1 ",
+        "SEP": "SER ",
+        "TPO": "THR ",
+        "PTR": "TYR ",
         "C  ": "CYT ",
         "G  ": "GUA ",
         "A  ": "ADE ",
@@ -295,6 +295,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
 
         output_file = f"{output_dir}/pdb2crd_charmm_{charmmgui_chain_id.lower()}.inp"
         lines = chain_data["lines"]
+        original_lines = chain_data["original_lines"]
         if lines:  # Ensure there's at least one line to process
             # Extract resnum
             start_res_num_str = lines[0][22:26]
@@ -325,27 +326,62 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
                 f"generate {charmmgui_chain_id} {charmm_gen_options[molecule_type]}\n"
             )
             outfile.write(f"read coor pdb unit 1 offset -{start_res_num_str}\n")
+
+            # Detect phosphorylated residues and insert patch commands
+            wrote_patch_comment = False
+            phos_patch_map = {
+                "SEP": "SP1",  # phosphoserine
+                "TPO": "THP1",  # phosphothreonine
+                "PTR": "TP1",  # phosphotyrosine
+            }
+            seen_patches = set()
+            for line in original_lines:
+                if line.startswith("ATOM") or line.startswith("HETATM"):
+                    resname = line[17:20].strip()
+                    resnum = line[22:26].strip()
+                    if (
+                        resname in phos_patch_map
+                        and (resname, resnum) not in seen_patches
+                    ):
+                        if not wrote_patch_comment:
+                            outfile.write("\n")
+                            outfile.write("! PATCHES FOR PHOSPHORYLATED RESIDUES\n")
+                            outfile.write("! (e.g., SP1, THP1, TP1)\n")
+                            wrote_patch_comment = True
+                        patch_name = phos_patch_map[resname]
+                        outfile.write(
+                            f"patch {patch_name} {charmmgui_chain_id} {resnum} setup warn\n"
+                        )
+                        seen_patches.add((resname, resnum))
+
             outfile.write("close unit 1\n")
             outfile.write("\n")
             outfile.write("! PLACE ANY MISSING HEAVY ATOMS\n")
-            outfile.write("ic purge\n")
+            # outfile.write("ic purge\n")
+            outfile.write("ic generate\n")
             outfile.write("ic param\n")
             outfile.write("ic fill preserve\n")
             outfile.write("ic build\n")
-            outfile.write(
-                f"define test sele segid {charmmgui_chain_id} .and. "
-                f"(.not. type H* ) .and. (.not. init ) show end\n"
-            )
+            outfile.write("\n")
+            outfile.write("! print missing atoms after IC commands\n")
+            outfile.write("coor print sele .not. init end\n")
+            # outfile.write(
+            #     f"define test sele segid {charmmgui_chain_id} .and. "
+            #     f"(.not. type H* ) .and. (.not. init ) show end\n"
+            # )
             outfile.write("\n")
             outfile.write("! REBUILD ALL H ATOM COORDS\n")
             outfile.write(
                 f"coor init sele segid {charmmgui_chain_id} .and. type H* end\n"
             )
             outfile.write(f"hbuild sele segid {charmmgui_chain_id} .and. type H* end\n")
-            outfile.write(
-                f"define test sele segid {charmmgui_chain_id} "
-                f".and. .not. init show end\n"
-            )
+            outfile.write("\n")
+            outfile.write("! print missing atoms after adding Hydrogens\n")
+            outfile.write("coor print sele .not. init end\n")
+            # outfile.write(
+            #     f"define test sele segid {charmmgui_chain_id} "
+            #     f".and. .not. init show end\n"
+            # )
             outfile.write("\n")
             outfile.write("! CALCULATE ENERGY\n")
             outfile.write("energy\n")
@@ -395,7 +431,8 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         outfile.write(f"STREAM {TOPO_FILES}\n")
         outfile.write("\n")
         outfile.write("\n")
-        # loop over each chain
+        # loop over each chain and read PSF and CRD files directly
+        first = True
         for chain_id, chain_data in chains.items():
             molecule_type = chain_data["type"]
             # need to account for CAR vs CAL.... only for Carbohydrates at the moment.
@@ -404,31 +441,40 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
             # CAL is for lowercase Chain IDs a-z
             if molecule_type == "CAR":
                 carb_suffix = "R" if chain_id.isupper() else "L"
-
                 charmmgui_chain_id = f"CA{carb_suffix}{chain_data['chainid'].upper()}"
             else:
                 charmmgui_chain_id = f"{molecule_type}{chain_data['chainid']}"
 
             outfile.write(f"! Read {charmmgui_chain_id}\n")
+
+            # Read PSF
             outfile.write(
-                f"open read card unit 1 name "
-                f"bilbomd_pdb2crd_{charmmgui_chain_id.lower()}.crd\n"
+                f"open read unit 10 card name bilbomd_pdb2crd_{charmmgui_chain_id}.psf\n"
             )
-            outfile.write("read sequence coor unit 1 resid\n")
-            # not sure we need to do this again since we already ran "generate"
-            # when converting PDB to CRD
-            #
+            if first:
+                outfile.write("read psf card unit 10\n")
+            else:
+                outfile.write("read psf card unit 10 append\n")
+            outfile.write("close unit 10\n")
+
+            # Read COOR
             outfile.write(
-                f"generate {charmmgui_chain_id} {charmm_gen_options[molecule_type]}\n"
+                f"open read unit 11 card name bilbomd_pdb2crd_{charmmgui_chain_id}.crd\n"
             )
-            outfile.write("rewind unit 1\n")
-            outfile.write("read coor unit 1 card resid\n")
-            outfile.write("close unit 1\n")
-            outfile.write("\n")
+            if first:
+                outfile.write("read coor card unit 11\n")
+            else:
+                outfile.write("read coor card unit 11 append\n")
+            outfile.write("close unit 11\n\n")
+
+            first = False
         # end chain loop
         outfile.write("\n")
         outfile.write("! Print heavy atoms with unknown coordinates\n")
         outfile.write("coor print sele ( .not. INIT ) .and. ( .not. hydrogen ) end\n")
+        outfile.write("\n")
+        outfile.write("! print all missing atoms\n")
+        outfile.write("coor print sele .not. init end\n")
         outfile.write("\n")
         outfile.write("! Write PSF file\n")
         outfile.write("open write unit 10 card name bilbomd_pdb2crd.psf\n")
@@ -458,7 +504,6 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         outfile.write("*\n")
         outfile.write("\n")
         outfile.write("stop\n")
-    # print(f"FILE_CREATED: {output_file.split('/')[-1]}")
 
 
 def split_and_process_pdb(pdb_file_path: str, output_dir: str):
@@ -486,10 +531,12 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
                 if unique_chain_key not in chains:
                     chains[unique_chain_key] = {
                         "lines": [],
+                        "original_lines": [],
                         "type": None,
                         "chainid": chain_id,
                     }
                 chains[unique_chain_key]["lines"].append(line)
+                chains[unique_chain_key]["original_lines"].append(line)
 
     # Determine molecule type for each chain
     for chain_id, chain_data in chains.items():
@@ -504,7 +551,7 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
         processed_lines = remove_alt_conformers(processed_lines)
         processed_lines = apply_charmm_residue_names(processed_lines)
 
-        # replacing HETATM with ATOM breaks the phosphorylation patches
+        # CHARMM will not tolerate HETATM lines
         processed_lines = replace_hetatm(processed_lines)
 
         chain_filename = get_chain_filename(chain_id, pdb_file_path)
