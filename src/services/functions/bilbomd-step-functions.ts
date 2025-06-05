@@ -24,22 +24,18 @@ import {
 } from '../pipelines/pdb-to-crd.js'
 import {
   CharmmParams,
-  CharmmDCD2PDBParams,
   MultiFoxsParams,
   PaeParams,
   CharmmHeatParams,
   CharmmMDParams,
-  FoxsParams,
   FileCopyParams
 } from '../../types/index.js'
 import { updateStepStatus } from './mongo-utils.js'
 import {
   makeDir,
-  makeFile,
   generateDCD2PDBInpFile,
   generateInputFile,
-  spawnCharmm,
-  spawnFoXS
+  spawnCharmm
 } from './job-utils.js'
 
 type JobStatusEnum = 'Submitted' | 'Pending' | 'Running' | 'Completed' | 'Error'
@@ -446,7 +442,7 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<voi
     }
     await updateStepStatus(DBjob, 'minimize', status)
     await generateInputFile(params)
-    await spawnCharmm(params)
+    await spawnCharmm(params, MQjob)
     status = {
       status: 'Success',
       message: 'CHARMM Minimization has completed.'
@@ -476,7 +472,7 @@ const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
     }
     await updateStepStatus(DBjob, 'heat', status)
     await generateInputFile(params)
-    await spawnCharmm(params)
+    await spawnCharmm(params, MQjob)
     status = {
       status: 'Success',
       message: 'CHARMM Heating has completed.'
@@ -523,7 +519,7 @@ const runMolecularDynamics = async (
       params.inp_basename = `${params.charmm_template}_rg${rg}`
       params.rg = rg
       await generateInputFile(params)
-      molecularDynamicsTasks.push(spawnCharmm(params))
+      molecularDynamicsTasks.push(spawnCharmm(params, MQjob))
     }
     await Promise.all(molecularDynamicsTasks)
     status = {
@@ -533,137 +529,6 @@ const runMolecularDynamics = async (
     await updateStepStatus(DBjob, 'md', status)
   } catch (error) {
     await handleError(error, MQjob, DBjob, 'md')
-  }
-}
-
-const runFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
-  const outputDir = path.join(config.uploadDir, DBjob.uuid)
-
-  const foxsParams: FoxsParams = {
-    out_dir: outputDir,
-    rg_min: DBjob.rg_min,
-    rg_max: DBjob.rg_max,
-    foxs_rg: 'foxs_rg.out',
-    conf_sample: DBjob.conformational_sampling
-  }
-
-  const DCD2PDBParams: CharmmDCD2PDBParams = {
-    out_dir: outputDir,
-    charmm_template: 'dcd2pdb',
-    charmm_topo_dir: config.charmmTopoDir,
-    charmm_inp_file: '',
-    charmm_out_file: '',
-    in_psf_file: DBjob.psf_file,
-    in_crd_file: '',
-    inp_basename: '',
-    foxs_rg: 'foxs_rg.out',
-    in_dcd: '',
-    run: ''
-  }
-
-  try {
-    // Extract PDB coordinates from DCD
-    const foxsAnalysisDirectories = await extractPDBFromDCD(
-      DBjob,
-      MQjob,
-      foxsParams,
-      DCD2PDBParams
-    )
-
-    // Run FoXS calculations
-    await runFoXSCalculations(DBjob, MQjob, foxsAnalysisDirectories)
-  } catch (error) {
-    handleError(error, MQjob, DBjob, 'foxs')
-  }
-}
-
-const extractPDBFromDCD = async (
-  DBjob: IBilboMDCRDJob,
-  MQjob: BullMQJob,
-  foxsParams: FoxsParams,
-  DCD2PDBParams: CharmmDCD2PDBParams
-): Promise<string[]> => {
-  let status: IStepStatus = {
-    status: 'Running',
-    message: 'Extracting PDB coordinates from DCD trajectory has started.'
-  }
-  try {
-    await updateStepStatus(DBjob, 'dcd2pdb', status)
-
-    const foxsDir = path.join(foxsParams.out_dir, 'foxs')
-    await makeDir(foxsDir)
-    const foxsRgFile = path.join(foxsParams.out_dir, foxsParams.foxs_rg)
-    await makeFile(foxsRgFile)
-
-    const step = Math.max(Math.round((foxsParams.rg_max - foxsParams.rg_min) / 5), 1)
-    const allCharmmDcd2PdbJobs: Promise<void>[] = []
-    const foxsAnalysisDirectories: string[] = []
-
-    for (let rg = foxsParams.rg_min; rg <= foxsParams.rg_max; rg += step) {
-      for (let run = 1; run <= foxsParams.conf_sample; run += 1) {
-        const foxsRunDir = path.join(foxsDir, `rg${rg}_run${run}`)
-        await makeDir(foxsRunDir)
-        foxsAnalysisDirectories.push(foxsRunDir)
-
-        DCD2PDBParams.charmm_inp_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.inp`
-        DCD2PDBParams.charmm_out_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.out`
-        DCD2PDBParams.inp_basename = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}`
-        DCD2PDBParams.run = `rg${rg}_run${run}`
-
-        await generateDCD2PDBInpFile(DCD2PDBParams, rg, run)
-
-        allCharmmDcd2PdbJobs.push(spawnCharmm(DCD2PDBParams))
-      }
-    }
-
-    // Wait for all CHARMM jobs to complete
-    await Promise.all(allCharmmDcd2PdbJobs)
-
-    // Update the dcd2pdb status
-    status = {
-      status: 'Success',
-      message: 'Extracting PDB coordinates from DCD trajectory has completed.'
-    }
-    await updateStepStatus(DBjob, 'dcd2pdb', status)
-
-    // return the list of directories for FoXS calculations
-    return foxsAnalysisDirectories
-  } catch (error) {
-    await handleError(error, MQjob, DBjob, 'dcd2pdb')
-    throw new Error(`Error in extractPDBFromDCD: ${error}`)
-  }
-}
-
-const runFoXSCalculations = async (
-  DBjob: IBilboMDCRDJob,
-  MQjob: BullMQJob,
-  foxsAnalysisDirectories: string[]
-): Promise<void> => {
-  let status: IStepStatus = {
-    status: 'Running',
-    message: 'FoXS Calculations have started.'
-  }
-
-  try {
-    await updateStepStatus(DBjob, 'foxs', status)
-    const allFoxsJobs: Promise<void>[] = []
-
-    // Iterate over the created directories and run FoXS on them
-    for (const foxsRunDir of foxsAnalysisDirectories) {
-      allFoxsJobs.push(spawnFoXS(foxsRunDir))
-    }
-
-    // Wait for all FoXS jobs to complete
-    await Promise.all(allFoxsJobs)
-
-    // Once everything is complete, update the foxs status
-    status = {
-      status: 'Success',
-      message: 'FoXS Calculations have completed.'
-    }
-    await updateStepStatus(DBjob, 'foxs', status)
-  } catch (error) {
-    await handleError(error, MQjob, DBjob, 'foxs')
   }
 }
 
@@ -1167,7 +1032,6 @@ export {
   runMinimize,
   runHeat,
   runMolecularDynamics,
-  runFoxs,
   runMultiFoxs,
   prepareResults,
   handleError,
