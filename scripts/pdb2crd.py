@@ -357,7 +357,6 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             outfile.write("close unit 1\n")
             outfile.write("\n")
             outfile.write("! PLACE ANY MISSING HEAVY ATOMS\n")
-            # outfile.write("ic purge\n")
             outfile.write("ic generate\n")
             outfile.write("ic param\n")
             outfile.write("ic fill preserve\n")
@@ -365,10 +364,6 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             outfile.write("\n")
             outfile.write("! print missing atoms after IC commands\n")
             outfile.write("coor print sele .not. init end\n")
-            # outfile.write(
-            #     f"define test sele segid {charmmgui_chain_id} .and. "
-            #     f"(.not. type H* ) .and. (.not. init ) show end\n"
-            # )
             outfile.write("\n")
             outfile.write("! REBUILD ALL H ATOM COORDS\n")
             outfile.write(
@@ -378,10 +373,6 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             outfile.write("\n")
             outfile.write("! print missing atoms after adding Hydrogens\n")
             outfile.write("coor print sele .not. init end\n")
-            # outfile.write(
-            #     f"define test sele segid {charmmgui_chain_id} "
-            #     f".and. .not. init show end\n"
-            # )
             outfile.write("\n")
             outfile.write("! CALCULATE ENERGY\n")
             outfile.write("energy\n")
