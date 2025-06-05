@@ -59,6 +59,10 @@ localhost/bilbomd/bilbomd-perlmutter-worker  0.0.20                    4e3ef0f8d
 
 ## Version History
 
+- 1.14.5 (6/5/2025)
+  - Reduce BullMQ lockDuration and adjust long-running steps to periodically update
+    BullMQ to keep the lock alive. This will hopefully help with job recovery when a
+    worker crashes and we need to restart services.
 - 1.14.4 (6/3/2025)
   - Fix bug in `pdb2crd.py` with HETATM not getting replaced with ATOM
 - 1.14.3 (6/2/2025)
