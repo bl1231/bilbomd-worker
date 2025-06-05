@@ -59,6 +59,9 @@ localhost/bilbomd/bilbomd-perlmutter-worker  0.0.20                    4e3ef0f8d
 
 ## Version History
 
+- 1.14.6 (6/5/2025)
+  - Updates to `pdb2crd.py` to properly patch phosphorylated SER, THR, and TYR residues
+    The previous `1.14.3` was not doing this properly.
 - 1.14.5 (6/5/2025)
   - Reduce BullMQ lockDuration and adjust long-running steps to periodically update
     BullMQ to keep the lock alive. This will hopefully help with job recovery when a
