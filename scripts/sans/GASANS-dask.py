@@ -171,7 +171,7 @@ class GAEnsembleOpt:
         method="prob",
         rank_prob=0.8,
         fitness_function="inverse_absolute",
-        fitting_algorithm="Differential Evolution",
+        fitting_algorithm="nedler",
         parallel=True,
         elitism=True,
     ):
@@ -307,7 +307,7 @@ class GAEnsembleOpt:
             self.interp_data.values[self.parents, :], 2, 1
         )
 
-        mfit_array = {}
+        mfit_array = []
         if self.parallel:
             fitmap = client.map(
                 fitness,
@@ -316,10 +316,9 @@ class GAEnsembleOpt:
                 ens_size=self.ens_size,
                 fitting_algorithm=self.fitting_algorithm,
             )
-            fitmap_seq = distributed.as_completed(fitmap)
+            distributed.wait(fitmap)
+            mfit_array = client.gather(fitmap)
 
-            for nfit, fit in enumerate(fitmap_seq):
-                mfit_array.update({nfit: fit.result()})
         else:
             for nfit, ens_data in enumerate(ensemble_scattering_parents):
                 mfit_array.update(self.fitness(ens_data, self.experiment))
@@ -331,7 +330,7 @@ class GAEnsembleOpt:
 
         logger.info("self.gen_rchi2 shape: %s", self.gen_rchi2.shape)
 
-        for data_index in list(mfit_array.keys()):
+        for data_index, fit_results in enumerate(mfit_array):
             if data_index >= self.gen_rchi2.shape[1]:
                 logger.error(
                     "Index %d is out of bounds for array with shape %s",
