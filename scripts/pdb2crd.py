@@ -50,12 +50,15 @@ upto 8 character PSF IDs. (versions c31a1 and later)
 import argparse
 import os
 
-TOPO_FILES = "/app/scripts/bilbomd_top_par_files.str"
+TOPO_FILES = os.environ.get("CHARMM_TOPOLOGY", "/app/scripts/bilbomd_top_par_files.str")
 
 
-def determine_molecule_type(lines):
+def determine_molecule_type_details(lines):
     """
-    Determines if the chain is Protein, DNA, RNA, or Carbohydrate
+    Returns a dictionary with molecule type info for the chain:
+    - types_present: Set of molecule types found in the chain
+    - first_residue_type: Molecule type of the first residue
+    - last_residue_type: Molecule type of the last residue
     """
     protein_residues = set(
         [
@@ -117,19 +120,33 @@ def determine_molecule_type(lines):
         ]
     )
 
+    def classify_residue(residue):
+        if residue in protein_residues:
+            return "PRO"
+        elif residue in dna_residues:
+            return "DNA"
+        elif residue in rna_residues:
+            return "RNA"
+        elif residue in carbohydrate_residues:
+            return "CAR"
+        else:
+            return "UNKNOWN"
+
+    types_present = set()
+    residue_types = []
+
     for line in lines:
         if line.startswith(("ATOM", "HETATM")):
             residue = line[17:20].strip()
-            # print(residue)
-            if residue in protein_residues:
-                return "PRO"
-            elif residue in dna_residues:
-                return "DNA"
-            elif residue in rna_residues:
-                return "RNA"
-            elif residue in carbohydrate_residues:
-                return "CAR"
-    return "UNKNOWN"
+            mol_type = classify_residue(residue)
+            types_present.add(mol_type)
+            residue_types.append(mol_type)
+
+    return {
+        "types_present": types_present,
+        "first_residue_type": residue_types[0] if residue_types else "UNKNOWN",
+        "last_residue_type": residue_types[-1] if residue_types else "UNKNOWN",
+    }
 
 
 def get_chain_filename(chain_id, pdb_filename):
@@ -265,10 +282,10 @@ def replace_hetatm(lines):
 
 def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
     """
-    Write individual CHARMM input file to convert each chain to a CRD file.
+    Write individual CHARMM input file to convert each chain to a CRD and PSF file.
     """
     charmm_gen_options = {
-        "PRO": "setup warn first none last CTER",
+        "PRO": "setup warn first none last none",
         "DNA": "setup warn first 5TER last 3TER",
         "RNA": "setup warn first 5TER last 3TER",
         "CAR": "setup",
@@ -322,9 +339,19 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             outfile.write("read sequ pdb unit 1\n")
 
             outfile.write("rewind unit 1\n")
-            outfile.write(
-                f"generate {charmmgui_chain_id} {charmm_gen_options[molecule_type]}\n"
-            )
+            # Enhanced CHARMM generate line
+            molinfo = chain_data.get("molinfo", {})
+            types_present = molinfo.get("types_present", set())
+            last_type = molinfo.get("last_residue_type", "UNKNOWN")
+
+            if types_present == {"PRO"} and last_type == "PRO":
+                gen_opts = "setup warn first NTER last CTER"
+            else:
+                gen_opts = charmm_gen_options.get(
+                    molecule_type, "setup warn first none last none"
+                )
+
+            outfile.write(f"generate {charmmgui_chain_id} {gen_opts}\n")
             outfile.write(f"read coor pdb unit 1 offset -{start_res_num_str}\n")
 
             # Detect phosphorylated residues and insert patch commands
@@ -345,7 +372,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
                     ):
                         if not wrote_patch_comment:
                             outfile.write("\n")
-                            outfile.write("! PATCHES FOR PHOSPHORYLATED RESIDUES\n")
+                            outfile.write("! PATCH PHOSPHORYLATED RESIDUES\n")
                             outfile.write("! (e.g., SP1, THP1, TP1)\n")
                             wrote_patch_comment = True
                         patch_name = phos_patch_map[resname]
@@ -398,12 +425,6 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
     """
     Melds individual chain CRD files into a single CRD file for subsequent CHARMM steps
     """
-    charmm_gen_options = {
-        "PRO": "setup warn first none last CTER",
-        "DNA": "setup warn first 5TER last 3TER",
-        "RNA": "setup warn first 5TER last 3TER",
-        "CAR": "setup",
-    }
     # Get the input filename:
     input_filename = os.path.basename(pdb_file_path)
     output_file = f"{output_dir}/pdb2crd_charmm_meld.inp"
@@ -529,9 +550,18 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
                 chains[unique_chain_key]["lines"].append(line)
                 chains[unique_chain_key]["original_lines"].append(line)
 
-    # Determine molecule type for each chain
+    # Determine molecule type for each chain and store detailed info
     for chain_id, chain_data in chains.items():
-        chain_data["type"] = determine_molecule_type(chain_data["lines"])
+        molinfo = (
+            determine_molecule_type_details(chain_data["lines"])
+            if "lines" in chain_data
+            else {}
+        )
+        chain_data["molinfo"] = molinfo
+        types_present = molinfo.get("types_present", set())
+        chain_data["type"] = (
+            "PRO" if types_present == {"PRO"} else next(iter(types_present), "UNKNOWN")
+        )
 
     # Process and write each chain to a separate file
     for chain_id, chain_data in chains.items():
