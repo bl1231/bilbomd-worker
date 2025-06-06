@@ -59,6 +59,10 @@ localhost/bilbomd/bilbomd-perlmutter-worker  0.0.20                    4e3ef0f8d
 
 ## Version History
 
+- 1.14.8 (6/6/2025)
+  - Updates to `pdb2crd.py` to properly patch protein chains with glycosylations present
+    on the CTER.
+  - Merge GA-SANS fix `#588`
 - 1.14.7 (6/5/2025)
   - Updates to `pdb2crd.py` to properly patch phosphorylated SER, THR, and TYR residues
     The previous `1.14.3` was not doing this properly.
