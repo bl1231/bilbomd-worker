@@ -504,7 +504,7 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         outfile.write("\n")
         outfile.write("calc cgtot = int ( ?cgtot )\n")
         outfile.write("\n")
-        outfile.write("open write unit 90 card name bilbomd_pdb2crd.str\n")
+        outfile.write("open write card unit 90 name bilbomd_pdb2crd.str\n")
         outfile.write("write title unit 90\n")
         outfile.write("* set ncharge = @cgtot\n")
         outfile.write("* set xmax = ?xmax\n")
