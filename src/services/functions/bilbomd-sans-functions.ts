@@ -9,7 +9,6 @@ import { IJob, IBilboMDSANSJob } from '@bl1231/bilbomd-mongodb-schema'
 import { updateStepStatus } from './mongo-utils.js'
 import { generateDCD2PDBInpFile } from './bilbomd-step-functions.js'
 import { spawn, exec } from 'node:child_process'
-// import { CharmmParams } from '../../types/index.js'
 import { makeDir, makeFile } from './job-utils.js'
 import { config } from '../../config/config.js'
 import { Job as BullMQJob } from 'bullmq'
@@ -106,49 +105,37 @@ const writeSegidToChainid = async (inputFile: string): Promise<void> => {
   }
 }
 
-// const spawnCharmm = (params: CharmmParams): Promise<void> => {
-//   const { charmm_inp_file: inputFile, charmm_out_file: outputFile, out_dir } = params
-//   const charmmArgs = ['-o', outputFile, '-i', inputFile]
-//   const charmmOpts = { cwd: out_dir }
-
-//   return new Promise<void>((resolve, reject) => {
-//     const charmm: ChildProcess = spawn(config.charmmBin, charmmArgs, charmmOpts)
-//     let charmmOutput = '' // Create an empty string to capture stdout
-
-//     charmm.stdout?.on('data', (data) => {
-//       charmmOutput += data.toString()
-//     })
-
-//     charmm.on('error', (error) => {
-//       reject(new Error(`CHARMM process encountered an error: ${error.message}`))
-//     })
-
-//     charmm.on('close', (code: number) => {
-//       if (code === 0) {
-//         logger.info(`CHARMM success: ${inputFile} exit code: ${code}`)
-//         resolve()
-//       } else {
-//         logger.info(`CHARMM error: ${inputFile} exit code: ${code}`)
-//         reject(new Error(charmmOutput))
-//       }
-//     })
-//   })
-// }
-
 const spawnPepsiSANS = async (
   analysisDir: string,
-  pepsiSANSOpts: string[]
+  pepsiSANSOpts: string[],
+  MQjob: BullMQJob
 ): Promise<void> => {
-  logger.info(`Running Pepsi-SANS in ${analysisDir}`)
-  const runDir = path.basename(analysisDir)
-
+  let heartbeat: NodeJS.Timeout | null = null
   try {
+    logger.info(`Running Pepsi-SANS in ${analysisDir}`)
+    const runDir = path.basename(analysisDir)
     // Read the directory and get the list of .pdb files
     const files = await fs.readdir(analysisDir)
     const pdbFiles = files.filter((file) => file.endsWith('.pdb'))
 
     // Create a header line for the CSV file
     const csvLines: string[] = ['PDBNAME,SCATTERINGFILE,DAT_DIRECTORY']
+
+    // Start a heartbeat timer
+    if (MQjob) {
+      heartbeat = setInterval(() => {
+        MQjob.updateProgress({
+          status: `Still processing Pepsi-SANS (${pdbFiles.length} files)`,
+          timestamp: Date.now()
+        })
+        MQjob.log(`Heartbeat: spawnPepsiSANS is still working...`)
+        logger.info(
+          `spawnPepsiSANS Heartbeat: still running GA-SANS for: ${
+            MQjob.data.title
+          } at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}`
+        )
+      }, 10_000)
+    }
 
     // Process each .pdb file in parallel
     const tasks = pdbFiles.map((file) => {
@@ -199,6 +186,8 @@ const spawnPepsiSANS = async (
       `An error occurred during Pepsi-SANS processing: ${(error as Error).message}`
     )
     throw error // Re-throw the error after logging
+  } finally {
+    if (heartbeat) clearInterval(heartbeat)
   }
 }
 
@@ -414,11 +403,11 @@ const runPepsiSANSOnPDBFiles = async (
         MQjob.updateProgress({ status: 'running', timestamp: Date.now() })
         MQjob.log(`Heartbeat: still running Pepsi-SANS`)
         logger.info(
-          `Pepsi-SANS Heartbeat: still running Pepsi-SANS for: ${
+          `runPepsiSANSOnPDBFiles Heartbeat: still running for: ${
             DBjob.title
           } at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}`
         )
-      }, 1000)
+      }, 10_000)
     }
 
     // -ms <max angle>,  --maximum_scattering_vector <max angle>
@@ -446,9 +435,11 @@ const runPepsiSANSOnPDBFiles = async (
     ]
 
     // Process each directory in parallel
-    await Promise.all(
-      validDirs.map((pepsiSANSRunDir) => spawnPepsiSANS(pepsiSANSRunDir, pepsiSANSOpts))
+    const allPepsiSANSJobs = validDirs.map((pepsiSANSRunDir) =>
+      spawnPepsiSANS(pepsiSANSRunDir, pepsiSANSOpts, MQjob)
     )
+    // Wait for all Pepsi-SANS jobs to complete
+    await Promise.all(allPepsiSANSJobs)
 
     // Combine all CSV files into a single CSV file.
     await combineCSVFiles(validDirs, workingDir, 'pepsisans_combined.csv')
@@ -495,9 +486,9 @@ const runGASANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<void
     if (MQjob) {
       heartbeat = setInterval(() => {
         MQjob.updateProgress({ status: 'running', timestamp: Date.now() })
-        MQjob.log(`Heartbeat: still running Pepsi-SANS`)
+        MQjob.log(`Heartbeat: still running GA-SANS`)
         logger.info(
-          `Pepsi-SANS Heartbeat: still running Pepsi-SANS for: ${
+          `runGASANS Heartbeat: still running GA-SANS for: ${
             DBjob.title
           } at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}`
         )
