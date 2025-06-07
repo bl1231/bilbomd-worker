@@ -69,7 +69,7 @@ const processBilboMDSANSJob = async (MQjob: BullMQJob) => {
 
   // Extract PDBs from DCDs
   await MQjob.log('start dcd2pdb')
-  await extractPDBFilesFromDCD(foundJob)
+  await extractPDBFilesFromDCD(MQjob, foundJob)
   await MQjob.log('end dcd2pdb')
   await MQjob.updateProgress(60)
   foundJob.progress = 60
@@ -85,7 +85,7 @@ const processBilboMDSANSJob = async (MQjob: BullMQJob) => {
 
   // Calculate Pepsi-SANS profiles
   await MQjob.log('start pepsisans')
-  await runPepsiSANSOnPDBFiles(foundJob)
+  await runPepsiSANSOnPDBFiles(MQjob, foundJob)
   await MQjob.log('end pepsisans')
   await MQjob.updateProgress(80)
   foundJob.progress = 80
@@ -93,7 +93,7 @@ const processBilboMDSANSJob = async (MQjob: BullMQJob) => {
 
   // GA-SANS analysis
   await MQjob.log('start ga-sans')
-  await runGASANS(foundJob)
+  await runGASANS(MQjob, foundJob)
   await MQjob.log('end ga-sans')
   await MQjob.updateProgress(90)
   foundJob.progress = 90
