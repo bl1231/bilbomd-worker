@@ -1,3 +1,4 @@
+import pLimit from 'p-limit'
 import path from 'path'
 import fs from 'fs-extra'
 import csv from 'csv-parser'
@@ -105,6 +106,44 @@ const writeSegidToChainid = async (inputFile: string): Promise<void> => {
   }
 }
 
+// Helper function to run a single Pepsi-SANS process for a given file
+async function runPepsiSANSProcess(
+  pepsiSansRunDir: string,
+  file: string,
+  pepsiSANSOpts: string[],
+  MQjob: BullMQJob,
+  index: number,
+  total: number
+): Promise<string> {
+  const inputPath = path.join(pepsiSansRunDir, file)
+  const outputFile = file.replace(/\.pdb$/, '.dat')
+  const outputPath = path.join(pepsiSansRunDir, outputFile)
+
+  return new Promise<string>((resolve, reject) => {
+    const proc = spawn('Pepsi-SANS', [inputPath, '-o', outputPath, ...pepsiSANSOpts])
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        if (MQjob && index % 20 === 0) {
+          MQjob.updateProgress({
+            status: `Pepsi-SANS ${index + 1}/${total}`,
+            timestamp: Date.now()
+          })
+          MQjob.log(`Pepsi-SANS progress: ${index + 1}/${total}`)
+          logger.info(`Pepsi-SANS progress: ${index + 1}/${total}`)
+        }
+        resolve(`${file},${outputFile},${path.basename(pepsiSansRunDir)}`)
+      } else {
+        reject(new Error(`Pepsi-SANS exited with code ${code} for ${file}`))
+      }
+    })
+
+    proc.on('error', (err) => {
+      reject(new Error(`Pepsi-SANS process error for ${file}: ${err.message}`))
+    })
+  })
+}
+
 const spawnPepsiSANS = async (
   pepsiSansRunDir: string,
   pepsiSANSOpts: string[],
@@ -112,70 +151,32 @@ const spawnPepsiSANS = async (
 ): Promise<void> => {
   try {
     logger.info(`Running Pepsi-SANS in ${pepsiSansRunDir}`)
-    const runDir = path.basename(pepsiSansRunDir)
     const allFiles = await fs.readdir(pepsiSansRunDir)
-    const pdbFiles = allFiles.filter((file) => file.endsWith('.pdb'))
+    const pdbFiles = allFiles.filter((f) => f.endsWith('.pdb'))
+    const total = pdbFiles.length
+    const csvLines = ['PDBNAME,SCATTERINGFILE,DAT_DIRECTORY']
 
-    // Create a header line for the CSV file
-    const csvLines: string[] = ['PDBNAME,SCATTERINGFILE,DAT_DIRECTORY']
+    const concurrency = parseInt(process.env.PEPSISANS_CONCURRENCY || '3', 10)
+    const limit = pLimit(concurrency)
 
-    for (let i = 0; i < pdbFiles.length; i++) {
-      const file = pdbFiles[i]
+    const tasks = pdbFiles.map((file, i) =>
+      limit(() =>
+        runPepsiSANSProcess(pepsiSansRunDir, file, pepsiSANSOpts, MQjob, i, total)
+      )
+    )
 
-      await new Promise<void>((resolve, reject) => {
-        const inputPath = path.join(pepsiSansRunDir, file)
-        const outputFile = file.replace(/\.pdb$/, '.dat')
-        const outputPath = path.join(pepsiSansRunDir, outputFile)
-        // logger.info(
-        //   `CMD: Pepsi-SANS ${inputPath} -o ${outputPath} ${pepsiSANSOpts.join(' ')}`
-        // )
-        const pepsiSANSProcess = spawn('Pepsi-SANS', [
-          inputPath,
-          '-o',
-          outputPath,
-          ...pepsiSANSOpts
-        ])
+    const results = await Promise.all(tasks)
+    csvLines.push(...results)
 
-        pepsiSANSProcess.on('close', (code) => {
-          if (code === 0) {
-            csvLines.push(`${file},${outputFile},${runDir}`)
-
-            if (MQjob && i % 20 === 0) {
-              MQjob.updateProgress({
-                status: `Pepsi-SANS processing: ${i + 1}/${pdbFiles.length}`,
-                timestamp: Date.now()
-              })
-              MQjob.log(`Pepsi-SANS progress: ${i + 1}/${pdbFiles.length}`)
-              logger.info(`Pepsi-SANS progress: ${i + 1}/${pdbFiles.length}`)
-            }
-
-            resolve()
-          } else {
-            const msg = `Pepsi-SANS process exited with code ${code} for ${file}`
-            logger.error(msg)
-            reject(new Error(msg))
-          }
-        })
-
-        pepsiSANSProcess.on('error', (error) => {
-          reject(new Error(`Pepsi-SANS process error for ${file}: ${error.message}`))
-        })
-      })
-    }
-
-    // Get the directory name for the CSV file
-    const csvFileName = `pepsisans_${runDir}.csv`
-
-    // Write the CSV file
-    const csvContent = csvLines.join('\n')
-    await fs.writeFile(path.join(pepsiSansRunDir, csvFileName), csvContent)
+    const csvFileName = `pepsisans_${path.basename(pepsiSansRunDir)}.csv`
+    await fs.writeFile(path.join(pepsiSansRunDir, csvFileName), csvLines.join('\n'))
 
     logger.info(`Pepsi-SANS processing complete. ${csvFileName} created.`)
   } catch (error) {
     logger.error(
       `An error occurred during Pepsi-SANS processing: ${(error as Error).message}`
     )
-    throw error // Re-throw the error after logging
+    throw error
   }
 }
 
