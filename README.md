@@ -59,6 +59,8 @@ localhost/bilbomd/bilbomd-perlmutter-worker  0.0.20                    4e3ef0f8d
 
 ## Version History
 
+- 1.14.9 (6/9/2025)
+  - Add BullMQ heartbeat functionality to the SANS pipeline.
 - 1.14.8 (6/6/2025)
   - Updates to `pdb2crd.py` to properly patch protein chains with glycosylations present
     on the CTER.

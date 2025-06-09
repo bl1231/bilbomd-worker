@@ -41,7 +41,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",
-    "@types/express": "^5.0.2",
+    "@types/express": "^5.0.3",
     "@types/fs-extra": "^11.0.4",
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.9",
@@ -49,7 +49,7 @@
     "@types/nodemailer": "^6.4.17",
     "@types/nodemailer-express-handlebars": "^4.0.5",
     "@types/shelljs": "^0.8.16",
-    "@vitest/ui": "^3.2.2",
+    "@vitest/ui": "^3.2.3",
     "copyfiles": "^2.4.1",
     "eslint": "^9.28.0",
     "fs-extra": "^11.3.0",
@@ -61,8 +61,8 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.33.1",
-    "vitest": "^3.2.2"
+    "typescript-eslint": "^8.34.0",
+    "vitest": "^3.2.3"
   },
   "_moduleAliases": {
     "@services": "build/services",
