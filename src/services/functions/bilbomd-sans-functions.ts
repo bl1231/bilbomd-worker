@@ -126,9 +126,9 @@ const spawnPepsiSANS = async (
         const inputPath = path.join(pepsiSansRunDir, file)
         const outputFile = file.replace(/\.pdb$/, '.dat')
         const outputPath = path.join(pepsiSansRunDir, outputFile)
-        logger.info(
-          `CMD: Pepsi-SANS ${inputPath} -o ${outputPath} ${pepsiSANSOpts.join(' ')}`
-        )
+        // logger.info(
+        //   `CMD: Pepsi-SANS ${inputPath} -o ${outputPath} ${pepsiSANSOpts.join(' ')}`
+        // )
         const pepsiSANSProcess = spawn('Pepsi-SANS', [
           inputPath,
           '-o',
@@ -275,19 +275,7 @@ const extractPDBFilesFromDCD = async (
   DBjob: IBilboMDSANSJob
 ): Promise<void> => {
   const outputDir = path.join(config.uploadDir, DBjob.uuid)
-  const DCD2PDBParams: CharmmDCD2PDBParams = {
-    out_dir: outputDir,
-    charmm_template: 'dcd2pdb-sans',
-    charmm_topo_dir: config.charmmTopoDir,
-    charmm_inp_file: '',
-    charmm_out_file: '',
-    in_psf_file: 'bilbomd_pdb2crd.psf',
-    in_crd_file: '',
-    inp_basename: '',
-    pepsisans_rg: 'pepsisans_rg.out',
-    in_dcd: '',
-    run: ''
-  }
+
   let status: IStepStatus = {
     status: 'Running',
     message: 'CHARMM Extract PDBs from DCD Trajectories has started.'
@@ -297,25 +285,47 @@ const extractPDBFilesFromDCD = async (
   const analysisDir = path.join(outputDir, 'pepsisans')
   await makeDir(analysisDir)
   // Create the output file for the Rg values from CHARMM
-  const pepsisansRgFile = path.join(outputDir, DCD2PDBParams.pepsisans_rg)
+  const pepsisansRgFile = path.join(outputDir, 'pepsisans_rg.out')
   await makeFile(pepsisansRgFile)
 
   const step = Math.max(Math.round((DBjob.rg_max - DBjob.rg_min) / 5), 1)
 
+  // Prepare Rg values array
+  const rgValues: number[] = []
   for (let rg = DBjob.rg_min; rg <= DBjob.rg_max; rg += step) {
-    for (let run = 1; run <= DBjob.conformational_sampling; run++) {
-      const pepsiSANSRunDir = path.join(analysisDir, `rg${rg}_run${run}`)
-      await makeDir(pepsiSANSRunDir)
-
-      DCD2PDBParams.charmm_inp_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.inp`
-      DCD2PDBParams.charmm_out_file = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}.out`
-      DCD2PDBParams.inp_basename = `${DCD2PDBParams.charmm_template}_rg${rg}_run${run}`
-      DCD2PDBParams.run = `rg${rg}_run${run}`
-
-      await generateDCD2PDBInpFile(DCD2PDBParams, rg, run)
-      await spawnCharmm(DCD2PDBParams, MQjob)
-    }
+    rgValues.push(rg)
   }
+
+  // Parallelize the outer loop (Rg loop) using Promise.all, process each Rg group sequentially
+  await Promise.all(
+    rgValues.map(async (rg) => {
+      logger.info(`Starting CHARMM DCD extraction for Rg=${rg}`)
+      for (let run = 1; run <= DBjob.conformational_sampling; run++) {
+        const runLabel = `rg${rg}_run${run}`
+        const pepsiSANSRunDir = path.join(analysisDir, runLabel)
+        await makeDir(pepsiSANSRunDir)
+
+        // Move DCD2PDBParams definition inside the loop to ensure unique scope per task
+        const DCD2PDBParams: CharmmDCD2PDBParams = {
+          out_dir: outputDir,
+          charmm_template: 'dcd2pdb-sans',
+          charmm_topo_dir: config.charmmTopoDir,
+          charmm_inp_file: `dcd2pdb-sans_${runLabel}.inp`,
+          charmm_out_file: `dcd2pdb-sans_${runLabel}.out`,
+          in_psf_file: 'bilbomd_pdb2crd.psf',
+          in_crd_file: '',
+          inp_basename: `dcd2pdb-sans_${runLabel}`,
+          pepsisans_rg: 'pepsisans_rg.out',
+          in_dcd: '',
+          run: runLabel
+        }
+
+        await generateDCD2PDBInpFile(DCD2PDBParams, rg, run)
+        await spawnCharmm(DCD2PDBParams, MQjob)
+      }
+    })
+  )
+
   status = {
     status: 'Success',
     message: 'CHARMM Extract PDBs from DCD Trajectories has completed.'
