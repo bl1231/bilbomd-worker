@@ -480,7 +480,7 @@ const runGASANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<void
             DBjob.title
           } at ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })}`
         )
-      }, 1000)
+      }, 10_000)
     }
 
     // Spawn the GASANS process
