@@ -23,7 +23,7 @@
     "@bl1231/bilbomd-mongodb-schema": "^1.7.2",
     "axios": "^1.9.0",
     "axios-retry": "^4.5.0",
-    "bullmq": "^5.53.2",
+    "bullmq": "^5.54.0",
     "csv-parser": "^3.2.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
