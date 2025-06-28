@@ -25,7 +25,8 @@ import bioxtasraw.RAWAPI as raw
 
 
 # Global constants
-MW_ERR_CUTOFF = 0.10
+MW_ERR_CUTOFF = 0.15
+MW_DIFF_CUTOFF = 3
 CHI2_CUTOFF_EXCELLENT = 1.0
 CHI2_CUTOFF_MODERATE = 2.0
 PRINT_FLAG = True
@@ -402,6 +403,7 @@ def evaluate_model_fit(eprof, mprof, q_ranges, mw_model):
     """Perform MW Bayesian calculation, chi-square analysis, and gather feedback."""
     mw_exp = mw_bayes(eprof)
     mw_err = abs((mw_exp - mw_model) / mw_model)
+    mw_diff = abs((mw_exp - mw_model))
     overall_chi_square = calculate_chi_square(eprof, mprof)
     print_debug(f"Overall chi-square: {round(overall_chi_square, 2)} MW: {mw_exp}")
 
@@ -411,7 +413,7 @@ def evaluate_model_fit(eprof, mprof, q_ranges, mw_model):
     residuals_of_regions = calculate_regional_residual_values(q_ranges, eprof, mprof)
 
     feedback = generate_feedback(
-        mw_exp, mw_model, mw_err, overall_chi_square, chi_squares_of_regions, q_ranges
+        mw_exp, mw_model, mw_err, mw_diff, overall_chi_square, chi_squares_of_regions, q_ranges
     )
 
     evaluation_results = {
@@ -428,10 +430,10 @@ def evaluate_model_fit(eprof, mprof, q_ranges, mw_model):
 
 
 def generate_feedback(
-    e_mw, m_mw, mw_err, overall_chi_square, chi_squares_of_regions, q_ranges
+    e_mw, m_mw, mw_err, mw_diff, overall_chi_square, chi_squares_of_regions, q_ranges
 ):
     """Generate feedback based on MW and chi-square analysis."""
-    mw_feedback = generate_mw_feedback(e_mw, m_mw, mw_err)
+    mw_feedback = generate_mw_feedback(e_mw, m_mw, mw_err, mw_diff)
     overall_chi_square_feedback = generate_overall_chi_square_feedback(
         overall_chi_square, mw_err
     )
@@ -446,8 +448,11 @@ def generate_feedback(
         highest_chi_square_flag,
         second_highest_chi_square_flag,
         mw_err,
+        mw_diff,
         chi_squares_of_regions,
     )
+    print_debug(f"MW feedback: {mw_feedback}")
+    print_debug(f"Overall chi2 feedback: {overall_chi_square_feedback}")
     print_debug(f"Regional feedback: {regional_chi_square_feedback}")
 
     return {
@@ -459,18 +464,23 @@ def generate_feedback(
     }
 
 
-def generate_mw_feedback(e_mw, m_mw, mw_err):
-    """Return feedback for MW error."""
-    if mw_err > MW_ERR_CUTOFF:
+def generate_mw_feedback(e_mw, m_mw, mw_err, mw_diff):
+    """
+    Return feedback for MW error. 
+    MW error that is < 15% OR < 3 kDa total is acceptable
+    """
+    if mw_err < MW_ERR_CUTOFF or mw_diff < MW_DIFF_CUTOFF:
         return (
             f"The difference between the model MW ({m_mw}) and the "
-            f"SAXS MW ({e_mw}) is large ({round(100 * mw_err, 1)}%), "
-            "sequence or oligomerization state is likely incorrect."
+            f"SAXS MW ({e_mw}) is within acceptable error "
+            f"({round(100 * mw_err, 1)}% err, {round(mw_diff, 1)} kDa diff.)."
         )
     return (
         f"The difference between the model MW ({m_mw}) and the "
-        f"SAXS MW ({e_mw}) is within acceptable error "
-        f"({round(100 * mw_err, 1)}%)."
+        f"SAXS MW ({e_mw}) is large ({round(100 * mw_err, 1)}% err, "
+        f"{round(mw_diff, 1)} kDa diff),"
+        "sequence or oligomerization state is likely incorrect."
+    
     )
 
 
@@ -503,11 +513,12 @@ def generate_regional_feedback(
     highest_chi_square_flag: str,
     second_highest_chi_square_flag: str,
     mw_err: float,
+    mw_diff: float,
     chi_squares_of_regions: list,
 ) -> str:
     """Generate feedback based on chi-square analysis in different q regions."""
 
-    if mw_err > MW_ERR_CUTOFF:
+    if mw_err > MW_ERR_CUTOFF and mw_diff > MW_DIFF_CUTOFF:
         return "Please revisit sequence and oligomerization state before examining flexibility."
 
     if all_regions_chi_square_good(chi_squares_of_regions):
@@ -629,7 +640,7 @@ def handle_poor_fit(
         if second_highest_chi_square_flag == "mid_q_err":
             feedback += (
                 " The movement of flexible regions in the model also do not seem to "
-                "improve the fitting."
+                "improve the fit."
             )
         elif second_highest_chi_square_flag == "high_q_err":
             feedback += " There are also background subtraction problems."
@@ -655,7 +666,7 @@ def handle_poor_fit(
         elif second_highest_chi_square_flag == "mid_q_err":
             feedback += (
                 " The movement of flexible regions in the model also do not seem to "
-                "improve the fitting."
+                "improve the fit."
             )
     else:
         feedback = (
