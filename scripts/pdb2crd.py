@@ -50,12 +50,15 @@ upto 8 character PSF IDs. (versions c31a1 and later)
 import argparse
 import os
 
-TOPO_FILES = "/app/scripts/bilbomd_top_par_files.str"
+TOPO_FILES = os.environ.get("CHARMM_TOPOLOGY", "/app/scripts/bilbomd_top_par_files.str")
 
 
-def determine_molecule_type(lines):
+def determine_molecule_type_details(lines):
     """
-    Determines if the chain is Protein, DNA, RNA, or Carbohydrate
+    Returns a dictionary with molecule type info for the chain:
+    - types_present: Set of molecule types found in the chain
+    - first_residue_type: Molecule type of the first residue
+    - last_residue_type: Molecule type of the last residue
     """
     protein_residues = set(
         [
@@ -79,6 +82,9 @@ def determine_molecule_type(lines):
             "VAL",
             "TRP",
             "TYR",
+            "SEP",
+            "TPO",
+            "PTR",
         ]
     )
     dna_residues = set(["DA", "DC", "DG", "DT", "DI", "ADE", "CYT", "GUA", "THY"])
@@ -114,19 +120,33 @@ def determine_molecule_type(lines):
         ]
     )
 
+    def classify_residue(residue):
+        if residue in protein_residues:
+            return "PRO"
+        elif residue in dna_residues:
+            return "DNA"
+        elif residue in rna_residues:
+            return "RNA"
+        elif residue in carbohydrate_residues:
+            return "CAR"
+        else:
+            return "UNKNOWN"
+
+    types_present = set()
+    residue_types = []
+
     for line in lines:
         if line.startswith(("ATOM", "HETATM")):
             residue = line[17:20].strip()
-            # print(residue)
-            if residue in protein_residues:
-                return "PRO"
-            elif residue in dna_residues:
-                return "DNA"
-            elif residue in rna_residues:
-                return "RNA"
-            elif residue in carbohydrate_residues:
-                return "CAR"
-    return "UNKNOWN"
+            mol_type = classify_residue(residue)
+            types_present.add(mol_type)
+            residue_types.append(mol_type)
+
+    return {
+        "types_present": types_present,
+        "first_residue_type": residue_types[0] if residue_types else "UNKNOWN",
+        "last_residue_type": residue_types[-1] if residue_types else "UNKNOWN",
+    }
 
 
 def get_chain_filename(chain_id, pdb_filename):
@@ -185,6 +205,9 @@ def apply_charmm_residue_names(lines):
     """
     residue_replacements = {
         "HIS": "HSD ",
+        "SEP": "SER ",
+        "TPO": "THR ",
+        "PTR": "TYR ",
         "C  ": "CYT ",
         "G  ": "GUA ",
         "A  ": "ADE ",
@@ -257,53 +280,12 @@ def replace_hetatm(lines):
     return processed_lines
 
 
-def renumber_residues(lines):
-    """
-    Renumber residues so they always begin with 1 for each chain.
-
-    :param lines: The list of lines (strings) from the PDB file for a specific chain.
-    :return: A list of lines with renumbered residues.
-    """
-    processed_lines = []
-    current_residue_number = 1
-    last_chain_id = None
-    last_residue_seq_number = None
-
-    for line in lines:
-        if line.startswith(("ATOM", "HETATM")):
-            chain_id = line[21]
-            residue_seq_number = line[22:26].strip()
-
-            # Check if this is a new chain or a new residue in the same chain
-            if (
-                chain_id != last_chain_id
-                or residue_seq_number != last_residue_seq_number
-            ):
-                if chain_id != last_chain_id:
-                    current_residue_number = 1  # Reset numbering for a new chain
-                else:
-                    current_residue_number += (
-                        1  # Increment for a new residue in the same chain
-                    )
-
-                last_chain_id = chain_id
-                last_residue_seq_number = residue_seq_number
-
-            # Reconstruct line with the new residue number
-            new_line = f"{line[:22]}{str(current_residue_number).rjust(4)}{line[26:]}"
-            processed_lines.append(new_line)
-        else:
-            processed_lines.append(line)
-
-    return processed_lines
-
-
 def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
     """
-    Write individual CHARMM input file to convert each chain to a CRD file.
+    Write individual CHARMM input file to convert each chain to a CRD and PSF file.
     """
     charmm_gen_options = {
-        "PRO": "setup warn first none last CTER",
+        "PRO": "setup warn first none last none",
         "DNA": "setup warn first 5TER last 3TER",
         "RNA": "setup warn first 5TER last 3TER",
         "CAR": "setup",
@@ -330,6 +312,7 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
 
         output_file = f"{output_dir}/pdb2crd_charmm_{charmmgui_chain_id.lower()}.inp"
         lines = chain_data["lines"]
+        original_lines = chain_data["original_lines"]
         if lines:  # Ensure there's at least one line to process
             # Extract resnum
             start_res_num_str = lines[0][22:26]
@@ -356,31 +339,67 @@ def write_pdb_2_crd_inp_files(chains, output_dir, pdb_file_path):
             outfile.write("read sequ pdb unit 1\n")
 
             outfile.write("rewind unit 1\n")
-            outfile.write(
-                f"generate {charmmgui_chain_id} {charmm_gen_options[molecule_type]}\n"
-            )
+            # Enhanced CHARMM generate line
+            molinfo = chain_data.get("molinfo", {})
+            types_present = molinfo.get("types_present", set())
+            last_type = molinfo.get("last_residue_type", "UNKNOWN")
+
+            if types_present == {"PRO"} and last_type == "PRO":
+                gen_opts = "setup warn first NTER last CTER"
+            else:
+                gen_opts = charmm_gen_options.get(
+                    molecule_type, "setup warn first none last none"
+                )
+
+            outfile.write(f"generate {charmmgui_chain_id} {gen_opts}\n")
             outfile.write(f"read coor pdb unit 1 offset -{start_res_num_str}\n")
+
+            # Detect phosphorylated residues and insert patch commands
+            wrote_patch_comment = False
+            phos_patch_map = {
+                "SEP": "SP1",  # phosphoserine
+                "TPO": "THP1",  # phosphothreonine
+                "PTR": "TP1",  # phosphotyrosine
+            }
+            seen_patches = set()
+            for line in original_lines:
+                if line.startswith("ATOM") or line.startswith("HETATM"):
+                    resname = line[17:20].strip()
+                    resnum = line[22:26].strip()
+                    if (
+                        resname in phos_patch_map
+                        and (resname, resnum) not in seen_patches
+                    ):
+                        if not wrote_patch_comment:
+                            outfile.write("\n")
+                            outfile.write("! PATCH PHOSPHORYLATED RESIDUES\n")
+                            outfile.write("! (e.g., SP1, THP1, TP1)\n")
+                            wrote_patch_comment = True
+                        patch_name = phos_patch_map[resname]
+                        outfile.write(
+                            f"patch {patch_name} {charmmgui_chain_id} {resnum} setup warn\n"
+                        )
+                        seen_patches.add((resname, resnum))
+
             outfile.write("close unit 1\n")
             outfile.write("\n")
             outfile.write("! PLACE ANY MISSING HEAVY ATOMS\n")
-            outfile.write("ic purge\n")
+            outfile.write("ic generate\n")
             outfile.write("ic param\n")
             outfile.write("ic fill preserve\n")
             outfile.write("ic build\n")
-            outfile.write(
-                f"define test sele segid {charmmgui_chain_id} .and. "
-                f"(.not. type H* ) .and. (.not. init ) show end\n"
-            )
+            outfile.write("\n")
+            outfile.write("! print missing atoms after IC commands\n")
+            outfile.write("coor print sele .not. init end\n")
             outfile.write("\n")
             outfile.write("! REBUILD ALL H ATOM COORDS\n")
             outfile.write(
                 f"coor init sele segid {charmmgui_chain_id} .and. type H* end\n"
             )
             outfile.write(f"hbuild sele segid {charmmgui_chain_id} .and. type H* end\n")
-            outfile.write(
-                f"define test sele segid {charmmgui_chain_id} "
-                f".and. .not. init show end\n"
-            )
+            outfile.write("\n")
+            outfile.write("! print missing atoms after adding Hydrogens\n")
+            outfile.write("coor print sele .not. init end\n")
             outfile.write("\n")
             outfile.write("! CALCULATE ENERGY\n")
             outfile.write("energy\n")
@@ -406,12 +425,6 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
     """
     Melds individual chain CRD files into a single CRD file for subsequent CHARMM steps
     """
-    charmm_gen_options = {
-        "PRO": "setup warn first none last CTER",
-        "DNA": "setup warn first 5TER last 3TER",
-        "RNA": "setup warn first 5TER last 3TER",
-        "CAR": "setup",
-    }
     # Get the input filename:
     input_filename = os.path.basename(pdb_file_path)
     output_file = f"{output_dir}/pdb2crd_charmm_meld.inp"
@@ -430,7 +443,8 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         outfile.write(f"STREAM {TOPO_FILES}\n")
         outfile.write("\n")
         outfile.write("\n")
-        # loop over each chain
+        # loop over each chain and read PSF and CRD files directly
+        first = True
         for chain_id, chain_data in chains.items():
             molecule_type = chain_data["type"]
             # need to account for CAR vs CAL.... only for Carbohydrates at the moment.
@@ -439,31 +453,40 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
             # CAL is for lowercase Chain IDs a-z
             if molecule_type == "CAR":
                 carb_suffix = "R" if chain_id.isupper() else "L"
-
                 charmmgui_chain_id = f"CA{carb_suffix}{chain_data['chainid'].upper()}"
             else:
                 charmmgui_chain_id = f"{molecule_type}{chain_data['chainid']}"
 
             outfile.write(f"! Read {charmmgui_chain_id}\n")
+
+            # Read PSF
             outfile.write(
-                f"open read card unit 1 name "
-                f"bilbomd_pdb2crd_{charmmgui_chain_id.lower()}.crd\n"
+                f"open read unit 10 card name bilbomd_pdb2crd_{charmmgui_chain_id}.psf\n"
             )
-            outfile.write("read sequence coor unit 1 resid\n")
-            # not sure we need to do this again since we already ran "generate"
-            # when converting PDB to CRD
-            #
+            if first:
+                outfile.write("read psf card unit 10\n")
+            else:
+                outfile.write("read psf card unit 10 append\n")
+            outfile.write("close unit 10\n")
+
+            # Read COOR
             outfile.write(
-                f"generate {charmmgui_chain_id} {charmm_gen_options[molecule_type]}\n"
+                f"open read unit 11 card name bilbomd_pdb2crd_{charmmgui_chain_id}.crd\n"
             )
-            outfile.write("rewind unit 1\n")
-            outfile.write("read coor unit 1 card resid\n")
-            outfile.write("close unit 1\n")
-            outfile.write("\n")
+            if first:
+                outfile.write("read coor card unit 11\n")
+            else:
+                outfile.write("read coor card unit 11 append\n")
+            outfile.write("close unit 11\n\n")
+
+            first = False
         # end chain loop
         outfile.write("\n")
         outfile.write("! Print heavy atoms with unknown coordinates\n")
         outfile.write("coor print sele ( .not. INIT ) .and. ( .not. hydrogen ) end\n")
+        outfile.write("\n")
+        outfile.write("! print all missing atoms\n")
+        outfile.write("coor print sele .not. init end\n")
         outfile.write("\n")
         outfile.write("! Write PSF file\n")
         outfile.write("open write unit 10 card name bilbomd_pdb2crd.psf\n")
@@ -481,7 +504,7 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         outfile.write("\n")
         outfile.write("calc cgtot = int ( ?cgtot )\n")
         outfile.write("\n")
-        outfile.write("open write unit 90 card name bilbomd_pdb2crd.str\n")
+        outfile.write("open write card unit 90 name bilbomd_pdb2crd.str\n")
         outfile.write("write title unit 90\n")
         outfile.write("* set ncharge = @cgtot\n")
         outfile.write("* set xmax = ?xmax\n")
@@ -493,7 +516,6 @@ def write_meld_chain_crd_files(chains, output_dir, pdb_file_path):
         outfile.write("*\n")
         outfile.write("\n")
         outfile.write("stop\n")
-    # print(f"FILE_CREATED: {output_file.split('/')[-1]}")
 
 
 def split_and_process_pdb(pdb_file_path: str, output_dir: str):
@@ -509,25 +531,37 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
     with open(pdb_file_path, "r", encoding="utf-8") as pdb_file:
         for line in pdb_file:
             if line.startswith(("ATOM", "HETATM")):
-                record_type = line[:6].strip()  # ATOM or HETATM
+                # record_type = line[:6].strip()  # ATOM or HETATM
                 chain_id = line[21]  # Chain ID
 
                 # Create a unique key for each chain that includes both chain ID and
                 #  record type
-                unique_chain_key = f"{record_type}_{chain_id}"
+                # unique_chain_key = f"{record_type}_{chain_id}"
+                unique_chain_key = f"pdb2crd_chain_{chain_id}"
 
                 # Initialize the chain in the dictionary if not already present
                 if unique_chain_key not in chains:
                     chains[unique_chain_key] = {
                         "lines": [],
+                        "original_lines": [],
                         "type": None,
                         "chainid": chain_id,
                     }
                 chains[unique_chain_key]["lines"].append(line)
+                chains[unique_chain_key]["original_lines"].append(line)
 
-    # Determine molecule type for each chain
+    # Determine molecule type for each chain and store detailed info
     for chain_id, chain_data in chains.items():
-        chain_data["type"] = determine_molecule_type(chain_data["lines"])
+        molinfo = (
+            determine_molecule_type_details(chain_data["lines"])
+            if "lines" in chain_data
+            else {}
+        )
+        chain_data["molinfo"] = molinfo
+        types_present = molinfo.get("types_present", set())
+        chain_data["type"] = (
+            "PRO" if types_present == {"PRO"} else next(iter(types_present), "UNKNOWN")
+        )
 
     # Process and write each chain to a separate file
     for chain_id, chain_data in chains.items():
@@ -537,25 +571,12 @@ def split_and_process_pdb(pdb_file_path: str, output_dir: str):
         processed_lines = remove_water(chain_data["lines"])
         processed_lines = remove_alt_conformers(processed_lines)
         processed_lines = apply_charmm_residue_names(processed_lines)
-        processed_lines = replace_hetatm(processed_lines)
-        # commenting this out since we really shouldn't be renumbering peoples input
-        # PDB files...
-        # processed_lines = renumber_residues(processed_lines)
 
-        # if processed_lines:  # Check if there are any lines after processing
-        #     first_line = processed_lines[0]
-        #     last_line = processed_lines[-1]
-        #     start_res_num = first_line[22:26]
-        #     end_res_num = last_line[22:26]
+        # CHARMM will not tolerate HETATM lines
+        processed_lines = replace_hetatm(processed_lines)
 
         chain_filename = get_chain_filename(chain_id, pdb_file_path)
-        # DEBUG ONLY
-        # print(
-        #     f"Writing processed chain to: {chain_filename} "
-        #     f"chainID: {chain_data['chainid']} "
-        #     f"type: {chain_data['type']} "
-        #     f"start: {start_res_num} end: {end_res_num}"
-        # )
+
         with open(
             output_dir + "/" + chain_filename, "w", encoding="utf-8"
         ) as chain_file:

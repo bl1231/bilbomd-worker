@@ -59,6 +59,24 @@ localhost/bilbomd/bilbomd-perlmutter-worker  0.0.20                    4e3ef0f8d
 
 ## Version History
 
+- 1.14.9 (6/9/2025)
+  - Add BullMQ heartbeat functionality to the SANS pipeline.
+- 1.14.8 (6/6/2025)
+  - Updates to `pdb2crd.py` to properly patch protein chains with glycosylations present
+    on the CTER.
+  - Merge GA-SANS fix `#588`
+- 1.14.7 (6/5/2025)
+  - Updates to `pdb2crd.py` to properly patch phosphorylated SER, THR, and TYR residues
+    The previous `1.14.3` was not doing this properly.
+- 1.14.5 (6/5/2025)
+  - Reduce BullMQ lockDuration and adjust long-running steps to periodically update
+    BullMQ to keep the lock alive. This will hopefully help with job recovery when a
+    worker crashes and we need to restart services.
+- 1.14.4 (6/3/2025)
+  - Fix bug in `pdb2crd.py` with HETATM not getting replaced with ATOM
+- 1.14.3 (6/2/2025)
+  - Update dependencies
+  - Add support for phosphorylated Serine, Threonine, and Tyrosine
 - 1.14.2 (5/12/2025)
   - Fix bugs introduced by moving from `build` to `dist`
   - Add better `rg_min` calculation for SAXS datasets with "low" Rg values.
