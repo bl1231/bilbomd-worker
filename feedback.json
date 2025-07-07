@@ -1,0 +1,29 @@
+{
+    "mw_saxs": 55.575,
+    "mw_model": 46.14,
+    "mw_err": 0.2045,
+    "best_model_dat_file": "multi_state_model_3_1_1.dat",
+    "best_ensemble_pdb_file": "ensemble_size_1_model.pdb",
+    "overall_chi_square": 2.33,
+    "q_ranges": [
+        0.00819,
+        0.1,
+        0.2,
+        0.324
+    ],
+    "chi_squares_of_regions": [
+        4.45,
+        1.59,
+        1.36
+    ],
+    "residuals_of_regions": [
+        0.292,
+        -0.078,
+        -0.03
+    ],
+    "mw_feedback": "The difference between the model MW (46.14) and the SAXS MW (55.575) is large (20.4%), sequence or oligomerization state is likely incorrect.",
+    "overall_chi_square_feedback": "The overall chi-square of this fit is 2.33. Please examine your sequence or oligomerization state.",
+    "highest_chi_square_feedback": "The chi-square is highest (4.45) in the region where (0.01 < q < 0.1).",
+    "second_highest_chi_square_feedback": "The 2nd highest chi-square (1.59) is in the region where 0.1 < q < 0.2, but this is okay.",
+    "regional_chi_square_feedback": "Please revisit sequence and oligomerization state before examining flexibility."
+}
