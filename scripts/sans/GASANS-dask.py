@@ -729,7 +729,7 @@ class GAEnsembleOpt:
         """
         bestpars = gen_modelparams(self.ens_size, self.cbest_rchi2["fit_pars"])
         best_model = _residual_lmf(
-            bestpars, self.data[self.cbest_rchi2["ensemble"][0]].values.T
+            bestpars, self.data[self.cbest_rchi2["ensemble"][0]].values
         )
         return best_model
 
