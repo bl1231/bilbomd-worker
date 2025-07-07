@@ -59,6 +59,8 @@ localhost/bilbomd/bilbomd-perlmutter-worker  0.0.20                    4e3ef0f8d
 
 ## Version History
 
+- 1.14.10 (7/7/2025)
+  - Fix export of best model scattering profile for BilboMD SANS
 - 1.14.9 (6/9/2025)
   - Add BullMQ heartbeat functionality to the SANS pipeline.
 - 1.14.8 (6/6/2025)
