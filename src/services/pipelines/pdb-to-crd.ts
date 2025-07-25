@@ -266,13 +266,21 @@ const spawnPdb2CrdCharmm = (
   return Promise.all(promises)
 }
 
-const spawnAF2PAEInpFileMaker = (
+const spawnAF2PAEInpFileMaker = async (
   af2paeDir: string,
   paeFile: string,
   paePower: string,
   plddtCutoff: string
 ) => {
   logger.info(`spawnAF2PAEInpFileMaker af2paeDir ${af2paeDir}`)
+  const jobDir = af2paeDir
+  const logPath = path.join(jobDir, 'af2pae.log')
+  await fs.ensureFile(logPath)
+  await fs.appendFile(
+    logPath,
+    `=== AF2PAE Input File Generation Started at ${new Date().toISOString()} ===\n`
+  )
+
   const logFile = path.join(af2paeDir, 'af2pae.log')
   const errorFile = path.join(af2paeDir, 'af2pae_error.log')
   const logStream = fs.createWriteStream(logFile)
