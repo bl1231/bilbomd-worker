@@ -3,7 +3,7 @@ import { Job, IJob, IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
 import { logger } from '../../helpers/loggers.js'
 import fs from 'fs-extra'
 import path from 'path'
-import { spawn } from 'node:child_process'
+import { spawn, ChildProcess } from 'node:child_process'
 import { updateStepStatus } from '../functions/mongo-utils.js'
 
 const uploadFolder = process.env.DATA_VOL ?? '/bilbomd/uploads'
@@ -81,6 +81,28 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
     status = {
       status: 'Success',
       message: 'Convert PDB to CRD/PSF has completed.'
+    }
+    // If it's a PAE Jiffy job, do AF2PAE postprocessing
+    if (!foundJob) {
+      const jobDir = path.join(uploadFolder, MQJob.data.uuid)
+      const paeFile = path.join(jobDir, 'pae.json')
+
+      try {
+        await MQJob.log('start spawnAF2PAEInpFileMaker')
+        logger.info(`Spawning AF2PAE postprocessing for ${MQJob.data.uuid}`)
+        await spawnAF2PAEInpFileMaker(
+          jobDir,
+          paeFile,
+          MQJob.data.pae_power,
+          MQJob.data.plddt_cutoff
+        )
+        await MQJob.log('end spawnAF2PAEInpFileMaker')
+        logger.info(`AF2PAE postprocessing complete for ${MQJob.data.uuid}`)
+      } catch (error) {
+        logger.error(`AF2PAE postprocessing failed: ${error}`)
+        await MQJob.log(`AF2PAE postprocessing failed: ${error}`)
+        throw error // rethrow to let BullMQ handle retry/failure
+      }
     }
     if (foundJob) {
       await updateStepStatus(foundJob, 'pdb2crd', status)
@@ -242,6 +264,69 @@ const spawnPdb2CrdCharmm = (
   })
 
   return Promise.all(promises)
+}
+
+const spawnAF2PAEInpFileMaker = (
+  af2paeDir: string,
+  paeFile: string,
+  paePower: string,
+  plddtCutoff: string
+) => {
+  logger.info(`spawnAF2PAEInpFileMaker af2paeDir ${af2paeDir}`)
+  const logFile = path.join(af2paeDir, 'af2pae.log')
+  const errorFile = path.join(af2paeDir, 'af2pae_error.log')
+  const logStream = fs.createWriteStream(logFile)
+  const errorStream = fs.createWriteStream(errorFile)
+  const af2pae_script = '/app/scripts/pae_ratios.py'
+  const args = [
+    af2pae_script,
+    paeFile,
+    'bilbomd_pdb2crd.crd',
+    '--pae_power',
+    paePower,
+    '--plddt_cutoff',
+    plddtCutoff
+  ]
+
+  return new Promise((resolve, reject) => {
+    const af2pae: ChildProcess = spawn('python', args, { cwd: af2paeDir })
+    af2pae.stdout?.on('data', (data: Buffer) => {
+      const dataString = data.toString().trim()
+      logger.info(`spawnAF2PAEInpFileMaker stdout ${dataString}`)
+      logStream.write(dataString)
+    })
+    af2pae.stderr?.on('data', (data: Buffer) => {
+      logger.error(`spawnAF2PAEInpFileMaker stderr:  ${data.toString()}`)
+      console.log(data)
+      errorStream.write(data.toString())
+    })
+    af2pae.on('error', (error) => {
+      logger.error(`spawnAF2PAEInpFileMaker error ${error}`)
+      reject(error)
+    })
+    af2pae.on('exit', (code) => {
+      // Close streams explicitly once the process exits
+      const closeStreamsPromises = [
+        new Promise((resolveStream) => logStream.end(resolveStream)),
+        new Promise((resolveStream) => errorStream.end(resolveStream))
+      ]
+      Promise.all(closeStreamsPromises)
+        .then(() => {
+          // Only proceed once all streams are closed
+          if (code === 0) {
+            logger.info(`spawnAF2PAEInpFileMaker success with exit code: ${code}`)
+            resolve(code.toString())
+          } else {
+            logger.error(`spawnAF2PAEInpFileMaker error with exit code: ${code}`)
+            reject(new Error(`spawnAF2PAEInpFileMaker error with exit code: ${code}`))
+          }
+        })
+        .catch((streamError) => {
+          logger.error(`Error closing file streams: ${streamError}`)
+          reject(streamError)
+        })
+    })
+  })
 }
 
 export { processPdb2CrdJob, createPdb2CrdCharmmInpFiles, spawnPdb2CrdCharmm }
