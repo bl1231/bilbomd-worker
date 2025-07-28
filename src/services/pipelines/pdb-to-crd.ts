@@ -15,14 +15,12 @@ interface Pdb2CrdCharmmInputData {
 }
 
 const initializeJob = async (MQJob: BullMQJob) => {
-  logger.info('---------------------initializeJob---------------------')
   // Clear the BullMQ Job logs
   await MQJob.clearLogs()
   await MQJob.log('Init!')
 }
 
 const cleanupJob = async (MQJob: BullMQJob) => {
-  logger.info('----------------------cleanupJob-----------------------')
   await MQJob.log('Done!')
 }
 
@@ -35,7 +33,6 @@ const processPdb2CrdJob = async (MQJob: BullMQJob) => {
 
   try {
     await MQJob.updateProgress(1)
-
     logger.info(`UUID: ${MQJob.data.uuid}`)
     foundJob = await Job.findOne({ uuid: MQJob.data.uuid }).populate('user').exec()
 
@@ -152,12 +149,12 @@ const createPdb2CrdCharmmInpFiles = async (
 
     pdb2crd.stderr.on('data', (data: Buffer) => {
       const errorString = data.toString().trim()
-      logger.error('createCharmmInpFile stderr:', errorString)
+      logger.error(`createCharmmInpFile stderr: ${errorString}`)
       errorStream.write(errorString + '\n')
     })
 
     pdb2crd.on('error', (error) => {
-      logger.error('createCharmmInpFile error:', error)
+      logger.error(`createCharmmInpFile error: ${error}`)
       reject(error)
     })
 
@@ -174,7 +171,7 @@ const createPdb2CrdCharmmInpFiles = async (
             // Read the log file to extract the output filenames
             fs.readFile(logFile, 'utf8', (err, data) => {
               if (err) {
-                logger.error('Failed to read log file:', err)
+                logger.error(`Failed to read log file: ${err}`)
                 reject(new Error('Failed to read log file'))
                 return
               }
