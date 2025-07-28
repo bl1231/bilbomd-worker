@@ -273,14 +273,6 @@ const spawnAF2PAEInpFileMaker = async (
   plddtCutoff: string
 ) => {
   logger.info(`spawnAF2PAEInpFileMaker af2paeDir ${af2paeDir}`)
-  const jobDir = af2paeDir
-  const logPath = path.join(jobDir, 'af2pae.log')
-  await fs.ensureFile(logPath)
-  await fs.appendFile(
-    logPath,
-    `=== AF2PAE Input File Generation Started at ${new Date().toISOString()} ===\n`
-  )
-
   const logFile = path.join(af2paeDir, 'af2pae.log')
   const errorFile = path.join(af2paeDir, 'af2pae_error.log')
   const logStream = fs.createWriteStream(logFile)
@@ -296,6 +288,12 @@ const spawnAF2PAEInpFileMaker = async (
     plddtCutoff
   ]
 
+  await fs.ensureFile(logFile)
+  await fs.appendFile(
+    logFile,
+    `=== AF2PAE Input File Generation Started at ${new Date().toISOString()} ===\n`
+  )
+
   return new Promise((resolve, reject) => {
     const af2pae: ChildProcess = spawn('python', args, { cwd: af2paeDir })
     af2pae.stdout?.on('data', (data: Buffer) => {
@@ -305,7 +303,6 @@ const spawnAF2PAEInpFileMaker = async (
     })
     af2pae.stderr?.on('data', (data: Buffer) => {
       logger.error(`spawnAF2PAEInpFileMaker stderr:  ${data.toString()}`)
-      console.log(data)
       errorStream.write(data.toString())
     })
     af2pae.on('error', (error) => {
