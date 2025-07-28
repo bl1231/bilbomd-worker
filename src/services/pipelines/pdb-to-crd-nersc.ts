@@ -14,15 +14,13 @@ interface Pdb2CrdCharmmInputData {
 }
 
 const initializeJob = async (MQJob: BullMQJob) => {
-  logger.info('-----------------initializeJob--------------------')
   // Clear the BullMQ Job logs
   await MQJob.clearLogs()
   await MQJob.log('Init!')
 }
 
-const cleanupJob = async (MQjob: BullMQJob) => {
-  logger.info('------------------cleanupJob-------------------')
-  await MQjob.log('Done!')
+const cleanupJob = async (MQJob: BullMQJob) => {
+  await MQJob.log('Done!')
 }
 
 const processPdb2CrdJobNersc = async (MQJob: BullMQJob) => {
@@ -35,7 +33,6 @@ const processPdb2CrdJobNersc = async (MQJob: BullMQJob) => {
       logger.warn(
         `No MongoDB entry found for: ${MQJob.data.uuid}. Must be from PAE Jiffy.`
       )
-      // return // Consider if you want to continue or exit the function here
     } else {
       logger.info(`MongoDB entry for ${MQJob.data.type} Job found: ${foundJob.uuid}`)
     }
