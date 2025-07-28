@@ -59,6 +59,9 @@ localhost/bilbomd/bilbomd-perlmutter-worker  0.0.20                    4e3ef0f8d
 
 ## Version History
 
+- 1.15.1 (7/28/2025)
+  - Consolodate `pdb-to-crd.ts` and `pdb-to-crd-nersc.ts` functionality to support
+    new PAE Jiffy on NERSC/SPIN.
 - 1.15.0 (7/28/2025)
   - Move the Alphafold PAE to const.inp functionality to the worker code base.
 - 1.14.10 (7/7/2025)
