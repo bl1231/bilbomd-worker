@@ -59,6 +59,9 @@ localhost/bilbomd/bilbomd-perlmutter-worker  0.0.20                    4e3ef0f8d
 
 ## Version History
 
+- 1.15.2 (8/18/2025)
+  - Update NodeJS to v22.18.0
+  - Update dependencies
 - 1.15.1 (7/28/2025)
   - Consolodate `pdb-to-crd.ts` and `pdb-to-crd-nersc.ts` functionality to support
     new PAE Jiffy on NERSC/SPIN.
