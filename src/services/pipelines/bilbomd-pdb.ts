@@ -1,5 +1,5 @@
 import { Job as BullMQJob } from 'bullmq'
-import { BilboMdPDBJob } from '@bl1231/bilbomd-mongodb-schema'
+import { BilboMdPDBJob, IBilboMDPDBJob } from '@bl1231/bilbomd-mongodb-schema'
 import {
   runPdb2Crd,
   runMinimize,
@@ -7,6 +7,7 @@ import {
   runMolecularDynamics,
   runMultiFoxs
 } from '../functions/bilbomd-step-functions.js'
+import { runOmmMinimize } from '../functions/openmm-functions.js'
 import {
   extractPDBFilesFromDCD,
   remediatePDBFiles,
@@ -15,6 +16,12 @@ import {
 import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc.js'
 import { initializeJob, cleanupJob } from '../functions/job-utils.js'
 import { runSingleFoXS } from '../functions/foxs-analysis.js'
+
+type StepRunners = {
+  minimize: (MQjob: BullMQJob, job: IBilboMDPDBJob) => Promise<void>
+  heat: (MQjob: BullMQJob, job: IBilboMDPDBJob) => Promise<void>
+  md: (MQjob: BullMQJob, job: IBilboMDPDBJob) => Promise<void>
+}
 
 const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(1)
@@ -28,6 +35,22 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
   await MQjob.updateProgress(5)
   foundJob.progress = 5
   await foundJob.save()
+
+  const engine = foundJob.md_engine ?? 'CHARMM'
+  const runners: StepRunners =
+    engine === 'OpenMM'
+      ? {
+          minimize: runOmmMinimize,
+          heat: runHeat,
+          md: runMolecularDynamics
+        }
+      : {
+          minimize: runMinimize,
+          heat: runHeat,
+          md: runMolecularDynamics
+        }
+
+  await MQjob.log(`Using MD engine: ${engine}`)
 
   // Initialize
   await initializeJob(MQjob, foundJob)
@@ -45,7 +68,7 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
 
   // CHARMM minimization
   await MQjob.log('start minimize')
-  await runMinimize(MQjob, foundJob)
+  await runners.minimize(MQjob, foundJob)
   await MQjob.log('end minimize')
   await MQjob.updateProgress(25)
   foundJob.progress = 25
@@ -61,7 +84,7 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
 
   // CHARMM heating
   await MQjob.log('start heat')
-  await runHeat(MQjob, foundJob)
+  await runners.heat(MQjob, foundJob)
   await MQjob.log('end heat')
   await MQjob.updateProgress(40)
   foundJob.progress = 40
@@ -69,7 +92,7 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
 
   // CHARMM Molecular Dynamics
   await MQjob.log('start md')
-  await runMolecularDynamics(MQjob, foundJob)
+  await runners.md(MQjob, foundJob)
   await MQjob.log('end md')
   await MQjob.updateProgress(50)
   foundJob.progress = 50
