@@ -220,6 +220,74 @@ const prepareOpenMMConfigYamlForJob = async (DBjob: IBilboMDPDBJob): Promise<str
   return yamlPath
 }
 
+type OmmStepKey = 'minimize' | 'heat' | 'md'
+
+const runOmmStep = async (
+  MQjob: BullMQJob,
+  DBjob: IBilboMDPDBJob,
+  stepKey: OmmStepKey,
+  scriptRelPath: string,
+  opts?: {
+    cwd?: string
+    platform?: 'CUDA' | 'OpenCL' | 'CPU'
+    pluginDir?: string
+    pythonBin?: string
+    timeoutMs?: number
+  }
+): Promise<void> => {
+  const workDir = path.join(config.uploadDir, DBjob.uuid)
+  const stepName = `OpenMM ${stepKey}`
+
+  const configYamlPath = path.join(workDir, 'openmm_config.yaml')
+  if (!(await fs.pathExists(configYamlPath))) {
+    await prepareOpenMMConfigYamlForJob(DBjob)
+  }
+
+  try {
+    let status: IStepStatus = {
+      status: 'Running',
+      message: `${stepName} has started.`
+    }
+    await updateStepStatus(DBjob, stepKey, status)
+
+    const scriptPath = path.resolve(process.cwd(), scriptRelPath)
+    const env = {
+      ...(opts?.platform ? { OPENMM_PLATFORM: opts.platform } : {}),
+      ...(opts?.pluginDir ? { OPENMM_PLUGIN_DIR: opts.pluginDir } : {})
+    }
+
+    const result = await runPythonStep(scriptPath, configYamlPath, {
+      cwd: opts?.cwd,
+      pythonBin: opts?.pythonBin,
+      env,
+      timeoutMs: opts?.timeoutMs ?? 60 * 60 * 1000,
+      onStdoutLine: (line) => {
+        logger.info(`[${stepKey}][stdout] ${line}`)
+      },
+      onStderrLine: (line) => {
+        logger.error(`[${stepKey}][stderr] ${line}`)
+      }
+    })
+
+    if (result.code !== 0) {
+      throw new Error(
+        `${stepName} failed (exit ${result.code}${
+          result.signal ? `, signal ${result.signal}` : ''
+        })`
+      )
+    }
+
+    status = {
+      status: 'Success',
+      message: `${stepName} has completed.`
+    }
+    await updateStepStatus(DBjob, stepKey, status)
+  } catch (error: unknown) {
+    logger.error(`Error during ${stepName} for job ${DBjob.uuid}: ${error}`)
+    // Optional: centralized error handler if desired
+  }
+}
+
 const runOmmMinimize = async (
   MQjob: BullMQJob,
   DBjob: IBilboMDPDBJob,
@@ -231,60 +299,31 @@ const runOmmMinimize = async (
     timeoutMs?: number
   }
 ): Promise<void> => {
-  logger.info(`Starting OpenMM Minimization for job ${DBjob.uuid}`)
-  const workDir = path.join(config.uploadDir, DBjob.uuid)
-
-  const configYamlPath = path.join(workDir, 'openmm_config.yaml')
-  if (!(await fs.pathExists(configYamlPath))) {
-    await prepareOpenMMConfigYamlForJob(DBjob)
-  }
-
-  try {
-    let status: IStepStatus = {
-      status: 'Running',
-      message: 'OpenMM Minimization has started.'
-    }
-    await updateStepStatus(DBjob, 'minimize', status)
-    const stepName = 'OpenMM minimize'
-    const scriptPath = path.resolve(process.cwd(), 'scripts/openmm/minimize.py')
-    const env = {
-      ...(opts?.platform ? { OPENMM_PLATFORM: opts.platform } : {}),
-      ...(opts?.pluginDir ? { OPENMM_PLUGIN_DIR: opts.pluginDir } : {})
-    }
-    const result = await runPythonStep(scriptPath, configYamlPath, {
-      cwd: opts?.cwd,
-      pythonBin: opts?.pythonBin,
-      env,
-      timeoutMs: opts?.timeoutMs ?? 60 * 60 * 1000, // default 1h
-      onStdoutLine: (line) => {
-        logger.info(`[minimize][stdout] ${line}`)
-      },
-      onStderrLine: (line) => {
-        logger.error(`[minimize][stderr] ${line}`)
-      }
-    })
-
-    if (result.code !== 0) {
-      throw new Error(
-        `${stepName} failed (exit ${result.code}${
-          result.signal ? `, signal ${result.signal}` : ''
-        })`
-      )
-    }
-    status = {
-      status: 'Success',
-      message: 'OpenMM Minimization has completed.'
-    }
-    await updateStepStatus(DBjob, 'minimize', status)
-  } catch (error: unknown) {
-    logger.error(`Error during OpenMM Minimization for job ${DBjob.uuid}: ${error}`)
-    // await handleError(error, MQjob, DBjob, 'minimize')
-  }
+  return runOmmStep(MQjob, DBjob, 'minimize', 'scripts/openmm/minimize.py', opts)
 }
 
-export {
-  runOmmMinimize,
-  writeOpenMMConfigYaml,
-  buildOpenMMConfigForJob,
-  prepareOpenMMConfigYamlForJob
-}
+const runOmmHeat = (
+  MQjob: BullMQJob,
+  DBjob: IBilboMDPDBJob,
+  opts?: {
+    cwd?: string
+    platform?: 'CUDA' | 'OpenCL' | 'CPU'
+    pluginDir?: string
+    pythonBin?: string
+    timeoutMs?: number
+  }
+) => runOmmStep(MQjob, DBjob, 'heat', 'scripts/openmm/heat.py', opts)
+
+const runOmmMD = (
+  MQjob: BullMQJob,
+  DBjob: IBilboMDPDBJob,
+  opts?: {
+    cwd?: string
+    platform?: 'CUDA' | 'OpenCL' | 'CPU'
+    pluginDir?: string
+    pythonBin?: string
+    timeoutMs?: number
+  }
+) => runOmmStep(MQjob, DBjob, 'md', 'scripts/openmm/md.py', opts)
+
+export { prepareOpenMMConfigYamlForJob, runOmmMinimize, runOmmHeat, runOmmMD }

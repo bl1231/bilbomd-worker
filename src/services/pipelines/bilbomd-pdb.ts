@@ -7,7 +7,7 @@ import {
   runMolecularDynamics,
   runMultiFoxs
 } from '../functions/bilbomd-step-functions.js'
-import { runOmmMinimize } from '../functions/openmm-functions.js'
+import { runOmmMinimize, runOmmHeat, runOmmMD } from '../functions/openmm-functions.js'
 import {
   extractPDBFilesFromDCD,
   remediatePDBFiles,
@@ -16,7 +16,7 @@ import {
 import { prepareBilboMDResults } from '../functions/bilbomd-step-functions-nersc.js'
 import { initializeJob, cleanupJob } from '../functions/job-utils.js'
 import { runSingleFoXS } from '../functions/foxs-analysis.js'
-
+import { prepareOpenMMConfigYamlForJob } from '../functions/openmm-functions.js'
 type StepRunners = {
   minimize: (MQjob: BullMQJob, job: IBilboMDPDBJob) => Promise<void>
   heat: (MQjob: BullMQJob, job: IBilboMDPDBJob) => Promise<void>
@@ -41,8 +41,8 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
     engine === 'OpenMM'
       ? {
           minimize: runOmmMinimize,
-          heat: runHeat,
-          md: runMolecularDynamics
+          heat: runOmmHeat,
+          md: runOmmMD
         }
       : {
           minimize: runMinimize,
@@ -58,10 +58,17 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
   foundJob.progress = 10
   await foundJob.save()
 
-  // PDB to CRD/PSF for 'pdb' mode
-  await MQjob.log('start pdb2crd')
-  await runPdb2Crd(MQjob, foundJob)
-  await MQjob.log('end pdb2crd')
+  if (engine === 'CHARMM') {
+    // PDB to CRD/PSF for 'pdb' mode
+    await MQjob.log('start pdb2crd')
+    await runPdb2Crd(MQjob, foundJob)
+    await MQjob.log('end pdb2crd')
+  } else {
+    // Prepare OpenMM config YAML instead of pdb2crd
+    await MQjob.log('start openmm-config')
+    await prepareOpenMMConfigYamlForJob(foundJob)
+    await MQjob.log('end openmm-config')
+  }
   await MQjob.updateProgress(15)
   foundJob.progress = 15
   await foundJob.save()
