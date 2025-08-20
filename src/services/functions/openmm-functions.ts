@@ -1,0 +1,290 @@
+import { config } from '../../config/config.js'
+import path from 'path'
+import { Job as BullMQJob } from 'bullmq'
+import { IBilboMDPDBJob, IStepStatus } from '@bl1231/bilbomd-mongodb-schema'
+import { logger } from '../../helpers/loggers.js'
+import { updateStepStatus } from './mongo-utils.js'
+import fs from 'fs-extra'
+import YAML from 'yaml'
+import { runPythonStep } from '../../helpers/runPythonStep.js'
+
+const writeOpenMMConfigYaml = async (
+  dir: string,
+  cfg: OpenMMConfig | Record<string, unknown>,
+  filename = 'openmm_config.yaml'
+): Promise<string> => {
+  const filePath = path.join(dir, filename)
+
+  // Ensure the directory exists.
+  await fs.mkdir(dir, { recursive: true })
+
+  // Serialize with deterministic key order for diff-friendly output.
+  // Avoids line wrapping to keep paths intact.
+  const yamlText = YAML.stringify(cfg, {
+    sortMapEntries: true,
+    lineWidth: 0
+  })
+
+  // Write atomically: write to a temp file, then rename.
+  const tmpPath = `${filePath}.tmp`
+  await fs.writeFile(tmpPath, yamlText, 'utf8')
+  await fs.rename(tmpPath, filePath)
+
+  return filePath
+}
+
+// Parse a CHARMM-style const.inp to derive OpenMM constraints
+// Supports lines like:
+//   define fixed1 sele ( resid 214:672 .and. segid PROA ) end
+//   cons fix sele fixed1 .or. fixed2 end
+//   define rigid1 sele ( resid 1:188 .and. segid PROA ) end
+//   shape desc dock1 rigid sele rigid1 end
+// Mapping rule: SEGID like PROA -> chain_id "A" (last character)
+const extractConstraintsFromConstInp = async (
+  constInpPath: string
+): Promise<OpenMMConfig['constraints'] | undefined> => {
+  try {
+    const raw = await fs.readFile(constInpPath, 'utf8')
+    const lines = raw.split(/\r?\n/)
+
+    // Collect name -> {start, stop, segid}
+    const defines = new Map<string, { start: number; stop: number; segid: string }>()
+
+    // Regexes (case-insensitive, tolerant of whitespace)
+    const defineRe =
+      /\bdefine\s+(\w+)\s+sele\s*\(\s*resid\s+(\d+)\s*:\s*(\d+)\s*\.and\.\s*segid\s+([A-Za-z0-9_]+)\s*\)\s*end/i
+    const consFixStartRe = /\bcons\s+fix\s+sele\b/i
+    const shapeRigidStartRe = /\bshape\s+desc\b.*\brigid\s+sele\b/i
+
+    // First pass: capture all define blocks
+    for (const line of lines) {
+      const m = line.match(defineRe)
+      if (m) {
+        const [, name, s, e, segid] = m
+        defines.set(name.toLowerCase(), {
+          start: parseInt(s, 10),
+          stop: parseInt(e, 10),
+          segid
+        })
+      }
+    }
+
+    // Second pass: capture cons fix selection names ("name1 .or. name2 ... end")
+    const fixedNames: string[] = []
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      if (consFixStartRe.test(line)) {
+        // Gather tokens from this line until we hit 'end'
+        let buf = line
+        let j = i + 1
+        while (!/\bend\b/i.test(buf) && j < lines.length) {
+          buf += ' ' + lines[j]
+          j++
+        }
+        // Extract names separated by ".or." or whitespace after 'sele'
+        // Example: cons fix sele fixed1 .or. fixed2 end
+        const afterSele = buf.split(/\bsele\b/i)[1] || ''
+        const nameTokens = afterSele
+          .replace(/\bend\b/i, '')
+          .split(/\s*\.or\.\s*|\s+/i)
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0)
+        for (const token of nameTokens) {
+          // keep only tokens that correspond to defines
+          if (defines.has(token.toLowerCase())) fixedNames.push(token.toLowerCase())
+        }
+        i = j - 1
+      }
+    }
+
+    // Third pass: capture rigid selections referenced by shape desc ... rigid sele <name1> [.or. <name2> ...] end
+    const rigidNames: string[] = []
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      if (shapeRigidStartRe.test(line)) {
+        // Gather tokens from this line until we hit 'end'
+        let buf = line
+        let j = i + 1
+        while (!/\bend\b/i.test(buf) && j < lines.length) {
+          buf += ' ' + lines[j]
+          j++
+        }
+        // Extract names after 'rigid sele', possibly separated by '.or.'
+        const afterSele = buf.split(/\brigid\s+sele\b/i)[1] || ''
+        const nameTokens = afterSele
+          .replace(/\bend\b/i, '')
+          .split(/\s*\.or\.\s*|\s+/i)
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0)
+        for (const token of nameTokens) {
+          if (defines.has(token.toLowerCase())) rigidNames.push(token.toLowerCase())
+        }
+        i = j - 1
+      }
+    }
+
+    const fixed_bodies = fixedNames.map((nm, idx) => {
+      const def = defines.get(nm)!
+      const chain_id = def.segid.slice(-1) // PROA -> A
+      return {
+        name: `FixedBody${idx + 1}`,
+        chain_id,
+        residues: { start: def.start, stop: def.stop }
+      }
+    })
+
+    const rigid_bodies = rigidNames.map((nm, idx) => {
+      const def = defines.get(nm)!
+      const chain_id = def.segid.slice(-1)
+      return {
+        name: `RigidBody${idx + 1}`,
+        chain_id,
+        residues: { start: def.start, stop: def.stop }
+      }
+    })
+
+    if (fixed_bodies.length === 0 && rigid_bodies.length === 0) return undefined
+    return { fixed_bodies, rigid_bodies }
+  } catch (error) {
+    // Missing file or parse error — be permissive and return undefined
+    logger.warn(`Error extracting constraints from ${constInpPath}: ${error}`)
+    return undefined
+  }
+}
+
+const buildOpenMMConfigForJob = (
+  DBjob: IBilboMDPDBJob,
+  workDir: string
+): OpenMMConfig => ({
+  input: {
+    dir: workDir,
+    pdb_file: DBjob.pdb_file,
+    forcefield: ['charmm36.xml', 'implicit/hct.xml']
+  },
+  output: {
+    output_dir: workDir,
+    min_dir: 'minimize',
+    heat_dir: 'heat',
+    md_dir: 'md'
+  },
+  steps: {
+    minimization: {
+      parameters: {
+        max_iterations: 1000
+      },
+      output_pdb: 'minimized.pdb'
+    },
+    heating: {
+      parameters: {
+        first_temp: 300,
+        final_temp: 600,
+        total_steps: 10000,
+        timestep: 0.001
+      },
+      output_pdb: 'heated.pdb',
+      output_restart: 'heated.xml'
+    },
+    md: {
+      parameters: {
+        temperature: 600,
+        friction: 0.1,
+        nsteps: 100000,
+        timestep: 0.001
+      },
+      rgyr: {
+        rgs: Array.from({ length: 6 }, (_, i) =>
+          Math.round(DBjob.rg_min + (i * (DBjob.rg_max - DBjob.rg_min)) / 5)
+        ),
+        report_interval: 1000,
+        filename: 'rgyr.csv'
+      },
+      output_pdb: 'md.pdb',
+      output_restart: 'md.xml',
+      output_dcd: 'md.dcd'
+    }
+  }
+})
+
+// Prepare (build + write) a single YAML config for all downstream OpenMM steps.
+// Returns the absolute path to the written config.
+const prepareOpenMMConfigYamlForJob = async (DBjob: IBilboMDPDBJob): Promise<string> => {
+  const workDir = path.join(config.uploadDir, DBjob.uuid)
+  const cfg = buildOpenMMConfigForJob(DBjob, workDir)
+  const constInpPath = path.join(workDir, DBjob.const_inp_file)
+  if (await fs.pathExists(constInpPath)) {
+    const constraints = await extractConstraintsFromConstInp(constInpPath)
+    if (constraints) cfg.constraints = constraints
+  }
+  const yamlPath = await writeOpenMMConfigYaml(workDir, cfg)
+  logger.info(`OpenMM config YAML written: ${yamlPath}`)
+  return yamlPath
+}
+
+const runOmmMinimize = async (
+  MQjob: BullMQJob,
+  DBjob: IBilboMDPDBJob,
+  opts?: {
+    cwd?: string
+    platform?: 'CUDA' | 'OpenCL' | 'CPU'
+    pluginDir?: string
+    pythonBin?: string
+    timeoutMs?: number
+  }
+): Promise<void> => {
+  logger.info(`Starting OpenMM Minimization for job ${DBjob.uuid}`)
+  const workDir = path.join(config.uploadDir, DBjob.uuid)
+
+  const configYamlPath = path.join(workDir, 'openmm_config.yaml')
+  if (!(await fs.pathExists(configYamlPath))) {
+    await prepareOpenMMConfigYamlForJob(DBjob)
+  }
+
+  try {
+    let status: IStepStatus = {
+      status: 'Running',
+      message: 'OpenMM Minimization has started.'
+    }
+    await updateStepStatus(DBjob, 'minimize', status)
+    const stepName = 'OpenMM minimize'
+    const scriptPath = path.resolve(process.cwd(), 'scripts/openmm/minimize.py')
+    const env = {
+      ...(opts?.platform ? { OPENMM_PLATFORM: opts.platform } : {}),
+      ...(opts?.pluginDir ? { OPENMM_PLUGIN_DIR: opts.pluginDir } : {})
+    }
+    const result = await runPythonStep(scriptPath, configYamlPath, {
+      cwd: opts?.cwd,
+      pythonBin: opts?.pythonBin,
+      env,
+      timeoutMs: opts?.timeoutMs ?? 60 * 60 * 1000, // default 1h
+      onStdoutLine: (line) => {
+        logger.info(`[minimize][stdout] ${line}`)
+      },
+      onStderrLine: (line) => {
+        logger.error(`[minimize][stderr] ${line}`)
+      }
+    })
+
+    if (result.code !== 0) {
+      throw new Error(
+        `${stepName} failed (exit ${result.code}${
+          result.signal ? `, signal ${result.signal}` : ''
+        })`
+      )
+    }
+    status = {
+      status: 'Success',
+      message: 'OpenMM Minimization has completed.'
+    }
+    await updateStepStatus(DBjob, 'minimize', status)
+  } catch (error: unknown) {
+    logger.error(`Error during OpenMM Minimization for job ${DBjob.uuid}: ${error}`)
+    // await handleError(error, MQjob, DBjob, 'minimize')
+  }
+}
+
+export {
+  runOmmMinimize,
+  writeOpenMMConfigYaml,
+  buildOpenMMConfigForJob,
+  prepareOpenMMConfigYamlForJob
+}
