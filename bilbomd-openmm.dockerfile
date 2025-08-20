@@ -49,6 +49,12 @@ RUN git clone https://github.com/openmm/openmm.git && \
     make PythonInstall && \
     ldconfig
 
+# --- Build & install PDBFixer ---
+WORKDIR /tmp
+RUN git clone https://github.com/openmm/pdbfixer.git && \
+    cd pdbfixer && \
+    python setup.py install
+
 # --- Runtime stage: slim image with CUDA runtime + OpenMM + conda env ---
 FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
 
@@ -58,6 +64,7 @@ ARG OPENMM_PREFIX=/opt/openmm-${OPENMM_BRANCH}
 # Copy the conda env and the compiled OpenMM install from the builder
 COPY --from=builder /miniforge3 /miniforge3
 COPY --from=builder ${OPENMM_PREFIX} ${OPENMM_PREFIX}
+RUN /miniforge3/envs/openmm/bin/python -m pip install --no-deps --no-build-isolation pdbfixer
 
 # Runtime environment
 ENV PATH=/miniforge3/envs/openmm/bin:/miniforge3/bin:${PATH}
