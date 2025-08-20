@@ -424,7 +424,15 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   })
 }
 
-const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
+const runMinimize = async (
+  MQjob: BullMQJob,
+  DBjob:
+    | IBilboMDCRDJob
+    | IBilboMDPDBJob
+    | IBilboMDAutoJob
+    | IBilboMDAlphaFoldJob
+    | IBilboMDSANSJob
+): Promise<void> => {
   const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const params: CharmmParams = {
     out_dir: outputDir,
@@ -453,7 +461,15 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<voi
   }
 }
 
-const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> => {
+const runHeat = async (
+  MQjob: BullMQJob,
+  DBjob:
+    | IBilboMDCRDJob
+    | IBilboMDPDBJob
+    | IBilboMDAutoJob
+    | IBilboMDAlphaFoldJob
+    | IBilboMDSANSJob
+): Promise<void> => {
   const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const params: CharmmHeatParams = {
     out_dir: outputDir,
@@ -485,7 +501,12 @@ const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob): Promise<void> =
 
 const runMolecularDynamics = async (
   MQjob: BullMQJob,
-  DBjob: IBilboMDCRDJob
+  DBjob:
+    | IBilboMDCRDJob
+    | IBilboMDPDBJob
+    | IBilboMDAutoJob
+    | IBilboMDAlphaFoldJob
+    | IBilboMDSANSJob
 ): Promise<void> => {
   const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const params: CharmmMDParams = {
@@ -532,7 +553,7 @@ const runMolecularDynamics = async (
   }
 }
 
-const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob): Promise<void> => {
+const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
   const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const multifoxsParams: MultiFoxsParams = {
     out_dir: outputDir,
