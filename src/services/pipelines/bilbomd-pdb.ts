@@ -73,7 +73,7 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
   foundJob.progress = 15
   await foundJob.save()
 
-  // CHARMM minimization
+  // Minimize
   await MQjob.log('start minimize')
   await runners.minimize(MQjob, foundJob)
   await MQjob.log('end minimize')
@@ -89,7 +89,7 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
   foundJob.progress = 30
   await foundJob.save()
 
-  // CHARMM heating
+  // Heat
   await MQjob.log('start heat')
   await runners.heat(MQjob, foundJob)
   await MQjob.log('end heat')
@@ -97,7 +97,7 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
   foundJob.progress = 40
   await foundJob.save()
 
-  // CHARMM Molecular Dynamics
+  // Molecular Dynamics
   await MQjob.log('start md')
   await runners.md(MQjob, foundJob)
   await MQjob.log('end md')
