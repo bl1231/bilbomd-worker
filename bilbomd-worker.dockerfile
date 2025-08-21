@@ -131,6 +131,13 @@ RUN mkdir /root/.local && chmod +x ATSAS-4.0.1-1-Linux-Ubuntu-22.run && \
 
 # -----------------------------------------------------------------------------
 # Install OpenMM
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    git build-essential cmake gfortran make \
+    wget ca-certificates bzip2 tar \
+    swig && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN conda update -y -n base -c defaults conda && \
     conda create -y -n openmm python=3.12 numpy doxygen pip cython && \
     conda clean -afy
