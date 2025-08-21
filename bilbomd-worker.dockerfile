@@ -1,6 +1,7 @@
 # -----------------------------------------------------------------------------
 # Setup the base image
-FROM ubuntu:22.04 AS install-dependencies
+# FROM ubuntu:22.04 AS install-dependencies
+FROM nvidia/cuda:12.2.2-devel-ubuntu22.04 AS install-dependencies
 
 RUN apt-get update && \
     apt-get install -y cmake gcc gfortran g++ wget libgl1-mesa-dev \
@@ -49,19 +50,6 @@ RUN wget "https://github.com/conda-forge/miniforge/releases/latest/download/Mini
 # Add Conda to PATH
 ENV PATH="/miniforge3/bin/:${PATH}"
 
-# Update conda
-# RUN conda update -y -n base -c defaults conda && \
-#     conda install -y cython swig doxygen && \
-#     conda clean -afy
-
-# Copy environment.yml and install dependencies
-# COPY environment.yml /tmp/environment.yml
-# RUN conda env update -f /tmp/environment.yml && \
-#     rm /tmp/environment.yml && \
-#     conda clean -afy
-
-# I was having trouble installing all of these dependencies in one go so
-# lets try this for now.
 RUN conda install --yes --name base -c conda-forge numpy scipy matplotlib \
     pillow numba h5py cython reportlab \
     dbus-python fabio pyfai hdf5plugin \
@@ -105,7 +93,8 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install ga-sans dependencies
-RUN conda install --yes --name base -c conda-forge pandas dask
+RUN conda install --yes --name base -c conda-forge pandas dask && \
+    conda clean -afy
 
 # pip install lmfit
 RUN pip install lmfit
@@ -139,6 +128,39 @@ RUN mkdir /root/.local && chmod +x ATSAS-4.0.1-1-Linux-Ubuntu-22.run && \
     AutomaticRuntimeDependencyResolution=Yes --root /usr/local/ATSAS-4.0.1 --file-query KeyFilePath=/tmp/atsas.lic \
     --confirm-command install && \
     rm ATSAS-4.0.1-1-Linux-Ubuntu-22.run
+
+# -----------------------------------------------------------------------------
+# Install OpenMM
+RUN conda update -y -n base -c defaults conda && \
+    conda create -y -n openmm python=3.12 numpy doxygen pip cython && \
+    conda clean -afy
+
+# Ensure the env is first on PATH for CMake to find the intended Python
+ENV PATH=/miniforge3/envs/openmm/bin:/miniforge3/bin:${PATH}
+
+# --- Build & install OpenMM ---
+WORKDIR /tmp
+RUN git clone https://github.com/openmm/openmm.git && \
+    cd openmm && \
+    mkdir build && cd build && \
+    cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=${OPENMM_PREFIX} \
+    -DOPENMM_BUILD_PYTHON_WRAPPERS=ON \
+    -DPYTHON_EXECUTABLE=/miniforge3/envs/openmm/bin/python \
+    -DSWIG_EXECUTABLE=/usr/bin/swig \
+    -DOPENMM_BUILD_CUDA_LIB=ON \
+    -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda && \
+    make -j"$(nproc)" && \
+    make install && \
+    make PythonInstall && \
+    ldconfig
+
+# --- Build & install PDBFixer ---
+WORKDIR /tmp
+RUN git clone https://github.com/openmm/pdbfixer.git && \
+    cd pdbfixer && \
+    python setup.py install
 
 # -----------------------------------------------------------------------------
 # Install bilbomd-worker app
