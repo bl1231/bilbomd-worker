@@ -105,19 +105,20 @@ RUN wget https://bl1231.als.lbl.gov/pickup/atsas/ATSAS-4.0.1-1-Linux-Ubuntu-22.r
 # -----------------------------------------------------------------------------
 # Build OpenMM from source and install
 FROM install-atsas AS openmm-build
-ARG OPENMM_BRANCH=main
+ARG OPENMM_BRANCH=master
 ARG OPENMM_PREFIX=/opt/openmm-${OPENMM_BRANCH}
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     git build-essential cmake gfortran make wget ca-certificates bzip2 tar swig && \
     rm -rf /var/lib/apt/lists/*
 RUN conda update -y -n base -c defaults conda && \
-    conda create -y -n openmm python=3.12 numpy doxygen pip cython && \
+    conda create -y -n openmm python=3.12 numpy doxygen pip cython pyyaml && \
     conda clean -afy
 ENV PATH=/miniforge3/envs/openmm/bin:/miniforge3/bin:${PATH}
 WORKDIR /tmp
 RUN git clone https://github.com/openmm/openmm.git && \
     cd openmm && \
+    git checkout ${OPENMM_BRANCH} && \
     mkdir build && cd build && \
     cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
@@ -195,7 +196,7 @@ ARG USER_ID
 ARG GROUP_ID
 ARG BILBOMD_WORKER_GIT_HASH
 ARG BILBOMD_WORKER_VERSION
-ARG OPENMM_BRANCH=main
+ARG OPENMM_BRANCH=master
 ARG OPENMM_PREFIX=/opt/openmm-${OPENMM_BRANCH}
 
 # Minimal runtime libs (no compilers). Add others only if required at runtime.
@@ -204,6 +205,12 @@ RUN apt-get update && \
     ca-certificates curl software-properties-common \
     libgfortran5 libstdc++6 libxml2 libtiff5 liblzma5 libicu70 libharfbuzz0b \
     parallel && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Node.js runtime so both `node` and `npm` are available in the final image
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 
 # IMP (FoXS) runtime via apt (no dev headers)
@@ -245,7 +252,7 @@ COPY --from=node-prod-deps /app/node_modules ./node_modules
 COPY --from=node-prod-deps /app/package*.json ./
 
 # ---- Runtime environment ----
-ENV PATH="/opt/envs/openmm/bin:/opt/envs/base/bin:${PATH}"
+# ENV PATH="/opt/envs/openmm/bin:/opt/envs/base/bin:${PATH}"
 ENV OPENMM_HOME="${OPENMM_PREFIX}"
 ENV OPENMM_DIR="${OPENMM_PREFIX}"
 ENV OPENMM_INCLUDE_DIR="${OPENMM_PREFIX}/include"
