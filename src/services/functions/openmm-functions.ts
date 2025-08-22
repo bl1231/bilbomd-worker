@@ -195,6 +195,7 @@ const buildOpenMMConfigForJob = (
         rgs: Array.from({ length: 6 }, (_, i) =>
           Math.round(DBjob.rg_min + (i * (DBjob.rg_max - DBjob.rg_min)) / 5)
         ),
+        k_rg: 4,
         report_interval: 1000,
         filename: 'rgyr.csv'
       },
@@ -237,7 +238,7 @@ const runOmmStep = async (
 ): Promise<void> => {
   const workDir = path.join(config.uploadDir, DBjob.uuid)
   const stepName = `OpenMM ${stepKey}`
-
+  logger.info(`Starting ${stepName} for job ${DBjob.uuid}`)
   const configYamlPath = path.join(workDir, 'openmm_config.yaml')
   if (!(await fs.pathExists(configYamlPath))) {
     await prepareOpenMMConfigYamlForJob(DBjob)

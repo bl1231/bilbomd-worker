@@ -495,7 +495,9 @@ const runGASANS = async (MQjob: BullMQJob, DBjob: IBilboMDSANSJob): Promise<void
     }
 
     // Spawn the GASANS process
-    const gasansProcess = spawn('python', gasansOpts, { cwd: workingDir })
+    const gasansProcess = spawn('/opt/envs/base/bin/python', gasansOpts, {
+      cwd: workingDir
+    })
 
     // Open write streams for stdout and stderr logs
     const stdoutStream = fs.createWriteStream(stdoutLog, { flags: 'a' })

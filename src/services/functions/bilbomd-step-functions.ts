@@ -243,7 +243,7 @@ const spawnPaeToConst = async (params: PaeParams): Promise<string> => {
   const opts = { cwd: params.out_dir }
 
   return new Promise((resolve, reject) => {
-    const runPaeToConst: ChildProcess = spawn('python', args, opts)
+    const runPaeToConst: ChildProcess = spawn('/opt/envs/base/bin/python', args, opts)
     runPaeToConst.stdout?.on('data', (data) => {
       logger.info(`runPaeToConst stdout:  ${data.toString()}`)
       logStream.write(data.toString())
@@ -365,7 +365,7 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   await updateStepStatus(DBjob, 'autorg', status)
 
   return new Promise<void>((resolve, reject) => {
-    const autoRg = spawn('python', args, { cwd: outputDir })
+    const autoRg = spawn('/opt/envs/base/bin/python', args, { cwd: outputDir })
 
     autoRg.stdout?.on('data', (data) => {
       logStream.write(data.toString())
@@ -796,7 +796,7 @@ const spawnRgyrDmaxScript = async (DBjob: IJob): Promise<void> => {
   const opts = { cwd: jobDir }
 
   return new Promise((resolve, reject) => {
-    const runRgyrDmaxScript: ChildProcess = spawn('python', args, opts)
+    const runRgyrDmaxScript: ChildProcess = spawn('/opt/envs/base/bin/python', args, opts)
 
     runRgyrDmaxScript.stdout?.on('data', (data) => {
       logger.info(`Rgyr Dmax script stdout: ${data.toString()}`)
@@ -842,7 +842,7 @@ const spawnFeedbackScript = async (DBjob: IJob): Promise<void> => {
   const opts = { cwd: resultsDir }
 
   return new Promise((resolve, reject) => {
-    const runFeedbackScript: ChildProcess = spawn('python', args, opts)
+    const runFeedbackScript: ChildProcess = spawn('/opt/envs/base/bin/python', args, opts)
 
     runFeedbackScript.stdout?.on('data', (data) => {
       logger.info(`Feedback script stdout: ${data.toString()}`)

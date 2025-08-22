@@ -65,6 +65,8 @@ interface MDParameters {
 interface RgyrOptions {
   /** Radius-of-gyration targets/centers to explore */
   rgs: number[]
+  /** Force constant for Rg restraint (kJ/mol/nm^2) */
+  k_rg: number
   /** How often to report (in steps) */
   report_interval: number
   /** CSV filename for Rg reporting */

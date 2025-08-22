@@ -114,12 +114,14 @@ const processBilboMDPDBJob = async (MQjob: BullMQJob) => {
   await foundJob.save()
 
   // Remediate PDB files
-  await MQjob.log('start remediate')
-  await remediatePDBFiles(foundJob)
-  await MQjob.log('end remediate')
-  await MQjob.updateProgress(70)
-  foundJob.progress = 70
-  await foundJob.save()
+  if (engine === 'CHARMM') {
+    await MQjob.log('start remediate')
+    await remediatePDBFiles(foundJob)
+    await MQjob.log('end remediate')
+    await MQjob.updateProgress(70)
+    foundJob.progress = 70
+    await foundJob.save()
+  }
 
   // Calculate FoXS profiles
   await MQjob.log('start foxs')
