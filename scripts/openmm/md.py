@@ -93,6 +93,7 @@ rgyr_report = config["steps"]["md"]["rgyr"].get("filename", "rg_report.csv")
 
 timestep = config["steps"]["md"]["parameters"]["timestep"]
 nsteps = config["steps"]["md"]["parameters"]["nsteps"]
+pdb_report_interval = config["steps"]["md"].get("write_single_pdb_every", 100)
 
 # atom_indices = [a.index for a in modeller.topology.atoms() if a.name == "CA"]
 
@@ -144,9 +145,10 @@ simulation.reporters.append(
 dcd_file_path = os.path.join(rg_md_dir, output_dcd_file_name)
 rgyr_file_path = os.path.join(rg_md_dir, rgyr_report)
 simulation.reporters.append(DCDReporter(dcd_file_path, report_interval))
-# Write one PDB file every 10 steps: <base>_<step>.pdb
 base_name = os.path.splitext(output_pdb_file_name)[0]
-simulation.reporters.append(PDBFrameWriter(rg_md_dir, base_name, reportInterval=100))
+simulation.reporters.append(
+    PDBFrameWriter(rg_md_dir, base_name, reportInterval=pdb_report_interval)
+)
 simulation.step(nsteps)
 
 with open(
