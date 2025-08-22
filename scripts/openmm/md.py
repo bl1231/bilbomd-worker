@@ -14,13 +14,11 @@ from openmm.app import (
     StateDataReporter,
     DCDReporter,
     CutoffNonPeriodic,
-    HBonds,
 )
 from openmm import VerletIntegrator, XmlSerializer, RGForce, CustomCVForce
 from utils.rigid_body import get_rigid_bodies, create_rigid_bodies
 from utils.fixed_bodies import apply_fixed_body_constraints
-
-# from utils.rgyr import RadiusOfGyrationCVForce, RadiusOfGyrationReporter
+from utils.pdb_writer import PDBFrameWriter
 
 if len(sys.argv) != 2:
     print("Usage: python md.py <config.yaml>")
@@ -96,79 +94,70 @@ rgyr_report = config["steps"]["md"]["rgyr"].get("filename", "rg_report.csv")
 timestep = config["steps"]["md"]["parameters"]["timestep"]
 nsteps = config["steps"]["md"]["parameters"]["nsteps"]
 
-atom_indices = [a.index for a in modeller.topology.atoms() if a.name == "CA"]
+# atom_indices = [a.index for a in modeller.topology.atoms() if a.name == "CA"]
 
 # for a in modeller.topology.atoms():
 #     if a.name == 'CA':
 #         print(f"Atom index: {a.index}, name: {a.name}, residue: {a.residue.name} {a.residue.index}, chain: {a.residue.chain.id}")
 
-for rg in rgs:
-    print(f"\n🔁 Running MD with Rg target: {rg} Å")
-    # system_copy = deepcopy(system)
-    rg_force = RGForce(
-        atom_indices,
+rg = rgs[0]
+print(f"\n🔁 Running MD with Rg target: {rg} Å")
+rg_force = RGForce()
+k_rg = 20.0 * 418.4
+rg0 = rg * 0.1
+cv = CustomCVForce("0.5 * k * (rg - rg0)^2")
+cv.addCollectiveVariable("rg", rg_force)
+cv.addGlobalParameter("k", k_rg)
+cv.addGlobalParameter("rg0", rg0)
+
+system.addForce(cv)
+
+# for i, force in enumerate(system_copy.getForces()):
+#     print(f"Force {i}: {force.__class__.__name__}, group {force.getForceGroup()}")
+
+integrator = VerletIntegrator(timestep)
+
+with open(os.path.join(heat_dir, heated_restart_file_name), encoding="utf-8") as f:
+    state = XmlSerializer.deserialize(f.read())
+
+simulation = Simulation(modeller.topology, system, integrator)
+simulation.context.setState(state)
+
+platform = simulation.context.getPlatform().getName()
+print(f"Initialized on platform: {platform}")
+
+rg_md_dir = os.path.join(md_dir, f"rg_{rg}")
+os.makedirs(rg_md_dir, exist_ok=True)
+
+simulation.reporters = []
+simulation.reporters.append(
+    StateDataReporter(
+        sys.stdout,
+        report_interval,
+        step=True,
+        temperature=True,
+        potentialEnergy=True,
+        totalEnergy=True,
+        speed=True,
     )
-    k_rg = (
-        20.0 * 418.4
-    )  # convert kcal/mol/A^2 (charmm units) to kJ/mol/nm^2 (omm units),
-    rg0 = rg * 0.1  # convert A (charmm) to nm (omm),
-    cv = CustomCVForce("0.5 * k * (rg - rg0)^2")
-    cv.addCollectiveVariable("rg", rg_force)
-    cv.addGlobalParameter("k", k_rg)
-    cv.addGlobalParameter("rg0", rg0)
+)
+dcd_file_path = os.path.join(rg_md_dir, output_dcd_file_name)
+rgyr_file_path = os.path.join(rg_md_dir, rgyr_report)
+simulation.reporters.append(DCDReporter(dcd_file_path, report_interval))
+# Write one PDB file every 10 steps: <base>_<step>.pdb
+base_name = os.path.splitext(output_pdb_file_name)[0]
+simulation.reporters.append(PDBFrameWriter(rg_md_dir, base_name, reportInterval=100))
+simulation.step(nsteps)
 
-    system.addForce(rg_force)
+with open(
+    os.path.join(rg_md_dir, output_restart_file_name), "w", encoding="utf-8"
+) as f:
+    final_state = simulation.context.getState(getPositions=True, getForces=True)
+    f.write(XmlSerializer.serialize(final_state))
 
-    # for i, force in enumerate(system_copy.getForces()):
-    #     print(f"Force {i}: {force.__class__.__name__}, group {force.getForceGroup()}")
+with open(
+    os.path.join(rg_md_dir, output_pdb_file_name), "w", encoding="utf-8"
+) as out_pdb:
+    PDBFile.writeFile(simulation.topology, final_state.getPositions(), out_pdb)
 
-    integrator = VerletIntegrator(timestep)
-
-    with open(os.path.join(heat_dir, heated_restart_file_name), encoding="utf-8") as f:
-        state = XmlSerializer.deserialize(f.read())
-
-    simulation = Simulation(modeller.topology, system, integrator)
-    simulation.context.setState(state)
-
-    platform = simulation.context.getPlatform().getName()
-    print(f"Initialized on platform: {platform}")
-
-    rg_md_dir = os.path.join(md_dir, f"rg_{rg}")
-    os.makedirs(rg_md_dir, exist_ok=True)
-
-    simulation.reporters = []
-    simulation.reporters.append(
-        StateDataReporter(
-            sys.stdout,
-            report_interval,
-            step=True,
-            temperature=True,
-            potentialEnergy=True,
-            totalEnergy=True,
-            speed=True,
-        )
-    )
-    dcd_file_path = os.path.join(rg_md_dir, output_dcd_file_name)
-    rgyr_file_path = os.path.join(rg_md_dir, rgyr_report)
-    simulation.reporters.append(DCDReporter(dcd_file_path, report_interval))
-    simulation.reporters.append(
-        RadiusOfGyrationReporter(
-            atom_indices, system_copy, rgyr_file_path, reportInterval=report_interval
-        )
-    )
-    # for i in atom_indices:
-    #     print(f"Atom {i}: mass = {system.getParticleMass(i)}, virtual = {system.isVirtualSite(i) if hasattr(system, 'isVirtualSite') else 'n/a'}")
-    simulation.step(nsteps)
-
-    with open(
-        os.path.join(rg_md_dir, output_restart_file_name), "w", encoding="utf-8"
-    ) as f:
-        final_state = simulation.context.getState(getPositions=True, getForces=True)
-        f.write(XmlSerializer.serialize(final_state))
-
-    with open(
-        os.path.join(rg_md_dir, output_pdb_file_name), "w", encoding="utf-8"
-    ) as out_pdb:
-        PDBFile.writeFile(simulation.topology, final_state.getPositions(), out_pdb)
-
-    print(f"✅ Completed MD with Rg {rg}. Results in {rg_md_dir}")
+print(f"✅ Completed MD with Rg {rg}. Results in {rg_md_dir}")
