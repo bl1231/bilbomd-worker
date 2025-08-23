@@ -188,21 +188,21 @@ const buildOpenMMConfigForJob = (
       parameters: {
         temperature: 600,
         friction: 0.1,
-        nsteps: 100000,
+        nsteps: 10000,
         timestep: 0.001
       },
       rgyr: {
         rgs: Array.from({ length: 6 }, (_, i) =>
           Math.round(DBjob.rg_min + (i * (DBjob.rg_max - DBjob.rg_min)) / 5)
         ),
-        k_rg: 4,
+        k_rg: 10,
         report_interval: 1000,
         filename: 'rgyr.csv'
       },
       output_pdb: 'md.pdb',
       output_restart: 'md.xml',
       output_dcd: 'md.dcd',
-      write_single_pdb_every: 100
+      pdb_report_interval: 100
     }
   }
 })

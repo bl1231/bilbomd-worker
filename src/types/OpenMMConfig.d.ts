@@ -84,7 +84,7 @@ interface MDStep {
   /** Trajectory file */
   output_dcd: string
   /** Write a single PDB file every N steps (e.g., for visualization) */
-  write_single_pdb_every: number
+  pdb_report_interval: number
 }
 
 interface Steps {

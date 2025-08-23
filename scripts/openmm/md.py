@@ -2,6 +2,7 @@
 
 import sys
 import os
+import time
 import yaml
 
 # from copy import deepcopy
@@ -87,34 +88,27 @@ create_rigid_bodies(system, modeller.positions, list(rigid_bodies.values()))
 
 
 rgs = config["steps"]["md"]["rgyr"]["rgs"]
-k_rg = config["steps"]["md"]["rgyr"]["k_rg"]
-report_interval = config["steps"]["md"]["rgyr"].get("report_interval", 500)
-rgyr_report = config["steps"]["md"]["rgyr"].get("filename", "rg_report.csv")
-
-timestep = config["steps"]["md"]["parameters"]["timestep"]
-nsteps = config["steps"]["md"]["parameters"]["nsteps"]
-pdb_report_interval = config["steps"]["md"].get("write_single_pdb_every", 100)
-
-# atom_indices = [a.index for a in modeller.topology.atoms() if a.name == "CA"]
-
-# for a in modeller.topology.atoms():
-#     if a.name == 'CA':
-#         print(f"Atom index: {a.index}, name: {a.name}, residue: {a.residue.name} {a.residue.index}, chain: {a.residue.chain.id}")
-
-rg = rgs[0]
+k_rg_yaml = float(config["steps"]["md"]["rgyr"]["k_rg"])  # kcal/mol/Å^2 from YAML
+timestep = float(config["steps"]["md"]["parameters"]["timestep"])
+nsteps = int(config["steps"]["md"]["parameters"]["nsteps"])
+pdb_report_interval = int(config["steps"]["md"]["pdb_report_interval"])
+report_interval = int(config["steps"]["md"]["rgyr"]["report_interval"])
+rgyr_report = config["steps"]["md"]["rgyr"]["filename"]
+# Allow overriding the target Rg from environment for parallel runs
+rg_env = os.environ.get("OMM_RG")
+rg = float(rg_env) if rg_env is not None else float(rgs[0])
 print(f"\n🔁 Running MD with Rg target: {rg} Å")
+
 rg_force = RGForce()
-k_rg = 20.0 * 418.4
-rg0 = rg * 0.1
+# Convert kcal/mol/Å^2 → kJ/mol/nm^2 (4.184 kJ/kcal and 1 Å^2 = 0.01 nm^2 ⇒ × 418.4)
+k_rg = k_rg_yaml * 418.4
+rg0 = rg * 0.1  # Å → nm
 cv = CustomCVForce("0.5 * k * (rg - rg0)^2")
 cv.addCollectiveVariable("rg", rg_force)
 cv.addGlobalParameter("k", k_rg)
 cv.addGlobalParameter("rg0", rg0)
 
 system.addForce(cv)
-
-# for i, force in enumerate(system_copy.getForces()):
-#     print(f"Force {i}: {force.__class__.__name__}, group {force.getForceGroup()}")
 
 integrator = VerletIntegrator(timestep)
 
@@ -127,7 +121,8 @@ simulation.context.setState(state)
 platform = simulation.context.getPlatform().getName()
 print(f"Initialized on platform: {platform}")
 
-rg_md_dir = os.path.join(md_dir, f"rg_{rg}")
+rg_label = str(int(rg)) if float(rg).is_integer() else str(rg)
+rg_md_dir = os.path.join(md_dir, f"rg_{rg_label}")
 os.makedirs(rg_md_dir, exist_ok=True)
 
 simulation.reporters = []
