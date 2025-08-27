@@ -200,6 +200,76 @@ const writeSegidToChainid = async (inputFile: string): Promise<void> => {
   }
 }
 
+const prepareFoXSInputs = async (
+  DBjob: IBilboMDPDBJob | IBilboMDCRDJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob
+): Promise<string[]> => {
+  const jobDir = path.join(config.uploadDir, DBjob.uuid)
+  const foxsDir = path.join(jobDir, 'foxs')
+  const mdDir = path.join(jobDir, 'md')
+
+  const listDirs = (base: string): string[] => {
+    if (!fs.existsSync(base)) return []
+    return fs
+      .readdirSync(base)
+      .map((name) => path.join(base, name))
+      .filter(
+        (fullPath) => fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()
+      )
+  }
+
+  const hasPdbs = (dir: string): boolean => {
+    try {
+      const files = fs.readdirSync(dir)
+      return files.some((f) => f.toLowerCase().endsWith('.pdb'))
+    } catch {
+      return false
+    }
+  }
+
+  // 1) Prefer already-prepared foxs/rg_* directories containing PDB files
+  const foxsSubDirs = listDirs(foxsDir).filter(hasPdbs)
+  if (foxsSubDirs.length > 0) return foxsSubDirs
+
+  // 2) If none found, look for OpenMM md/rg_* directories and mirror them into foxs via symlinks
+  const mdSubDirs = listDirs(mdDir).filter(hasPdbs)
+  if (mdSubDirs.length === 0) return []
+
+  // Ensure foxs directory exists
+  await fs.ensureDir(foxsDir)
+
+  const mirroredFoxsDirs: string[] = []
+  for (const srcDir of mdSubDirs) {
+    const baseName = path.basename(srcDir) // e.g., 'rg_27'
+    const destDir = path.join(foxsDir, baseName.replace('rg_', 'rg')) // normalize 'rg_27' -> 'rg27'
+    await fs.ensureDir(destDir)
+
+    // Symlink all .pdb files from md/rg_* into foxs/rg*
+    const entries = fs.readdirSync(srcDir)
+    for (const entry of entries) {
+      if (!entry.toLowerCase().endsWith('.pdb')) continue
+      if (entry.toLowerCase() === 'md.pdb') continue
+      const src = path.join(srcDir, entry)
+      const dst = path.join(destDir, entry)
+      try {
+        // Use relative symlinks when possible
+        if (!fs.existsSync(dst)) {
+          const rel = path.relative(path.dirname(dst), src)
+          await fs.ensureSymlink(rel, dst)
+        }
+      } catch (error) {
+        // If symlink fails (e.g., on some filesystems), fall back to copying
+        logger.error('Error creating symlink ', error)
+        if (!fs.existsSync(dst)) {
+          await fs.copy(src, dst)
+        }
+      }
+    }
+    if (hasPdbs(destDir)) mirroredFoxsDirs.push(destDir)
+  }
+
+  return mirroredFoxsDirs
+}
+
 const runFoXS = async (
   MQjob: BullMQJob,
   DBjob: IBilboMDPDBJob | IBilboMDCRDJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob
@@ -213,9 +283,13 @@ const runFoXS = async (
     // Update the initial status
     await updateStepStatus(DBjob, 'foxs', status)
 
-    // Generate the array of FoXS directories
-    const analysisDir = path.join(config.uploadDir, DBjob.uuid, 'foxs')
-    const foxsRunDirs = generateFoxsRunDirs(analysisDir, DBjob)
+    // Discover or prepare FoXS input directories (supports OpenMM md/rg_* layout)
+    const foxsRunDirs = await prepareFoXSInputs(DBjob)
+    if (foxsRunDirs.length === 0) {
+      throw new Error(
+        'No FoXS input directories with PDB files were found under foxs/ or md/.'
+      )
+    }
 
     // Set up the heartbeat for monitoring
     if (MQjob) {
@@ -231,7 +305,7 @@ const runFoXS = async (
     }
 
     // Run FoXS on each directory
-    const allFoxsJobs = foxsRunDirs.map(({ dir }) => spawnFoXS(dir, MQjob))
+    const allFoxsJobs = foxsRunDirs.map((dir) => spawnFoXS(dir, MQjob))
 
     // Wait for all FoXS jobs to complete
     await Promise.all(allFoxsJobs)
