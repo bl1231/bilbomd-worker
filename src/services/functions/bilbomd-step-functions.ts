@@ -616,23 +616,70 @@ const prepareResults = async (
       // Decide whether to continue or throw based on your application's requirements
     }
 
-    // Copy the minimized PDB
-    await copyFiles({
-      source: `${jobDir}/minimization_output.pdb`,
-      destination: resultsDir,
-      filename: 'minimization_output.pdb',
-      MQjob,
-      isCritical: false
-    })
+    // // Copy the minimized PDB
+    // await copyFiles({
+    //   source: `${jobDir}/minimization_output.pdb`,
+    //   destination: resultsDir,
+    //   filename: 'minimization_output.pdb',
+    //   MQjob,
+    //   isCritical: false
+    // })
 
-    // Copy the DAT file for the minimized PDB
-    await copyFiles({
-      source: `${jobDir}/minimization_output_${DBjob.data_file.split('.')[0]}.dat`,
-      destination: resultsDir,
-      filename: 'minimization_output.pdb.dat',
-      MQjob,
-      isCritical: false
-    })
+    // // Copy the DAT file for the minimized PDB
+    // await copyFiles({
+    //   source: `${jobDir}/minimization_output_${DBjob.data_file.split('.')[0]}.dat`,
+    //   destination: resultsDir,
+    //   filename: 'minimization_output.pdb.dat',
+    //   MQjob,
+    //   isCritical: false
+    // })
+
+    // --- Copy the minimized PDB (supports CHARMM and OpenMM layouts)
+    {
+      const baseDataName = DBjob.data_file.split('.')[0]
+      const charmmPdb = path.join(jobDir, 'minimization_output.pdb')
+      const openmmPdb = path.join(jobDir, 'minimize', 'minimized.pdb')
+
+      const pdbSource = (await fs.pathExists(openmmPdb))
+        ? openmmPdb
+        : (await fs.pathExists(charmmPdb))
+        ? charmmPdb
+        : null
+
+      if (pdbSource) {
+        await copyFiles({
+          source: pdbSource,
+          destination: resultsDir,
+          filename: path.basename(pdbSource), // keep original filename
+          MQjob,
+          isCritical: false
+        })
+      } else {
+        logger.warn('No minimized PDB found (checked OpenMM and CHARMM locations).')
+      }
+
+      // --- Copy the DAT file for the minimized PDB (supports both layouts)
+      const charmmDat = path.join(jobDir, `minimization_output_${baseDataName}.dat`)
+      const openmmDat = path.join(jobDir, 'minimize', `minimized_${baseDataName}.dat`)
+
+      const datSource = (await fs.pathExists(openmmDat))
+        ? openmmDat
+        : (await fs.pathExists(charmmDat))
+        ? charmmDat
+        : null
+
+      if (datSource) {
+        await copyFiles({
+          source: datSource,
+          destination: resultsDir,
+          filename: path.basename(datSource), // keep original filename
+          MQjob,
+          isCritical: false
+        })
+      } else {
+        logger.warn('No minimized DAT file found (checked OpenMM and CHARMM locations).')
+      }
+    }
 
     // Copy ensemble_size_*.txt files
     await copyFiles({
