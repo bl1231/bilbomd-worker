@@ -125,9 +125,9 @@ read_job_params() {
 
     # Set walltime based on job_type
     if [ "$job_type" = "BilboMdAlphaFold" ]; then
-        walltime="02:00:00"
+        walltime="03:00:00"
     else
-        walltime="01:30:00"
+        walltime="02:30:00"
     fi
 
     if [ "$job_type" = "BilboMdPDB" ]; then

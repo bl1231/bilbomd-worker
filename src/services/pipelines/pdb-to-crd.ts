@@ -141,7 +141,7 @@ const createPdb2CrdCharmmInpFiles = async (
   const args = [pdb2crd_script, inputPDB, '.']
 
   return new Promise<string[]>((resolve, reject) => {
-    const pdb2crd = spawn('python', args, { cwd: workingDir })
+    const pdb2crd = spawn('/opt/envs/base/bin/python', args, { cwd: workingDir })
 
     pdb2crd.stdout.on('data', (data: Buffer) => {
       logStream.write(data.toString())
@@ -292,7 +292,9 @@ const spawnAF2PAEInpFileMaker = async (
   )
 
   return new Promise((resolve, reject) => {
-    const af2pae: ChildProcess = spawn('python', args, { cwd: af2paeDir })
+    const af2pae: ChildProcess = spawn('/opt/envs/base/bin/python', args, {
+      cwd: af2paeDir
+    })
     af2pae.stdout?.on('data', (data: Buffer) => {
       const dataString = data.toString().trim()
       logger.info(`spawnAF2PAEInpFileMaker stdout ${dataString}`)

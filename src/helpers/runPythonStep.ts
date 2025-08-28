@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 
 export interface RunPythonOptions {
-  pythonBin?: string // default: '/opt/conda/bin/python'
+  pythonBin?: string // default: '/opt/envs/openmm/bin/python'
   cwd?: string // working dir for the step
   env?: NodeJS.ProcessEnv // extra env (merged on top of process.env)
   timeoutMs?: number // hard timeout
@@ -18,7 +18,7 @@ export async function runPythonStep(
   opts: RunPythonOptions = {}
 ): Promise<{ code: number; signal: NodeJS.Signals | null }> {
   const {
-    pythonBin = '/opt/conda/bin/python',
+    pythonBin = '/opt/envs/openmm/bin/python',
     cwd,
     env,
     timeoutMs,

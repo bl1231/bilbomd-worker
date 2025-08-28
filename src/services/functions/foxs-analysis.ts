@@ -39,7 +39,8 @@ const runSingleFoXS = async (DBjob: IJob | IBilboMDAutoJob): Promise<void> => {
     const errorFile = path.join(jobDir, 'initial_foxs_analysis_error.log')
     const logStream = fs.createWriteStream(logFile)
     const errorStream = fs.createWriteStream(errorFile)
-    const inputPDB = 'minimization_output.pdb'
+    // const inputPDB = 'minimization_output.pdb'
+    const inputPDB = 'minimize/minimized.pdb'
     const inputDAT = DBjob.data_file
     const profileSize = await countDataPoints(path.join(jobDir, inputDAT))
     const foxsOpts = { cwd: jobDir }

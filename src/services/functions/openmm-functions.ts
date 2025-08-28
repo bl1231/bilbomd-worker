@@ -188,19 +188,21 @@ const buildOpenMMConfigForJob = (
       parameters: {
         temperature: 600,
         friction: 0.1,
-        nsteps: 100000,
+        nsteps: 10000,
         timestep: 0.001
       },
       rgyr: {
         rgs: Array.from({ length: 6 }, (_, i) =>
           Math.round(DBjob.rg_min + (i * (DBjob.rg_max - DBjob.rg_min)) / 5)
         ),
+        k_rg: 10,
         report_interval: 1000,
         filename: 'rgyr.csv'
       },
       output_pdb: 'md.pdb',
       output_restart: 'md.xml',
-      output_dcd: 'md.dcd'
+      output_dcd: 'md.dcd',
+      pdb_report_interval: 100
     }
   }
 })
@@ -237,7 +239,7 @@ const runOmmStep = async (
 ): Promise<void> => {
   const workDir = path.join(config.uploadDir, DBjob.uuid)
   const stepName = `OpenMM ${stepKey}`
-
+  logger.info(`Starting ${stepName} for job ${DBjob.uuid}`)
   const configYamlPath = path.join(workDir, 'openmm_config.yaml')
   if (!(await fs.pathExists(configYamlPath))) {
     await prepareOpenMMConfigYamlForJob(DBjob)
@@ -314,7 +316,7 @@ const runOmmHeat = (
   }
 ) => runOmmStep(MQjob, DBjob, 'heat', 'scripts/openmm/heat.py', opts)
 
-const runOmmMD = (
+const runOmmMD = async (
   MQjob: BullMQJob,
   DBjob: IBilboMDPDBJob,
   opts?: {
@@ -323,7 +325,111 @@ const runOmmMD = (
     pluginDir?: string
     pythonBin?: string
     timeoutMs?: number
+    concurrency?: number // optional: cap parallel md.py processes
   }
-) => runOmmStep(MQjob, DBjob, 'md', 'scripts/openmm/md.py', opts)
+): Promise<void> => {
+  const workDir = path.join(config.uploadDir, DBjob.uuid)
+  const stepKey: OmmStepKey = 'md'
+  const stepName = 'OpenMM md'
+  logger.info(`Starting ${stepName} (parallel) for job ${DBjob.uuid}`)
+
+  const configYamlPath = path.join(workDir, 'openmm_config.yaml')
+  if (!(await fs.pathExists(configYamlPath))) {
+    await prepareOpenMMConfigYamlForJob(DBjob)
+  }
+
+  // Read YAML to get Rg list
+  const yamlRaw = await fs.readFile(configYamlPath, 'utf8')
+  const cfg = YAML.parse(yamlRaw)
+  const rgs: number[] = cfg?.steps?.md?.rgyr?.rgs ?? []
+  if (!Array.isArray(rgs) || rgs.length === 0) {
+    logger.warn('No rgs found in config; defaulting to [50]')
+    rgs.splice(0, rgs.length, 50)
+  }
+
+  // Determine concurrency
+  const envCUDA = process.env.CUDA_VISIBLE_DEVICES
+  const gpuCount = envCUDA ? envCUDA.split(',').filter(Boolean).length : undefined
+  const maxParallel = opts?.concurrency ?? gpuCount ?? 1
+
+  // Light-weight concurrency limiter
+  const queue = rgs.slice()
+  let running = 0
+  let completed = 0
+  let failed = 0
+
+  const status: IStepStatus = {
+    status: 'Running',
+    message: `${stepName} has started for ${rgs.length} Rg values (max ${maxParallel} concurrent)`
+  }
+  await updateStepStatus(DBjob, stepKey, status)
+
+  const runOne = async (rg: number) => {
+    const scriptPath = path.resolve(process.cwd(), 'scripts/openmm/md.py')
+    const env = {
+      ...(opts?.platform ? { OPENMM_PLATFORM: opts.platform } : {}),
+      ...(opts?.pluginDir ? { OPENMM_PLUGIN_DIR: opts.pluginDir } : {}),
+      OMM_RG: String(rg)
+    }
+    logger.info(`[md] launching rg=${rg}`)
+    const result = await runPythonStep(scriptPath, configYamlPath, {
+      cwd: opts?.cwd,
+      pythonBin: opts?.pythonBin,
+      env,
+      timeoutMs: opts?.timeoutMs ?? 2 * 60 * 60 * 1000, // 2h default per run
+      onStdoutLine: (line) => logger.info(`[md rg=${rg}][stdout] ${line}`),
+      onStderrLine: (line) => logger.error(`[md rg=${rg}][stderr] ${line}`)
+    })
+    if (result.code !== 0) {
+      throw new Error(
+        `md.py (rg=${rg}) failed (exit ${result.code}${
+          result.signal ? `, signal ${result.signal}` : ''
+        })`
+      )
+    }
+  }
+
+  const pump = async (): Promise<void> => {
+    while (running < maxParallel && queue.length > 0) {
+      const rg = queue.shift() as number
+      running++
+      runOne(rg)
+        .then(async () => {
+          completed++
+          running--
+          await updateStepStatus(DBjob, stepKey, {
+            status: 'Running',
+            message: `${stepName}: completed ${completed}/${rgs.length} (max ${maxParallel} concurrent)`
+          })
+          await pump()
+        })
+        .catch(async (err) => {
+          failed++
+          running--
+          logger.error(`Error in md (rg=${rg}): ${err}`)
+          await updateStepStatus(DBjob, stepKey, {
+            status: 'Running',
+            message: `${stepName}: ${completed}/${rgs.length} done, ${failed} failed`
+          })
+          await pump()
+        })
+    }
+  }
+
+  await pump()
+  // Wait for all in-flight to finish
+  while (running > 0) {
+    await new Promise((r) => setTimeout(r, 250))
+  }
+
+  if (failed > 0) {
+    throw new Error(`${stepName} completed with ${failed} failures out of ${rgs.length}`)
+  }
+
+  await updateStepStatus(DBjob, stepKey, {
+    status: 'Success',
+    message: `${stepName} has completed for ${rgs.length} Rg values`
+  })
+}
 
 export { prepareOpenMMConfigYamlForJob, runOmmMinimize, runOmmHeat, runOmmMD }

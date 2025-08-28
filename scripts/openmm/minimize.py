@@ -45,9 +45,15 @@ fixer.findMissingResidues()
 fixer.findMissingAtoms()
 fixer.addMissingAtoms()
 fixer.addMissingHydrogens(pH=7.0)
+fixer.findNonstandardResidues()
+if fixer.nonstandardResidues:
+    print("Nonstandard residues found:")
+    for residue in fixer.nonstandardResidues:
+        print(f" - {residue}")
+else:
+    print("No nonstandard residues found.")
 
-# Step 2: Build the system using Amber14 force fields
-# forcefield = ForceField(config["input"]["forcefield"])
+# Step 2: Build the system using configured force fields
 forcefield = ForceField(*config["input"]["forcefield"])
 modeller = Modeller(fixer.topology, fixer.positions)
 
@@ -58,7 +64,7 @@ system = forcefield.createSystem(
     nonbondedCutoff=1.2 * nanometer,
     constraints=HBonds,
     soluteDielectric=1.0,
-    solventDielectric=78.5
+    solventDielectric=78.5,
 )
 
 # Simulation setup
