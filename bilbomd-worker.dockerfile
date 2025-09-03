@@ -1,6 +1,6 @@
 # -----------------------------------------------------------------------------
 # Setup the base image for building (CUDA devel)
-FROM nvidia/cuda:12.2.2-devel-ubuntu22.04 AS install-dependencies
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS install-dependencies
 
 RUN apt-get update && \
     apt-get install -y cmake gcc gfortran g++ wget libgl1-mesa-dev \
@@ -190,7 +190,7 @@ RUN conda run -n base   conda-pack -p /miniforge3 -o /tmp/base-env.tar.gz
 
 # -----------------------------------------------------------------------------
 # Slim final runtime image (CUDA runtime only)
-FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04 AS bilbomd-worker
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS bilbomd-worker
 
 ARG USER_ID
 ARG GROUP_ID
@@ -244,6 +244,18 @@ RUN mkdir -p /opt/envs/openmm /opt/envs/base && \
     cd /opt/envs/openmm && tar -xzf /tmp/openmm-env.tar.gz && ./bin/conda-unpack || true && \
     cd /opt/envs/base   && tar -xzf /tmp/base-env.tar.gz   && ./bin/conda-unpack || true && \
     rm -f /tmp/openmm-env.tar.gz /tmp/base-env.tar.gz
+
+# --- Slim the unpacked envs and OpenMM libs to reduce image size ---
+RUN set -eux; \
+    # Remove bytecode, caches, tests, static libs from both envs; \
+    find /opt/envs -type d -name "__pycache__" -prune -exec rm -rf {} +; \
+    find /opt/envs -type f -name "*.py[co]" -delete; \
+    find /opt/envs -type d \( -name tests -o -name test -o -name testing \) -prune -exec rm -rf {} +; \
+    find /opt/envs -type f -name "*.a" -delete; \
+    find /opt/envs -type f -name "*.la" -delete; \
+    # Strip OpenMM shared libs and plugins when available; \
+    strip --strip-unneeded ${OPENMM_PREFIX}/lib/libOpenMM*.so || true; \
+    strip --strip-unneeded ${OPENMM_PREFIX}/lib/plugins/*.so || true
 
 # 5) Node app: dist + production node_modules
 ENV NODE_ENV=production
