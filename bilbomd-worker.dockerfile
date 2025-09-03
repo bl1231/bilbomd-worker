@@ -264,4 +264,4 @@ ENV BILBOMD_WORKER_VERSION=${BILBOMD_WORKER_VERSION}
 
 USER bilbo:bilbomd
 EXPOSE 3000
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/worker.js"]
