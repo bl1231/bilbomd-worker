@@ -4,6 +4,9 @@ import sys
 import json
 import shutil
 from pathlib import Path
+import yaml
+import re
+import numpy as np
 
 # -----------------------------
 # Argument and Environment Setup
@@ -11,10 +14,10 @@ from pathlib import Path
 def setup_environment(uuid):
     # Slurm and project parameters
     project = "m4659"
-    queue = "regular"
+    queue = "debug"
     constraint = "gpu"
     nodes = 1
-    walltime = "02:30:00"
+    walltime = "00:30:00"
     mailtype = "end,fail"
     mailuser = "sclassen@lbl.gov"
 
@@ -96,12 +99,132 @@ def prepare_input(workdir, upload_dir):
     return params
 
 # -----------------------------
+# Convert const.inp to OpenMM config yaml
+# -----------------------------
+def prepare_openmm_config(workdir, params):
+    """
+    Locate const.inp in workdir, parse CHARMM-style constraints, and write OpenMM-compatible config.yaml.
+    This is a draft; parsing logic should be expanded for your specific CHARMM syntax.
+    """
+    
+
+    # Locate const.inp
+    const_inp_path = os.path.join(workdir, "const.inp")
+    if not os.path.exists(const_inp_path):
+        print(f"Warning: {const_inp_path} not found. Skipping OpenMM config generation.")
+        return None
+
+    # Build OpenMM config dictionary (skeleton)
+    openmm_config = {
+        "input": {
+            "dir": "/bilbomd/work",
+            "pdb_file": params.get("pdb_file", "input.pdb"),
+            "forcefield": ["charmm36.xml", "implicit/hct.xml"]
+        },
+        "output": {
+            "output_dir": "/bilbomd/work/openmm",
+            "min_dir": "minimization",
+            "heat_dir": "heating",
+            "md_dir": "md"
+        },
+        "constraints": {
+            "fixed_bodies": [],
+            "rigid_bodies": []
+        },
+        "steps": {
+            "minimization": {
+                "parameters": {"max_iterations": 1000},
+                "output_pdb": "minimized.pdb"
+            },
+            "heating": {
+                "parameters": {
+                    "first_temp": 300,
+                    "final_temp": 1500,
+                    "total_steps": 15000,
+                    "timestep": 0.001
+                },
+                "output_pdb": "heated.pdb",
+                "output_restart": "heated.xml"
+            },
+            "md": {
+                "parameters": {
+                    "temperature": 1500,
+                    "friction": 0.1,
+                    "nsteps": 100000,
+                    "timestep": 0.001
+                },
+                # this should be an array of integer values from params.rg_min to params.rg_max divided into N equally spaced values.
+                "rgyr": {"rgs": [42]}
+            }
+        }
+    }
+
+    # Parse CHARMM-style constraints for fixed and rigid bodies
+    
+    fixed_bodies = []
+    rigid_bodies = []
+    with open(const_inp_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            # Fixed bodies
+            m_fixed = re.match(r'define fixed(\d+) sele \( resid (\d+):(\d+) .and. segid (\w+) \) end', line)
+            if m_fixed:
+                idx, start, stop, segid = m_fixed.groups()
+                fixed_bodies.append({
+                    "name": f"FixedBody{idx}",
+                    "chain_id": segid[-1],
+                    "residues": {
+                        "start": int(start),
+                        "stop": int(stop)
+                    }
+                })
+            # Rigid bodies
+            m_rigid = re.match(r'define rigid(\d+) sele \( resid (\d+):(\d+) .and. segid (\w+) \) end', line)
+            if m_rigid:
+                idx, start, stop, segid = m_rigid.groups()
+                rigid_bodies.append({
+                    "name": f"RigidBody{idx}",
+                    "chain_id": segid[-1],
+                    "residues": {
+                        "start": int(start),
+                        "stop": int(stop)
+                    }
+                })
+
+    # Merge into openmm_config
+    openmm_config["constraints"]["fixed_bodies"] = fixed_bodies
+    openmm_config["constraints"]["rigid_bodies"] = rigid_bodies
+
+    # Compute Rg values for MD step
+    
+    rg_min = int(params.get("rg_min", 0))
+    rg_max = int(params.get("rg_max", 0))
+    N = int(params.get("rg_N", 5))  # Default to 5 values if not specified
+    if rg_max > rg_min and N > 0:
+        rgs = np.linspace(rg_min, rg_max, N)
+        rgs = [int(round(rg)) for rg in rgs]
+        openmm_config["steps"]["md"]["rgyr"]["rgs"] = rgs
+    else:
+        openmm_config["steps"]["md"]["rgyr"]["rgs"] = []
+
+    # Write to config.yaml
+    config_yaml_path = os.path.join(workdir, "openmm_config.yaml")
+    with open(config_yaml_path, "w") as f:
+        yaml.dump(openmm_config, f)
+    print(f"OpenMM config written to {config_yaml_path}")
+    return config_yaml_path
+
+# -----------------------------
 # Status File Creation
 # -----------------------------
 def create_status_file(workdir):
-    # Create initial status.txt file
-    # ...existing code...
-    pass
+    status_file = os.path.join(workdir, "status.txt")
+    steps = [
+        "alphafold", "pae", "autorg", "minimize", "initfoxs", "heat", "md", "dcd2pdb", "foxs", "multifoxs", "copy2cfs"
+    ]
+    with open(status_file, "w") as f:
+        for step in steps:
+            f.write(f"{step}: Waiting\n")
 
 # -----------------------------
 # Slurm Script Section Generation
@@ -130,6 +253,31 @@ export WORKDIR="{config['workdir']}"
 export STATUS_FILE="{config['workdir']}/status.txt"
 """
     return header
+
+def add_helper_functions():
+    section  = """
+# Updates our status.txt file using sed to update values
+update_status() {
+  local step=$1
+  local status=$2
+  echo "Update $step status: $status"
+  # Use sed to update the status file
+  sed -i "s/^$step: .*/$step: $status/" "$STATUS_FILE"
+}
+
+# Check exit code and cancel the SLURM job if non-zero
+check_exit_code() {
+  local exit_code=$1
+  local step=$2
+  if [ $exit_code -ne 0 ]; then
+    echo "Process in $step failed with exit code $exit_code. Cancelling SLURM job."
+    update_status $step Error
+    scancel $SLURM_JOB_ID
+    exit $exit_code
+  fi
+  }
+"""
+    return section
 
 def generate_alphafold_section(config):
     # Generate AlphaFold section for Slurm script
@@ -164,12 +312,12 @@ srun --ntasks=1 \\
      --gpus-per-task=1 \\
      --cpu-bind=cores \\
      --job-name minimize \\
-     podman-hpc run --rm --userns=keep-id --gpu \\
+     podman-hpc run --rm --gpu \\
         -v {config['workdir']}:/bilbomd/work \\
         -v {config['upload_dir']}:/cfs \\
         {config['openmm_worker']} /bin/bash -c "
             set -e
-            cd /bilbomd/work/ && python minimize.py
+            cd /bilbomd/work/ && python /app/scripts/openmm/minimize.py openmm_config.yaml
         "
 MIN_EXIT=$?
 check_exit_code $MIN_EXIT minimize
@@ -181,8 +329,30 @@ update_status minimize Success
 
 def generate_heat_section(config):
     # Generate heating section (OpenMM)
-    # ...existing code...
-    pass
+    section = f"""
+# -----------------------------------------------------------------------------
+# OpenMM Heating
+update_status heat Running
+echo "Running OpenMM Heating..."
+srun --ntasks=1 \\
+     --cpus-per-task={config['num_cores']} \\
+     --gpus-per-task=1 \\
+     --cpu-bind=cores \\
+     --job-name heat \\
+     podman-hpc run --rm --gpu \\
+        -v {config['workdir']}:/bilbomd/work \\
+        -v {config['upload_dir']}:/cfs \\
+        {config['openmm_worker']} /bin/bash -c "
+            set -e
+            cd /bilbomd/work/ && python /app/scripts/openmm/heat.py openmm_config.yaml
+        "
+MIN_EXIT=$?
+check_exit_code $MIN_EXIT heat
+
+echo "OpenMM Heating complete"
+update_status heat Success
+"""
+    return section
 
 def generate_md_section(config, rg_values):
     # Generate molecular dynamics section (OpenMM)
@@ -222,10 +392,14 @@ def main():
 
     # Step 3: Create status file
     create_status_file(config['workdir'])
+    
+    # Prepare OpenMM config from const.inp
+    prepare_openmm_config(config['workdir'], params)
 
     # Step 4: Generate Slurm script sections
     slurm_sections = []
     slurm_sections.append(generate_slurm_header(config))
+    slurm_sections.append(add_helper_functions())
     if params.get('job_type') == 'BilboMdAlphaFold':
         slurm_sections.append(generate_alphafold_section(config))
         slurm_sections.append(generate_pae2const_section(config))
