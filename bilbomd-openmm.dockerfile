@@ -81,5 +81,8 @@ ENV LD_LIBRARY_PATH=${OPENMM_PREFIX}/lib:${LD_LIBRARY_PATH}
 # Make sure the dynamic linker can find the OpenMM libs without setting LD_LIBRARY_PATH
 RUN echo "${OPENMM_PREFIX}/lib" > /etc/ld.so.conf.d/openmm.conf && ldconfig
 
+# copy in the bilbomd worker code
+COPY scripts/openmm /app/scripts/openmm
+
 # (Optional) verify python import during build
 RUN python -c "import openmm, sys; print('OpenMM', openmm.__version__, 'Python', sys.version)"
