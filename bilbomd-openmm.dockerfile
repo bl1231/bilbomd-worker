@@ -1,5 +1,5 @@
 # --- Build stage: compile OpenMM from source and install Python wrappers ---
-FROM nvidia/cuda:12.2.2-devel-ubuntu22.04 AS builder
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -23,6 +23,8 @@ RUN wget -q "https://github.com/conda-forge/miniforge/releases/latest/download/M
     rm /tmp/miniforge.sh
 
 ENV PATH=/miniforge3/bin:${PATH}
+
+RUN conda clean -a -y
 
 RUN conda update -y -n base -c defaults conda && \
     conda create -y -n openmm python=3.12 numpy doxygen pip cython && \
@@ -55,8 +57,12 @@ RUN git clone https://github.com/openmm/pdbfixer.git && \
     cd pdbfixer && \
     python setup.py install
 
+# --- Install other Python packages ---
+RUN conda install -y -n openmm pyyaml && \
+    conda clean -afy
+
 # --- Runtime stage: slim image with CUDA runtime + OpenMM + conda env ---
-FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 ARG OPENMM_BRANCH=main
 ARG OPENMM_PREFIX=/opt/openmm-${OPENMM_BRANCH}
