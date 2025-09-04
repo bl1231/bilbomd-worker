@@ -18,7 +18,7 @@ from openmm import VerletIntegrator, XmlSerializer, RGForce, CustomCVForce, Plat
 from utils.rigid_body import get_rigid_bodies, create_rigid_bodies
 from utils.fixed_bodies import apply_fixed_body_constraints
 from utils.pdb_writer import PDBFrameWriter
-
+from utils.rgyr import RadiusOfGyrationReporter
 
 def run_md_for_rg(rg, config_path, gpu_id=None):
     """
@@ -145,6 +145,12 @@ def run_md_for_rg(rg, config_path, gpu_id=None):
     dcd_file_path = os.path.join(rg_md_dir, output_dcd_file_name)
     rgyr_file_path = os.path.join(rg_md_dir, rgyr_report)
     simulation.reporters.append(DCDReporter(dcd_file_path, report_interval))
+
+    # Radius of Gyration Reporter
+    atom_indices = [a.index for a in modeller.topology.atoms() if a.name == 'CA']
+    simulation.reporters.append(RadiusOfGyrationReporter(atom_indices, system, rgyr_file_path, reportInterval=report_interval))
+
+    # PDB Frame Writer
     base_name = os.path.splitext(output_pdb_file_name)[0]
     simulation.reporters.append(PDBFrameWriter(rg_md_dir, base_name, reportInterval=pdb_report_interval))
 
