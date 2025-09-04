@@ -180,8 +180,8 @@ if __name__ == "__main__":
 
     print("Assignments:", ", ".join([f"Rg={rg}→GPU{gid}" for rg, gid in assignments]))
 
-    # Run up to 4 jobs concurrently (one per GPU)
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    # Run up to 8 jobs concurrently
+    with ThreadPoolExecutor(max_workers=8) as pool:
         futures = [pool.submit(run_md_for_rg, rg, config_path, gid) for rg, gid in assignments]
         for fut in futures:
             fut.result()  # bubble exceptions
