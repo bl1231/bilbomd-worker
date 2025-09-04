@@ -282,7 +282,7 @@ check_exit_code() {
 def generate_alphafold_section(config):
     # Generate AlphaFold section for Slurm script
     section = f"""
-# -----------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------
 # Run ColabFoldLocal (i.e AlphaFold)
 update_status alphafold Running
 echo "Running AlphaFold..."
@@ -301,9 +301,8 @@ def generate_pae2const_section(config):
     pass
 
 def generate_minimize_section(config):
-    # Generate minimization section (OpenMM)
     section = f"""
-# -----------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------
 # OpenMM Minimization
 update_status minimize Running
 echo "Running OpenMM Minimization..."
@@ -328,9 +327,8 @@ update_status minimize Success
     return section
 
 def generate_heat_section(config):
-    # Generate heating section (OpenMM)
     section = f"""
-# -----------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------
 # OpenMM Heating
 update_status heat Running
 echo "Running OpenMM Heating..."
@@ -355,10 +353,30 @@ update_status heat Success
     return section
 
 def generate_md_section(config, rg_values):
-    # Generate molecular dynamics section (OpenMM)
-    # Use dynamic decision making to set up multiple srun commands
-    # ...existing code...
-    pass
+    section = f"""
+# --------------------------------------------------------------------------------------
+# OpenMM Molecular Dynamics (all Rg values)
+update_status md Running
+echo "Running OpenMM MD for all Rg values..."
+srun --ntasks=1 \\
+     --cpus-per-task={config['num_cores']} \\
+     --gpus-per-task=4 \\
+     --cpu-bind=cores \\
+     --job-name md \\
+     podman-hpc run --rm --gpu \\
+        -v {config['workdir']}:/bilbomd/work \\
+        -v {config['upload_dir']}:/cfs \\
+        {config['openmm_worker']} /bin/bash -c "
+            set -e
+            cd /bilbomd/work/ && python /app/scripts/openmm/md.py openmm_config.yaml
+        "
+MD_EXIT=$?
+check_exit_code $MD_EXIT md
+
+echo "OpenMM MD complete"
+update_status md Success
+"""
+    return section
 
 def generate_foxs_section(config):
     # Generate FoXS analysis section
