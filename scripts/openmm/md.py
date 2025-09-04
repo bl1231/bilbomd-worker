@@ -1,11 +1,9 @@
-"""run MD with CHARMM-like restraints"""
+"""run OpenMM Molecular Dynamics with CHARMM-like restraints"""
 
 import sys
 import os
-import time
 import yaml
-
-# from copy import deepcopy
+from concurrent.futures import ThreadPoolExecutor   # ⬅️ use threads, not processes
 from openmm.unit import angstroms
 from openmm.app import (
     Simulation,
@@ -16,145 +14,174 @@ from openmm.app import (
     DCDReporter,
     CutoffNonPeriodic,
 )
-from openmm import VerletIntegrator, XmlSerializer, RGForce, CustomCVForce
+from openmm import VerletIntegrator, XmlSerializer, RGForce, CustomCVForce, Platform
 from utils.rigid_body import get_rigid_bodies, create_rigid_bodies
 from utils.fixed_bodies import apply_fixed_body_constraints
 from utils.pdb_writer import PDBFrameWriter
 
-if len(sys.argv) != 2:
-    print("Usage: python md.py <config.yaml>")
-    sys.exit(1)
 
-config_path = sys.argv[1]
-with open(config_path, "r", encoding="utf-8") as f:
-    config = yaml.safe_load(f)
+def run_md_for_rg(rg, config_path, gpu_id=None):
+    """
+    Run a single MD trajectory targeting radius-of-gyration `rg` (Å).
+    If `gpu_id` is provided, bind the Simulation to that CUDA device.
+    """
 
-# Build output directories:
-output_dir = config["output"]["output_dir"]
-min_dir = os.path.join(output_dir, config["output"]["min_dir"])
-heat_dir = os.path.join(output_dir, config["output"]["heat_dir"])
-md_dir = os.path.join(output_dir, config["output"]["md_dir"])
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
 
-heated_pdb_file_name = config["steps"]["heating"]["output_pdb"]
-heated_restart_file_name = config["steps"]["heating"]["output_restart"]
+    # Build output directories:
+    output_dir = config["output"]["output_dir"]
+    min_dir = os.path.join(output_dir, config["output"]["min_dir"])
+    heat_dir = os.path.join(output_dir, config["output"]["heat_dir"])
+    md_dir = os.path.join(output_dir, config["output"]["md_dir"])
 
-output_pdb_file_name = config["steps"]["md"]["output_pdb"]
-output_restart_file_name = config["steps"]["md"]["output_restart"]
-output_dcd_file_name = config["steps"]["md"]["output_dcd"]
+    heated_pdb_file_name = config["steps"]["heating"]["output_pdb"]
+    heated_restart_file_name = config["steps"]["heating"]["output_restart"]
 
+    output_pdb_file_name = config["steps"]["md"]["output_pdb"]
+    output_restart_file_name = config["steps"]["md"]["output_restart"]
+    output_dcd_file_name = config["steps"]["md"]["output_dcd"]
 
-for d in [output_dir, min_dir, heat_dir, md_dir]:
-    if not os.path.exists(d):
-        os.makedirs(d)
+    for d in [output_dir, min_dir, heat_dir, md_dir]:
+        if not os.path.exists(d):
+            os.makedirs(d, exist_ok=True)
 
-# Load heated structure
-input_pdb_file = os.path.join(heat_dir, heated_pdb_file_name)
-pdb = PDBFile(file=input_pdb_file)
+    # Load heated structure
+    input_pdb_file = os.path.join(heat_dir, heated_pdb_file_name)
+    pdb = PDBFile(file=input_pdb_file)
 
-forcefield = ForceField(*config["input"]["forcefield"])
-modeller = Modeller(pdb.topology, pdb.positions)
+    forcefield = ForceField(*config["input"]["forcefield"])
+    modeller = Modeller(pdb.topology, pdb.positions)
 
-fixed_bodies_config = config["constraints"]["fixed_bodies"]
-rigid_bodies_configs = config["constraints"]["rigid_bodies"]
+    fixed_bodies_config = config["constraints"]["fixed_bodies"]
+    rigid_bodies_configs = config["constraints"]["rigid_bodies"]
 
-# Get all rigid bodies from the modeller based on our configurations.
-rigid_bodies = get_rigid_bodies(modeller, rigid_bodies_configs)
+    # Get all rigid bodies from the modeller based on our configurations.
+    rigid_bodies = get_rigid_bodies(modeller, rigid_bodies_configs)
+    for name, atoms in rigid_bodies.items():
+        print(
+            f"[GPU {gpu_id}] Rigid body '{name}': {len(atoms)} atoms — indices: "
+            f"{atoms[:10]}{'...' if len(atoms) > 10 else ''}"
+        )
 
-for name, atoms in rigid_bodies.items():
-    print(
-        f"Rigid body '{name}': {len(atoms)} atoms — indices: {atoms[:10]}{'...' if len(atoms) > 10 else ''}"
+    # ⚙️ Build system
+    system = forcefield.createSystem(
+        modeller.topology,
+        nonbondedMethod=CutoffNonPeriodic,
+        nonbondedCutoff=4 * angstroms,
+        constraints=None,
+        soluteDielectric=1.0,
+        solventDielectric=78.5,
+        removeCMMotion=False,
     )
 
-# ⚙️ Build system
-system = forcefield.createSystem(
-    modeller.topology,
-    nonbondedMethod=CutoffNonPeriodic,
-    nonbondedCutoff=4 * angstroms,
-    constraints=None,
-    soluteDielectric=1.0,
-    solventDielectric=78.5,
-    removeCMMotion=False,
-)
+    # 🔒 Apply fixed body constraints and rigid bodies
+    print(f"[GPU {gpu_id}] Applying fixed body constraints...")
+    apply_fixed_body_constraints(system, modeller, fixed_bodies_config)
 
-# 🔒 Apply 'cons fix': freeze atoms by setting mass = 0
-# 🔒 Apply fixed body constraints to freeze the atoms.
-print("Applying fixed body constraints...")
-# apply_fixed_body_constraints_zero_mass(system, modeller, fixed_bodies_config)
-apply_fixed_body_constraints(system, modeller, fixed_bodies_config)
+    print(f"[GPU {gpu_id}] Applying rigid body constraints...")
+    create_rigid_bodies(system, modeller.positions, list(rigid_bodies.values()))
 
-# Apply rigid body constraints
-print("Applying rigid body constraints...")
-create_rigid_bodies(system, modeller.positions, list(rigid_bodies.values()))
+    # ⛓️ RG restraint
+    k_rg_yaml = float(config["steps"]["md"]["rgyr"]["k_rg"])  # kcal/mol/Å^2 from YAML
+    timestep = float(config["steps"]["md"]["parameters"]["timestep"])
+    nsteps = int(config["steps"]["md"]["parameters"]["nsteps"])
+    pdb_report_interval = int(config["steps"]["md"]["pdb_report_interval"])
+    report_interval = int(config["steps"]["md"]["rgyr"]["report_interval"])
+    rgyr_report = config["steps"]["md"]["rgyr"]["filename"]
+    print(f"\n[GPU {gpu_id}] 🔁 Running MD with Rg target: {rg} Å")
 
+    rg_force = RGForce()
+    # Convert kcal/mol/Å^2 → kJ/mol/nm^2
+    k_rg = k_rg_yaml * 418.4
+    rg0 = rg * 0.1  # Å → nm
+    cv = CustomCVForce("0.5 * k * (rg - rg0)^2")
+    cv.addCollectiveVariable("rg", rg_force)
+    cv.addGlobalParameter("k", k_rg)
+    cv.addGlobalParameter("rg0", rg0)
+    system.addForce(cv)
 
-rgs = config["steps"]["md"]["rgyr"]["rgs"]
-k_rg_yaml = float(config["steps"]["md"]["rgyr"]["k_rg"])  # kcal/mol/Å^2 from YAML
-timestep = float(config["steps"]["md"]["parameters"]["timestep"])
-nsteps = int(config["steps"]["md"]["parameters"]["nsteps"])
-pdb_report_interval = int(config["steps"]["md"]["pdb_report_interval"])
-report_interval = int(config["steps"]["md"]["rgyr"]["report_interval"])
-rgyr_report = config["steps"]["md"]["rgyr"]["filename"]
-# Allow overriding the target Rg from environment for parallel runs
-rg_env = os.environ.get("OMM_RG")
-rg = float(rg_env) if rg_env is not None else float(rgs[0])
-print(f"\n🔁 Running MD with Rg target: {rg} Å")
+    integrator = VerletIntegrator(timestep)
 
-rg_force = RGForce()
-# Convert kcal/mol/Å^2 → kJ/mol/nm^2 (4.184 kJ/kcal and 1 Å^2 = 0.01 nm^2 ⇒ × 418.4)
-k_rg = k_rg_yaml * 418.4
-rg0 = rg * 0.1  # Å → nm
-cv = CustomCVForce("0.5 * k * (rg - rg0)^2")
-cv.addCollectiveVariable("rg", rg_force)
-cv.addGlobalParameter("k", k_rg)
-cv.addGlobalParameter("rg0", rg0)
+    with open(os.path.join(heat_dir, heated_restart_file_name), encoding="utf-8") as f:
+        state = XmlSerializer.deserialize(f.read())
 
-system.addForce(cv)
+    # Prefer CUDA and pin to a device if provided
+    try:
+        cuda_platform = Platform.getPlatformByName("CUDA")
+        platform_props = {}
+        if gpu_id is not None:
+            # Bind this Simulation to a specific GPU on the node
+            platform_props["CudaDeviceIndex"] = str(gpu_id)
+            # Optional: Perlmutter A100s are great with mixed/single
+            # platform_props["CudaPrecision"] = "single"  # or "mixed"
+        simulation = Simulation(modeller.topology, system, integrator, cuda_platform, platform_props)
+        simulation.context.setState(state)
+        platform = simulation.context.getPlatform().getName()
+        print(f"[GPU {gpu_id}] Initialized on platform: {platform} (CudaDeviceIndex={platform_props.get('CudaDeviceIndex','-')})")
+    except Exception as e:
+        print(f"[GPU {gpu_id}] [WARNING] CUDA not available; falling back. Error: {e}")
+        simulation = Simulation(modeller.topology, system, integrator)
+        simulation.context.setState(state)
+        platform = simulation.context.getPlatform().getName()
+        print(f"[GPU {gpu_id}] Initialized on platform: {platform}")
 
-integrator = VerletIntegrator(timestep)
+    rg_label = str(int(rg)) if float(rg).is_integer() else str(rg)
+    rg_md_dir = os.path.join(md_dir, f"rg_{rg_label}")
+    os.makedirs(rg_md_dir, exist_ok=True)
 
-with open(os.path.join(heat_dir, heated_restart_file_name), encoding="utf-8") as f:
-    state = XmlSerializer.deserialize(f.read())
-
-simulation = Simulation(modeller.topology, system, integrator)
-simulation.context.setState(state)
-
-platform = simulation.context.getPlatform().getName()
-print(f"Initialized on platform: {platform}")
-
-rg_label = str(int(rg)) if float(rg).is_integer() else str(rg)
-rg_md_dir = os.path.join(md_dir, f"rg_{rg_label}")
-os.makedirs(rg_md_dir, exist_ok=True)
-
-simulation.reporters = []
-simulation.reporters.append(
-    StateDataReporter(
-        sys.stdout,
-        report_interval,
-        step=True,
-        temperature=True,
-        potentialEnergy=True,
-        totalEnergy=True,
-        speed=True,
+    simulation.reporters = []
+    simulation.reporters.append(
+        StateDataReporter(
+            sys.stdout,
+            report_interval,
+            step=True,
+            temperature=True,
+            potentialEnergy=True,
+            totalEnergy=True,
+            speed=True,
+        )
     )
-)
-dcd_file_path = os.path.join(rg_md_dir, output_dcd_file_name)
-rgyr_file_path = os.path.join(rg_md_dir, rgyr_report)
-simulation.reporters.append(DCDReporter(dcd_file_path, report_interval))
-base_name = os.path.splitext(output_pdb_file_name)[0]
-simulation.reporters.append(
-    PDBFrameWriter(rg_md_dir, base_name, reportInterval=pdb_report_interval)
-)
-simulation.step(nsteps)
+    dcd_file_path = os.path.join(rg_md_dir, output_dcd_file_name)
+    rgyr_file_path = os.path.join(rg_md_dir, rgyr_report)
+    simulation.reporters.append(DCDReporter(dcd_file_path, report_interval))
+    base_name = os.path.splitext(output_pdb_file_name)[0]
+    simulation.reporters.append(PDBFrameWriter(rg_md_dir, base_name, reportInterval=pdb_report_interval))
 
-with open(
-    os.path.join(rg_md_dir, output_restart_file_name), "w", encoding="utf-8"
-) as f:
-    final_state = simulation.context.getState(getPositions=True, getForces=True)
-    f.write(XmlSerializer.serialize(final_state))
+    simulation.step(nsteps)
 
-with open(
-    os.path.join(rg_md_dir, output_pdb_file_name), "w", encoding="utf-8"
-) as out_pdb:
-    PDBFile.writeFile(simulation.topology, final_state.getPositions(), out_pdb)
+    with open(os.path.join(rg_md_dir, output_restart_file_name), "w", encoding="utf-8") as f:
+        final_state = simulation.context.getState(getPositions=True, getForces=True)
+        f.write(XmlSerializer.serialize(final_state))
 
-print(f"✅ Completed MD with Rg {rg}. Results in {rg_md_dir}")
+    with open(os.path.join(rg_md_dir, output_pdb_file_name), "w", encoding="utf-8") as out_pdb:
+        PDBFile.writeFile(simulation.topology, final_state.getPositions(), out_pdb)
+
+    print(f"[GPU {gpu_id}] ✅ Completed MD with Rg {rg}. Results in {rg_md_dir}")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python md.py <config.yaml>")
+        sys.exit(1)
+
+    config_path = sys.argv[1]
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    rgs = list(config["steps"]["md"]["rgyr"]["rgs"])
+    if not rgs:
+        print("No Rg targets provided.")
+        sys.exit(1)
+
+    # Map Rgs to available GPUs in a round-robin fashion (0..3)
+    gpu_ids = [0, 1, 2, 3]
+    assignments = [(rg, gpu_ids[i % len(gpu_ids)]) for i, rg in enumerate(rgs)]
+
+    print("Assignments:", ", ".join([f"Rg={rg}→GPU{gid}" for rg, gid in assignments]))
+
+    # Run up to 4 jobs concurrently (one per GPU)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(run_md_for_rg, rg, config_path, gid) for rg, gid in assignments]
+        for fut in futures:
+            fut.result()  # bubble exceptions
