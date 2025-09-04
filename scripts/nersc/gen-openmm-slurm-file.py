@@ -33,7 +33,7 @@ def setup_environment(uuid):
     workdir = f"{pscratch}/bilbomd/{env_dir}/{uuid}"
 
     # Docker images (update as needed for OpenMM)
-    openmm_worker = "bilbomd/bilbomd-openmm-worker:0.0.1"
+    openmm_worker = "bilbomd/bilbomd-openmm-worker:0.0.2"
     bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.20"
     af_worker = "bilbomd/bilbomd-colabfold:0.0.8"
 
@@ -154,7 +154,16 @@ def prepare_openmm_config(workdir, params):
                     "timestep": 0.001
                 },
                 # this should be an array of integer values from params.rg_min to params.rg_max divided into N equally spaced values.
-                "rgyr": {"rgs": [42]}
+                "rgyr": {
+                    "rgs": [10,15,20,25,30],
+                    "k_rg": 1,
+                    "report_interval": 500,
+                    "filename": "rgyr_report.csv"
+                },
+                "output_pdb": "md_final.pdb",
+                "pdb_report_interval": 500,
+                "output_restart": "md.xml",
+                "output_dcd": "md.dcd",
             }
         }
     }
@@ -431,7 +440,7 @@ def main():
     slurm_sections.append(generate_copy_section(config))
 
     # Step 5: Write final Slurm file
-    slurm_file = Path(config['workdir']) / 'bilbomd_openmm.slurm'
+    slurm_file = Path(config['workdir']) / 'bilbomd_omm.slurm'
     with open(slurm_file, 'w') as f:
         for section in slurm_sections:
             if section:
