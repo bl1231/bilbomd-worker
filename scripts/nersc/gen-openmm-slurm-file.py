@@ -32,12 +32,12 @@ def setup_environment(uuid):
     upload_dir = f"{cfs_base}/{env_dir}/uploads/{uuid}"
     workdir = f"{pscratch}/bilbomd/{env_dir}/{uuid}"
 
-    # Docker images (update as needed for OpenMM)
-    openmm_worker = "bilbomd/bilbomd-openmm-worker:0.0.3"
+    # Docker images
+    openmm_worker = "bilbomd/bilbomd-openmm-worker:0.0.4"
     bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.20"
     af_worker = "bilbomd/bilbomd-colabfold:0.0.8"
 
-    # Number of cores (example logic)
+    # Number of cores
     if constraint.startswith("gpu"):
         num_cores = 128
     elif constraint == "cpu":
@@ -153,14 +153,13 @@ def prepare_openmm_config(workdir, params):
                     "nsteps": 100000,
                     "timestep": 0.001
                 },
-                # this should be an array of integer values from params.rg_min to params.rg_max divided into N equally spaced values.
                 "rgyr": {
-                    "rgs": [10,15,20,25,30],
+                    "rgs": [],
                     "k_rg": 1,
                     "report_interval": 500,
                     "filename": "rgyr_report.csv"
                 },
-                "output_pdb": "md_final.pdb",
+                "output_pdb": "md.pdb",
                 "pdb_report_interval": 500,
                 "output_restart": "md.xml",
                 "output_dcd": "md.dcd",
@@ -208,7 +207,7 @@ def prepare_openmm_config(workdir, params):
     
     rg_min = int(params.get("rg_min", 0))
     rg_max = int(params.get("rg_max", 0))
-    N = int(params.get("rg_N", 5))  # Default to 5 values if not specified
+    N = int(params.get("rg_N", 10))  # Default to 10 values if not specified
     if rg_max > rg_min and N > 0:
         rgs = np.linspace(rg_min, rg_max, N)
         rgs = [int(round(rg)) for rg in rgs]
@@ -295,7 +294,16 @@ def generate_alphafold_section(config):
 # Run ColabFoldLocal (i.e AlphaFold)
 update_status alphafold Running
 echo "Running AlphaFold..."
-srun --gpus=4 --job-name alphafold podman-hpc run --rm --gpu --userns=keep-id -v {config['workdir']}:/bilbomd/work -v {config['upload_dir']}:/cfs {config['af_worker']} /bin/bash -c "cd /bilbomd/work/ && colabfold_batch --num-models=3 --amber --use-gpu-relax --num-recycle=4 af-entities.fasta alphafold"
+srun --gpus=4 \\
+     --job-name alphafold \\
+     podman-hpc run --rm --gpu \\
+        -v {config['workdir']}:/bilbomd/work \\
+        -v {config['upload_dir']}:/cfs \\
+        {config['af_worker']} /bin/bash -c "
+            set -e
+            cd /bilbomd/work/ &&
+            colabfold_batch --num-models=3 --amber --use-gpu-relax --num-recycle=4 af-entities.fasta alphafold
+        "
 AF_EXIT=$?
 check_exit_code $AF_EXIT alphafold
 
@@ -321,8 +329,8 @@ srun --ntasks=1 \\
      --cpu-bind=cores \\
      --job-name minimize \\
      podman-hpc run --rm --gpu \\
-        -v {config['workdir']}:/bilbomd/work \\
-        -v {config['upload_dir']}:/cfs \\
+        -v $WORKDIR:/bilbomd/work \\
+        -v $UPLOAD_DIR:/cfs \\
         {config['openmm_worker']} /bin/bash -c "
             set -e
             cd /bilbomd/work/ && python /app/scripts/openmm/minimize.py openmm_config.yaml
@@ -347,21 +355,21 @@ srun --ntasks=1 \\
      --cpu-bind=cores \\
      --job-name heat \\
      podman-hpc run --rm --gpu \\
-        -v {config['workdir']}:/bilbomd/work \\
-        -v {config['upload_dir']}:/cfs \\
+        -v $WORKDIR:/bilbomd/work \\
+        -v $UPLOAD_DIR:/cfs \\
         {config['openmm_worker']} /bin/bash -c "
             set -e
             cd /bilbomd/work/ && python /app/scripts/openmm/heat.py openmm_config.yaml
         "
-MIN_EXIT=$?
-check_exit_code $MIN_EXIT heat
+HEAT_EXIT=$?
+check_exit_code $HEAT_EXIT heat
 
 echo "OpenMM Heating complete"
 update_status heat Success
 """
     return section
 
-def generate_md_section(config, rg_values):
+def generate_md_section(config):
     section = f"""
 # --------------------------------------------------------------------------------------
 # OpenMM Molecular Dynamics (all Rg values)
@@ -373,8 +381,8 @@ srun --ntasks=1 \\
      --cpu-bind=cores \\
      --job-name md \\
      podman-hpc run --rm --gpu \\
-        -v {config['workdir']}:/bilbomd/work \\
-        -v {config['upload_dir']}:/cfs \\
+        -v $WORKDIR:/bilbomd/work \\
+        -v $UPLOAD_DIR:/cfs \\
         {config['openmm_worker']} /bin/bash -c "
             set -e
             cd /bilbomd/work/ && python /app/scripts/openmm/md.py openmm_config.yaml
@@ -419,11 +427,11 @@ def main():
 
     # Step 3: Create status file
     create_status_file(config['workdir'])
-    
-    # Prepare OpenMM config from const.inp
+
+    # Step 4: Prepare OpenMM config from const.inp
     prepare_openmm_config(config['workdir'], params)
 
-    # Step 4: Generate Slurm script sections
+    # Step 5: Generate Slurm script sections
     slurm_sections = []
     slurm_sections.append(generate_slurm_header(config))
     slurm_sections.append(add_helper_functions())
@@ -432,14 +440,12 @@ def main():
         slurm_sections.append(generate_pae2const_section(config))
     slurm_sections.append(generate_minimize_section(config))
     slurm_sections.append(generate_heat_section(config))
-    # Assume rg_values is determined from params or analysis
-    rg_values = config.get('rg_values', [])
-    slurm_sections.append(generate_md_section(config, rg_values))
+    slurm_sections.append(generate_md_section(config))
     slurm_sections.append(generate_foxs_section(config))
     slurm_sections.append(generate_multifoxs_section(config))
     slurm_sections.append(generate_copy_section(config))
 
-    # Step 5: Write final Slurm file
+    # Step 6: Write final Slurm file
     slurm_file = Path(config['workdir']) / 'bilbomd_omm.slurm'
     with open(slurm_file, 'w') as f:
         for section in slurm_sections:
