@@ -21,15 +21,17 @@ def setup_environment(uuid):
     # Determine environment (default to 'development')
     environment = os.environ.get("ENVIRONMENT", "development")
     pscratch = os.environ.get("PSCRATCH")
+    cfs = os.environ.get("CFS")
     env_dir = "prod" if environment == "production" else "dev"
 
     # Directory paths
-    cfs_base = f"/global/cfs/cdirs/{project}/bilbomd"
+    cfs_base = f"{cfs}/{project}/bilbomd"
     upload_dir = f"{cfs_base}/{env_dir}/uploads/{uuid}"
     workdir = f"{pscratch}/bilbomd/{env_dir}/{uuid}"
 
     # Docker images (update as needed for OpenMM)
-    openmm_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.0"
+    openmm_worker = "bilbomd/bilbomd-openmm-worker:0.0.1"
+    bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.20"
     af_worker = "bilbomd/bilbomd-colabfold:0.0.8"
 
     # Number of cores (example logic)
@@ -130,17 +132,55 @@ export STATUS_FILE="{config['workdir']}/status.txt"
     return header
 
 def generate_alphafold_section(config):
-    # Generate AlphaFold section if needed
-    # ...existing code...
-    pass
+    # Generate AlphaFold section for Slurm script
+    section = f"""
+# -----------------------------------------------------------------------------
+# Run ColabFoldLocal (i.e AlphaFold)
+update_status alphafold Running
+echo "Running AlphaFold..."
+srun --gpus=4 --job-name alphafold podman-hpc run --rm --gpu --userns=keep-id -v {config['workdir']}:/bilbomd/work -v {config['upload_dir']}:/cfs {config['af_worker']} /bin/bash -c "cd /bilbomd/work/ && colabfold_batch --num-models=3 --amber --use-gpu-relax --num-recycle=4 af-entities.fasta alphafold"
+AF_EXIT=$?
+check_exit_code $AF_EXIT alphafold
+
+echo "AlphaFold Done."
+update_status alphafold Success
+"""
+    return section
 
 def generate_pae2const_section(config):
     # Generate PAE to constraint file section
     # ...existing code...
     pass
 
-def generate_min_heat_section(config):
-    # Generate minimization and heating section (OpenMM)
+def generate_minimize_section(config):
+    # Generate minimization section (OpenMM)
+    section = f"""
+# -----------------------------------------------------------------------------
+# OpenMM Minimization
+update_status minimize Running
+echo "Running OpenMM Minimization..."
+srun --ntasks=1 \\
+     --cpus-per-task={config['num_cores']} \\
+     --gpus-per-task=1 \\
+     --cpu-bind=cores \\
+     --job-name minimize \\
+     podman-hpc run --rm --userns=keep-id --gpu \\
+        -v {config['workdir']}:/bilbomd/work \\
+        -v {config['upload_dir']}:/cfs \\
+        {config['openmm_worker']} /bin/bash -c "
+            set -e
+            cd /bilbomd/work/ && python minimize.py
+        "
+MIN_EXIT=$?
+check_exit_code $MIN_EXIT minimize
+
+echo "OpenMM Minimization complete"
+update_status minimize Success
+"""
+    return section
+
+def generate_heat_section(config):
+    # Generate heating section (OpenMM)
     # ...existing code...
     pass
 
@@ -177,8 +217,8 @@ def main():
     # Step 1: Setup environment
     config = setup_environment(uuid)
 
-    # Step 2: Prepare input
-    prepare_input(config['workdir'], config['upload_dir'])
+    # Step 2: Prepare input and read the job params
+    params = prepare_input(config['workdir'], config['upload_dir'])
 
     # Step 3: Create status file
     create_status_file(config['workdir'])
@@ -186,11 +226,11 @@ def main():
     # Step 4: Generate Slurm script sections
     slurm_sections = []
     slurm_sections.append(generate_slurm_header(config))
-    if config.get('use_alphafold'):
+    if params.get('job_type') == 'BilboMdAlphaFold':
         slurm_sections.append(generate_alphafold_section(config))
-    if config.get('use_pae2const'):
         slurm_sections.append(generate_pae2const_section(config))
-    slurm_sections.append(generate_min_heat_section(config))
+    slurm_sections.append(generate_minimize_section(config))
+    slurm_sections.append(generate_heat_section(config))
     # Assume rg_values is determined from params or analysis
     rg_values = config.get('rg_values', [])
     slurm_sections.append(generate_md_section(config, rg_values))
