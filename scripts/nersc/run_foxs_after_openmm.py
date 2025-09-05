@@ -40,11 +40,21 @@ def parse_args() -> argparse.Namespace:
         default="foxs",
         help="FoXS command/executable name (default: foxs)",
     )
+    # Prefer SLURM-provided CPU count on the node when available
+    slurm_cpus_env = os.environ.get("SLURM_CPUS_ON_NODE", "")
+    try:
+        slurm_cpus = int(slurm_cpus_env) if slurm_cpus_env else None
+    except ValueError:
+        slurm_cpus = None
+    default_workers = slurm_cpus or (os.cpu_count() or 4)
     p.add_argument(
         "--workers",
         type=int,
-        default=os.cpu_count() or 4,
-        help="Max parallel workers (default: CPU count)",
+        default=default_workers,
+        help=(
+            "Max parallel workers (default: SLURM_CPUS_ON_NODE if set, "
+            "otherwise the machine CPU count)"
+        ),
     )
     p.add_argument(
         "--relative-to",
@@ -145,7 +155,7 @@ def main() -> int:
         print(f"[WARN] No directories matching {args.pattern} under {root}")
         return 0
 
-    print(f"Run FoXS...")
+    print("Run FoXS...")
     print(f"Found {len(rg_dirs)} directories.")
 
     futures = []
@@ -192,7 +202,7 @@ def main() -> int:
             if rc != 0:
                 failures += 1
 
-    print(f"Completed FoXS runs.")
+    print("Completed FoXS runs.")
     print(f"- Total PDBs processed: {total_pdbs}")
     print(f"- Failures: {failures}")
     print(
