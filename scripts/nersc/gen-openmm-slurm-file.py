@@ -12,6 +12,7 @@ import numpy as np
 # Argument and Environment Setup
 # -----------------------------
 
+
 def setup_environment(uuid):
     # Slurm and project parameters
     project = "m4659"
@@ -45,7 +46,6 @@ def setup_environment(uuid):
         num_cores = 256
     else:
         num_cores = 128
-        
 
     # Return config dictionary
     return {
@@ -66,12 +66,14 @@ def setup_environment(uuid):
         "bilbomd_worker": bilbomd_worker,
         "af_worker": af_worker,
         "num_cores": num_cores,
-        "num_rgs": 8
+        "num_rgs": 8,
     }
+
 
 # -----------------------------
 # Input Preparation
 # -----------------------------
+
 
 def prepare_input(workdir, upload_dir):
     # Create working directory if it doesn't exist
@@ -102,16 +104,20 @@ def prepare_input(workdir, upload_dir):
         print(f"Warning: params.json not found in {workdir}.")
     return params
 
+
 # -----------------------------
 # Convert const.inp to OpenMM config yaml
 # -----------------------------
 
+
 def prepare_openmm_config(config, params):
 
     # Locate const.inp
-    const_inp_path = os.path.join(config['workdir'], "const.inp")
+    const_inp_path = os.path.join(config["workdir"], "const.inp")
     if not os.path.exists(const_inp_path):
-        print(f"Warning: {const_inp_path} not found. Skipping OpenMM config generation.")
+        print(
+            f"Warning: {const_inp_path} not found. Skipping OpenMM config generation."
+        )
         return None
 
     # Build OpenMM config dictionary
@@ -119,52 +125,49 @@ def prepare_openmm_config(config, params):
         "input": {
             "dir": "/bilbomd/work",
             "pdb_file": params.get("pdb_file", "input.pdb"),
-            "forcefield": ["charmm36.xml", "implicit/hct.xml"]
+            "forcefield": ["charmm36.xml", "implicit/hct.xml"],
         },
         "output": {
             "output_dir": "/bilbomd/work/openmm",
             "min_dir": "minimization",
             "heat_dir": "heating",
-            "md_dir": "md"
+            "md_dir": "md",
         },
-        "constraints": {
-            "fixed_bodies": [],
-            "rigid_bodies": []
-        },
+        "constraints": {"fixed_bodies": [], "rigid_bodies": []},
         "steps": {
             "minimization": {
                 "parameters": {"max_iterations": 1000},
-                "output_pdb": "minimized.pdb"
+                "output_pdb": "minimized.pdb",
             },
             "heating": {
                 "parameters": {
                     "first_temp": 300,
                     "final_temp": 1500,
                     "total_steps": 15000,
-                    "timestep": 0.001
+                    "timestep": 0.001,
                 },
                 "output_pdb": "heated.pdb",
-                "output_restart": "heated.xml"
+                "output_restart": "heated.xml",
             },
             "md": {
                 "parameters": {
                     "temperature": 1500,
                     "friction": 0.1,
                     "nsteps": 200000,
-                    "timestep": 0.001
+                    "timestep": 0.001,
                 },
                 "rgyr": {
                     "rgs": [],
                     "k_rg": 1,
                     "report_interval": 500,
-                    "filename": "rgyr_report.csv"
+                    "filename": "rgyr_report.csv",
                 },
                 "output_pdb": "md.pdb",
                 "pdb_report_interval": 500,
                 "output_restart": "md.xml",
                 "output_dcd": "md.dcd",
-            }
-        }
+            },
+        },
     }
 
     fixed_bodies = []
@@ -173,29 +176,33 @@ def prepare_openmm_config(config, params):
         for line in f:
             line = line.strip()
             # Fixed bodies
-            m_fixed = re.match(r'define fixed(\d+) sele \( resid (\d+):(\d+) .and. segid (\w+) \) end', line)
+            m_fixed = re.match(
+                r"define fixed(\d+) sele \( resid (\d+):(\d+) .and. segid (\w+) \) end",
+                line,
+            )
             if m_fixed:
                 idx, start, stop, segid = m_fixed.groups()
-                fixed_bodies.append({
-                    "name": f"FixedBody{idx}",
-                    "chain_id": segid[-1],
-                    "residues": {
-                        "start": int(start),
-                        "stop": int(stop)
+                fixed_bodies.append(
+                    {
+                        "name": f"FixedBody{idx}",
+                        "chain_id": segid[-1],
+                        "residues": {"start": int(start), "stop": int(stop)},
                     }
-                })
+                )
             # Rigid bodies
-            m_rigid = re.match(r'define rigid(\d+) sele \( resid (\d+):(\d+) .and. segid (\w+) \) end', line)
+            m_rigid = re.match(
+                r"define rigid(\d+) sele \( resid (\d+):(\d+) .and. segid (\w+) \) end",
+                line,
+            )
             if m_rigid:
                 idx, start, stop, segid = m_rigid.groups()
-                rigid_bodies.append({
-                    "name": f"RigidBody{idx}",
-                    "chain_id": segid[-1],
-                    "residues": {
-                        "start": int(start),
-                        "stop": int(stop)
+                rigid_bodies.append(
+                    {
+                        "name": f"RigidBody{idx}",
+                        "chain_id": segid[-1],
+                        "residues": {"start": int(start), "stop": int(stop)},
                     }
-                })
+                )
 
     # Merge into openmm_config
     openmm_config["constraints"]["fixed_bodies"] = fixed_bodies
@@ -205,7 +212,7 @@ def prepare_openmm_config(config, params):
     rg_min = int(params.get("rg_min", 0))
     rg_max = int(params.get("rg_max", 0))
     # N = int(params.get("rg_N", 8))
-    N = int(config['num_rgs'])
+    N = int(config["num_rgs"])
     if rg_max > rg_min and N > 0:
         rgs = np.linspace(rg_min, rg_max, N)
         rgs = [int(round(rg)) for rg in rgs]
@@ -214,28 +221,43 @@ def prepare_openmm_config(config, params):
         openmm_config["steps"]["md"]["rgyr"]["rgs"] = []
 
     # Write to config.yaml
-    config_yaml_path = os.path.join(config['workdir'], "openmm_config.yaml")
+    config_yaml_path = os.path.join(config["workdir"], "openmm_config.yaml")
     with open(config_yaml_path, "w") as f:
         yaml.dump(openmm_config, f)
     print(f"OpenMM config written to {config_yaml_path}")
     return config_yaml_path
 
+
 # -----------------------------
 # Status File Creation
 # -----------------------------
 
+
 def create_status_file(workdir):
     status_file = os.path.join(workdir, "status.txt")
     steps = [
-        "alphafold", "pae", "autorg", "minimize", "initfoxs", "heat", "md", "dcd2pdb", "foxs", "multifoxs", "analysis", "copy2cfs"
+        "alphafold",
+        "pae",
+        "autorg",
+        "minimize",
+        "initfoxs",
+        "heat",
+        "md",
+        "dcd2pdb",
+        "foxs",
+        "multifoxs",
+        "analysis",
+        "copy2cfs",
     ]
     with open(status_file, "w") as f:
         for step in steps:
             f.write(f"{step}: Waiting\n")
 
+
 # -----------------------------
 # Slurm Script Section Generation
 # -----------------------------
+
 
 def generate_slurm_header(config):
     header = f"""#!/bin/bash -l
@@ -262,8 +284,9 @@ export STATUS_FILE="{config['workdir']}/status.txt"
 """
     return header
 
+
 def add_helper_functions():
-    section  = """
+    section = """
 # Updates our status.txt file using sed to update values
 update_status() {
   local step=$1
@@ -286,6 +309,7 @@ check_exit_code() {
   }
 """
     return section
+
 
 def generate_alphafold_section(config):
     section = f"""
@@ -311,10 +335,12 @@ update_status alphafold Success
 """
     return section
 
+
 def generate_pae2const_section(config):
     # Generate PAE to constraint file section
     # ...existing code...
     pass
+
 
 def generate_minimize_section(config):
     section = f"""
@@ -343,6 +369,7 @@ update_status minimize Success
 """
     return section
 
+
 def generate_heat_section(config):
     section = f"""
 # --------------------------------------------------------------------------------------
@@ -370,9 +397,12 @@ update_status heat Success
 """
     return section
 
+
 def generate_md_section(config):
-    cores_per_task = int(config['num_cores'] / config['num_rgs'])
-    print(f"MD section: {config['num_cores']} cores, {config['num_rgs']} Rg values, {cores_per_task} cores per task")       
+    cores_per_task = int(config["num_cores"] / config["num_rgs"])
+    print(
+        f"MD section: {config['num_cores']} cores, {config['num_rgs']} Rg values, {cores_per_task} cores per task"
+    )
     section = f"""
 # --------------------------------------------------------------------------------------
 # OpenMM Molecular Dynamics (concurrent runs with each Rg value)
@@ -406,6 +436,7 @@ update_status md Success
 """
     return section
 
+
 def generate_foxs_section(config):
     section = f"""
 # --------------------------------------------------------------------------------------
@@ -436,6 +467,7 @@ update_status foxs Success
 """
     return section
 
+
 def generate_multifoxs_section(config):
     section = f"""
 # --------------------------------------------------------------------------------------
@@ -465,6 +497,7 @@ update_status multifoxs Success
 """
     return section
 
+
 def generate_analysis_section(config):
     section = f"""
 # --------------------------------------------------------------------------------------
@@ -492,6 +525,7 @@ update_status analysis Success
 """
     return section
 
+
 def generate_end_matters(config):
     section = f"""
 # --------------------------------------------------------------------------------------
@@ -503,8 +537,9 @@ sacct --format=JobID,JobName,Account,AllocCPUS,State,Elapsed,ExitCode,DerivedExi
 """
     return section
 
+
 def generate_copy_section(config):
-    section = f"""
+    section = """
 # --------------------------------------------------------------------------------------
 # Copy results back to CFS
 update_status copy2cfs Running
@@ -515,6 +550,7 @@ check_exit_code $CP_EXIT copy2cfs
 update_status copy2cfs Success
 """
     return section
+
 
 # -----------------------------
 # Main Assembly
@@ -529,10 +565,10 @@ def main():
     config = setup_environment(uuid)
 
     # Step 2: Prepare input and read the job params
-    params = prepare_input(config['workdir'], config['upload_dir'])
+    params = prepare_input(config["workdir"], config["upload_dir"])
 
     # Step 3: Create status file
-    create_status_file(config['workdir'])
+    create_status_file(config["workdir"])
 
     # Step 4: Prepare OpenMM config from const.inp
     prepare_openmm_config(config, params)
@@ -541,7 +577,7 @@ def main():
     slurm_sections = []
     slurm_sections.append(generate_slurm_header(config))
     slurm_sections.append(add_helper_functions())
-    if params.get('job_type') == 'BilboMdAlphaFold':
+    if params.get("job_type") == "BilboMdAlphaFold":
         slurm_sections.append(generate_alphafold_section(config))
         slurm_sections.append(generate_pae2const_section(config))
     slurm_sections.append(generate_minimize_section(config))
@@ -554,13 +590,14 @@ def main():
     slurm_sections.append(generate_end_matters(config))
 
     # Step 6: Write final Slurm file
-    slurm_file = Path(config['workdir']) / 'bilbomd_omm.slurm'
-    with open(slurm_file, 'w') as f:
+    slurm_file = Path(config["workdir"]) / "bilbomd_omm.slurm"
+    with open(slurm_file, "w") as f:
         for section in slurm_sections:
             if section:
                 f.write(section)
-                f.write('\n')
+                f.write("\n")
     print(f"Slurm batch file written to {slurm_file}")
+
 
 if __name__ == "__main__":
     main()
