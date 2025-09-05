@@ -408,16 +408,11 @@ def generate_md_section(config):
 # OpenMM Molecular Dynamics (concurrent runs with each Rg value)
 update_status md Running
 echo "Running OpenMM MD for all Rg values..."
-if ! nvidia-cuda-mps-control -d; then
-    echo "ERROR: Failed to start MPS daemon."
-    exit 1
-fi
-echo "INFO: MPS server daemon started"
 srun --ntasks={config['num_rgs']} \\
      --cpus-per-task={cores_per_task} \\
      --gpus-per-node=4 \\
      --cpu-bind=cores \\
-     --gpu-bind=map_gpu:0,0,1,1,2,2,3,3 \\
+     --gpu-bind=map_gpu:0,1,2,3 \\
      --job-name md \\
      podman-hpc run --rm --gpu \\
         -v $WORKDIR:/bilbomd/work \\
