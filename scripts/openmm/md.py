@@ -165,6 +165,11 @@ def run_md_for_rg(rg, config_path, gpu_id=None):
 
     print(f"[GPU {gpu_id}] ✅ Completed MD with Rg {rg}. Results in {rg_md_dir}")
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
@@ -180,14 +185,39 @@ if __name__ == "__main__":
         print("No Rg targets provided.")
         sys.exit(1)
 
-    # Map Rgs to available GPUs in a round-robin fashion (0..3)
-    gpu_ids = [0, 1, 2, 3]
-    assignments = [(rg, gpu_ids[i % len(gpu_ids)]) for i, rg in enumerate(rgs)]
+    # Slurm task metadata
+    task_id   = _env_int("SLURM_PROCID", 0)      # 0..(ntasks-1)
+    world_sz  = _env_int("SLURM_NTASKS", 1)      # total tasks launched by srun
+    jobid     = os.environ.get("SLURM_JOB_ID", "?")
+    stepid    = os.environ.get("SLURM_STEP_ID", "?")
 
-    print("Assignments:", ", ".join([f"Rg={rg}→GPU{gid}" for rg, gid in assignments]))
+    # GPU visibility: Slurm sets CUDA_VISIBLE_DEVICES per task (e.g. "2"),
+    # so inside this process the chosen GPU appears as logical "0".
+    cvis = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+    gpu_local_index = 0  # use device 0 relative to CUDA_VISIBLE_DEVICES
 
-    # Run up to 8 jobs concurrently
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        futures = [pool.submit(run_md_for_rg, rg, config_path, gid) for rg, gid in assignments]
-        for fut in futures:
-            fut.result()
+    # Shard the Rg list to this task (round-robin)
+    my_rgs = rgs[task_id::world_sz]
+
+    print(f"[md.py] SLURM_JOB_ID={jobid} STEP={stepid} TASK={task_id}/{world_sz-1}")
+    print(f"[md.py] CUDA_VISIBLE_DEVICES='{cvis}' -> using local GPU index {gpu_local_index}")
+    print(f"[md.py] Rg assignments for this task: {my_rgs}")
+
+    if not my_rgs:
+        print(f"[md.py] Task {task_id}: no work (rgs shorter than ntasks). Exiting.")
+        sys.exit(0)
+
+    # Run assigned Rg targets sequentially on this task/GPU
+    failures = 0
+    for rg in my_rgs:
+        try:
+            print(f"[md.py] Task {task_id}: running Rg={rg}")
+            run_md_for_rg(rg, config_path, gpu_id=gpu_local_index)
+            print(f"[md.py] Task {task_id}: done Rg={rg}")
+        except Exception as e:
+            failures += 1
+            print(f"[md.py] Task {task_id}: FAILED Rg={rg} -> {e}", flush=True)
+
+    if failures:
+        print(f"[md.py] Task {task_id}: {failures} failures.", flush=True)
+        sys.exit(1)
