@@ -35,7 +35,7 @@ def setup_environment(uuid):
 
     # Docker images
     openmm_worker = "bilbomd/bilbomd-openmm-worker:0.0.4"
-    bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.22"
+    bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.23"
     af_worker = "bilbomd/bilbomd-colabfold:0.0.8"
 
     # Number of cores
@@ -106,10 +106,10 @@ def prepare_input(workdir, upload_dir):
 # Convert const.inp to OpenMM config yaml
 # -----------------------------
 
-def prepare_openmm_config(workdir, params):
+def prepare_openmm_config(config, params):
 
     # Locate const.inp
-    const_inp_path = os.path.join(workdir, "const.inp")
+    const_inp_path = os.path.join(config['workdir'], "const.inp")
     if not os.path.exists(const_inp_path):
         print(f"Warning: {const_inp_path} not found. Skipping OpenMM config generation.")
         return None
@@ -204,7 +204,8 @@ def prepare_openmm_config(workdir, params):
     # Compute Rg values for MD step
     rg_min = int(params.get("rg_min", 0))
     rg_max = int(params.get("rg_max", 0))
-    N = int(params.get("rg_N", 8))
+    # N = int(params.get("rg_N", 8))
+    N = int(config['num_rgs'])
     if rg_max > rg_min and N > 0:
         rgs = np.linspace(rg_min, rg_max, N)
         rgs = [int(round(rg)) for rg in rgs]
@@ -213,7 +214,7 @@ def prepare_openmm_config(workdir, params):
         openmm_config["steps"]["md"]["rgyr"]["rgs"] = []
 
     # Write to config.yaml
-    config_yaml_path = os.path.join(workdir, "openmm_config.yaml")
+    config_yaml_path = os.path.join(config['workdir'], "openmm_config.yaml")
     with open(config_yaml_path, "w") as f:
         yaml.dump(openmm_config, f)
     print(f"OpenMM config written to {config_yaml_path}")
@@ -331,7 +332,8 @@ srun --ntasks=1 \\
         -v $UPLOAD_DIR:/cfs \\
         {config['openmm_worker']} /bin/bash -c "
             set -e
-            cd /bilbomd/work/ && python /app/scripts/openmm/minimize.py openmm_config.yaml
+            cd /bilbomd/work/ &&
+            python /app/scripts/openmm/minimize.py openmm_config.yaml
         "
 MIN_EXIT=$?
 check_exit_code $MIN_EXIT minimize
@@ -357,7 +359,8 @@ srun --ntasks=1 \\
         -v $UPLOAD_DIR:/cfs \\
         {config['openmm_worker']} /bin/bash -c "
             set -e
-            cd /bilbomd/work/ && python /app/scripts/openmm/heat.py openmm_config.yaml
+            cd /bilbomd/work/ &&
+            python /app/scripts/openmm/heat.py openmm_config.yaml
         "
 HEAT_EXIT=$?
 check_exit_code $HEAT_EXIT heat
@@ -368,15 +371,21 @@ update_status heat Success
     return section
 
 def generate_md_section(config):
-    cores_per_task = int(config['num_cores'] // config['num_rgs'])
+    cores_per_task = int(config['num_cores'] / config['num_rgs'])
+    print(f"MD section: {config['num_cores']} cores, {config['num_rgs']} Rg values, {cores_per_task} cores per task")       
     section = f"""
 # --------------------------------------------------------------------------------------
 # OpenMM Molecular Dynamics (concurrent runs with each Rg value)
 update_status md Running
 echo "Running OpenMM MD for all Rg values..."
+if ! nvidia-cuda-mps-control -d; then
+    echo "ERROR: Failed to start MPS daemon."
+    exit 1
+fi
+echo "INFO: MPS server daemon started"
 srun --ntasks={config['num_rgs']} \\
      --cpus-per-task={cores_per_task} \\
-     --gpus-per-task=4 \\
+     --gpus-per-node=4 \\
      --cpu-bind=cores \\
      --gpu-bind=map_gpu:0,0,1,1,2,2,3,3 \\
      --job-name md \\
@@ -386,7 +395,8 @@ srun --ntasks={config['num_rgs']} \\
         {config['openmm_worker']} /bin/bash -c "
             set -e
             export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
-            cd /bilbomd/work/ && python /app/scripts/openmm/md.py openmm_config.yaml
+            cd /bilbomd/work/ && 
+            python /app/scripts/openmm/md.py openmm_config.yaml
         "
 MD_EXIT=$?
 check_exit_code $MD_EXIT md
@@ -525,7 +535,7 @@ def main():
     create_status_file(config['workdir'])
 
     # Step 4: Prepare OpenMM config from const.inp
-    prepare_openmm_config(config['workdir'], params)
+    prepare_openmm_config(config, params)
 
     # Step 5: Generate Slurm script sections
     slurm_sections = []
