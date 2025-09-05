@@ -3,7 +3,7 @@
 import sys
 import os
 import yaml
-from concurrent.futures import ThreadPoolExecutor   # ⬅️ use threads, not processes
+from concurrent.futures import ThreadPoolExecutor  # ⬅️ use threads, not processes
 from openmm.unit import angstroms
 from openmm.app import (
     Simulation,
@@ -19,6 +19,7 @@ from utils.rigid_body import get_rigid_bodies, create_rigid_bodies
 from utils.fixed_bodies import apply_fixed_body_constraints
 from utils.pdb_writer import PDBFrameWriter
 from utils.rgyr import RadiusOfGyrationReporter
+
 
 def run_md_for_rg(rg, config_path, gpu_id=None):
     """
@@ -115,10 +116,14 @@ def run_md_for_rg(rg, config_path, gpu_id=None):
             platform_props["CudaDeviceIndex"] = str(gpu_id)
             # Optional: Perlmutter A100s are great with mixed/single
             # platform_props["CudaPrecision"] = "single"  # or "mixed"
-        simulation = Simulation(modeller.topology, system, integrator, cuda_platform, platform_props)
+        simulation = Simulation(
+            modeller.topology, system, integrator, cuda_platform, platform_props
+        )
         simulation.context.setState(state)
         platform = simulation.context.getPlatform().getName()
-        print(f"[GPU {gpu_id}] Initialized on platform: {platform} (CudaDeviceIndex={platform_props.get('CudaDeviceIndex','-')})")
+        print(
+            f"[GPU {gpu_id}] Initialized on platform: {platform} (CudaDeviceIndex={platform_props.get('CudaDeviceIndex','-')})"
+        )
     except Exception as e:
         print(f"[GPU {gpu_id}] [WARNING] CUDA not available; falling back. Error: {e}")
         simulation = Simulation(modeller.topology, system, integrator)
@@ -147,23 +152,34 @@ def run_md_for_rg(rg, config_path, gpu_id=None):
     simulation.reporters.append(DCDReporter(dcd_file_path, report_interval))
 
     # Radius of Gyration Reporter
-    atom_indices = [a.index for a in modeller.topology.atoms() if a.name == 'CA']
-    simulation.reporters.append(RadiusOfGyrationReporter(atom_indices, system, rgyr_file_path, reportInterval=report_interval))
+    atom_indices = [a.index for a in modeller.topology.atoms() if a.name == "CA"]
+    simulation.reporters.append(
+        RadiusOfGyrationReporter(
+            atom_indices, system, rgyr_file_path, reportInterval=report_interval
+        )
+    )
 
     # PDB Frame Writer
     base_name = os.path.splitext(output_pdb_file_name)[0]
-    simulation.reporters.append(PDBFrameWriter(rg_md_dir, base_name, reportInterval=pdb_report_interval))
+    simulation.reporters.append(
+        PDBFrameWriter(rg_md_dir, base_name, reportInterval=pdb_report_interval)
+    )
 
     simulation.step(nsteps)
 
-    with open(os.path.join(rg_md_dir, output_restart_file_name), "w", encoding="utf-8") as f:
+    with open(
+        os.path.join(rg_md_dir, output_restart_file_name), "w", encoding="utf-8"
+    ) as f:
         final_state = simulation.context.getState(getPositions=True, getForces=True)
         f.write(XmlSerializer.serialize(final_state))
 
-    with open(os.path.join(rg_md_dir, output_pdb_file_name), "w", encoding="utf-8") as out_pdb:
+    with open(
+        os.path.join(rg_md_dir, output_pdb_file_name), "w", encoding="utf-8"
+    ) as out_pdb:
         PDBFile.writeFile(simulation.topology, final_state.getPositions(), out_pdb)
 
     print(f"[GPU {gpu_id}] ✅ Completed MD with Rg {rg}. Results in {rg_md_dir}")
+
 
 def _env_int(name: str, default: int) -> int:
     try:
@@ -171,25 +187,40 @@ def _env_int(name: str, default: int) -> int:
     except (TypeError, ValueError):
         return default
 
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python md.py <config.yaml>")
-        sys.exit(1)
 
-    config_path = sys.argv[1]
-    with open(config_path, "r", encoding="utf-8") as f:
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run OpenMM MD for a specific rg_set.")
+    parser.add_argument("config_path", help="Path to openmm_config.yaml")
+    parser.add_argument(
+        "--rg-set", type=int, default=0, help="Index of rg_sets to use (default: 0)"
+    )
+    args = parser.parse_args()
+
+    with open(args.config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
-    rgs = list(config["steps"]["md"]["rgyr"]["rgs"])
+    rg_sets = config["steps"]["md"]["rgyr"].get("rg_sets", [])
+    if not rg_sets:
+        print("No rg_sets found in config.")
+        sys.exit(1)
+    if args.rg_set < 0 or args.rg_set >= len(rg_sets):
+        print(
+            f"Invalid rg_set index {args.rg_set}. Available sets: 0 to {len(rg_sets)-1}"
+        )
+        sys.exit(1)
+
+    rgs = list(rg_sets[args.rg_set])
     if not rgs:
-        print("No Rg targets provided.")
+        print(f"rg_set {args.rg_set} is empty.")
         sys.exit(1)
 
     # Slurm task metadata
-    task_id   = _env_int("SLURM_PROCID", 0)      # 0..(ntasks-1)
-    world_sz  = _env_int("SLURM_NTASKS", 1)      # total tasks launched by srun
-    jobid     = os.environ.get("SLURM_JOB_ID", "?")
-    stepid    = os.environ.get("SLURM_STEP_ID", "?")
+    task_id = _env_int("SLURM_PROCID", 0)  # 0..(ntasks-1)
+    world_sz = _env_int("SLURM_NTASKS", 1)  # total tasks launched by srun
+    jobid = os.environ.get("SLURM_JOB_ID", "?")
+    stepid = os.environ.get("SLURM_STEP_ID", "?")
 
     # GPU visibility: Slurm sets CUDA_VISIBLE_DEVICES per task (e.g. "2"),
     # so inside this process the chosen GPU appears as logical "0".
@@ -200,7 +231,10 @@ if __name__ == "__main__":
     my_rgs = rgs[task_id::world_sz]
 
     print(f"[md.py] SLURM_JOB_ID={jobid} STEP={stepid} TASK={task_id}/{world_sz-1}")
-    print(f"[md.py] CUDA_VISIBLE_DEVICES='{cvis}' -> using local GPU index {gpu_local_index}")
+    print(
+        f"[md.py] CUDA_VISIBLE_DEVICES='{cvis}' -> using local GPU index {gpu_local_index}"
+    )
+    print(f"[md.py] Using rg_set {args.rg_set}: {rgs}")
     print(f"[md.py] Rg assignments for this task: {my_rgs}")
 
     if not my_rgs:
@@ -212,7 +246,7 @@ if __name__ == "__main__":
     for rg in my_rgs:
         try:
             print(f"[md.py] Task {task_id}: running Rg={rg}")
-            run_md_for_rg(rg, config_path, gpu_id=gpu_local_index)
+            run_md_for_rg(rg, args.config_path, gpu_id=gpu_local_index)
             print(f"[md.py] Task {task_id}: done Rg={rg}")
         except Exception as e:
             failures += 1
