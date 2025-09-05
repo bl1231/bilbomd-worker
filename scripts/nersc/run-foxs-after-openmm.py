@@ -176,7 +176,7 @@ def main() -> int:
             import re
             pdbs = sorted([
                 f for f in rgdir.glob("*.pdb")
-                if re.match(r"md_\\d+\\.pdb$", f.name)
+                if re.match(r"md_\d+\.pdb$", f.name)
             ])
             if not pdbs:
                 append_line(
