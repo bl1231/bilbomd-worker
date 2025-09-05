@@ -23,25 +23,47 @@ import subprocess
 import sys
 import threading
 
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Run FoXS on PDBs under openmm/md/rg_*")
-    p.add_argument("--root", default="openmm/md", type=Path,
-                   help="Root directory containing rg_* subdirs (default: openmm/md)")
-    p.add_argument("--pattern", default="rg_*",
-                   help="Subdirectory glob pattern (default: rg_*)")
-    p.add_argument("--foxs-cmd", default="foxs",
-                   help="FoXS command/executable name (default: foxs)")
-    p.add_argument("--workers", type=int, default=os.cpu_count() or 4,
-                   help="Max parallel workers (default: CPU count)")
-    p.add_argument("--relative-to", type=Path, default=None,
-                   help="Base path to make .dat paths relative to (default: --root)")
-    p.add_argument("--global-manifest", default="foxs_dat_files.txt",
-                   help="Global manifest filename written under --root (default: foxs_dat_files.txt)")
+    p.add_argument(
+        "--root",
+        default="openmm/md",
+        type=Path,
+        help="Root directory containing rg_* subdirs (default: openmm/md)",
+    )
+    p.add_argument(
+        "--pattern", default="rg_*", help="Subdirectory glob pattern (default: rg_*)"
+    )
+    p.add_argument(
+        "--foxs-cmd",
+        default="foxs",
+        help="FoXS command/executable name (default: foxs)",
+    )
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=os.cpu_count() or 4,
+        help="Max parallel workers (default: CPU count)",
+    )
+    p.add_argument(
+        "--relative-to",
+        type=Path,
+        default=None,
+        help="Base path to make .dat paths relative to (default: --root)",
+    )
+    p.add_argument(
+        "--global-manifest",
+        default="foxs_dat_files.txt",
+        help="Global manifest filename written under --root (default: foxs_dat_files.txt)",
+    )
     return p.parse_args()
+
 
 # Thread-safe append helpers
 _write_locks: dict[Path, threading.Lock] = {}
 _global_lock = threading.Lock()
+
 
 def get_lock(path: Path) -> threading.Lock:
     with _global_lock:
@@ -51,6 +73,7 @@ def get_lock(path: Path) -> threading.Lock:
             _write_locks[path] = lock
         return lock
 
+
 def append_line(path: Path, line: str) -> None:
     lock = get_lock(path)
     with lock:
@@ -58,18 +81,22 @@ def append_line(path: Path, line: str) -> None:
         with path.open("a", encoding="utf-8") as f:
             f.write(line.rstrip() + "\n")
 
-def run_foxs_on_pdb(pdb_path: Path,
-                    foxs_cmd: str,
-                    per_dir_log: Path,
-                    per_dir_err: Path,
-                    per_dir_manifest: Path,
-                    global_manifest: Path,
-                    rel_base: Path) -> tuple[Path, int]:
+
+def run_foxs_on_pdb(
+    pdb_path: Path,
+    foxs_cmd: str,
+    per_dir_log: Path,
+    per_dir_err: Path,
+    per_dir_manifest: Path,
+    global_manifest: Path,
+    rel_base: Path,
+) -> tuple[Path, int]:
     """Run FoXS on one PDB; return (pdb_path, returncode)."""
     workdir = pdb_path.parent
     # Open in append mode so multiple runs aggregate logs
-    with per_dir_log.open("a", encoding="utf-8") as out_f, \
-         per_dir_err.open("a", encoding="utf-8") as err_f:
+    with per_dir_log.open("a", encoding="utf-8") as out_f, per_dir_err.open(
+        "a", encoding="utf-8"
+    ) as err_f:
         try:
             proc = subprocess.run(
                 [foxs_cmd, "-p", pdb_path.name],
@@ -96,6 +123,7 @@ def run_foxs_on_pdb(pdb_path: Path,
         append_line(per_dir_err, f"[ERROR] foxs failed (rc={rc}) for {pdb_path.name}")
 
     return (pdb_path, rc)
+
 
 def main() -> int:
     args = parse_args()
@@ -135,7 +163,9 @@ def main() -> int:
 
             pdbs = sorted(rgdir.glob("*.pdb"))
             if not pdbs:
-                append_line(per_dir_err, "[WARN] No .pdb files found in this directory.")
+                append_line(
+                    per_dir_err, "[WARN] No .pdb files found in this directory."
+                )
                 continue
 
             print(f"- Processing {rgdir} ({len(pdbs)} PDBs)")
@@ -165,9 +195,12 @@ def main() -> int:
     print(f"Completed FoXS runs.")
     print(f"- Total PDBs processed: {total_pdbs}")
     print(f"- Failures: {failures}")
-    print(f"- Global manifest: {global_manifest.relative_to(Path.cwd()) if global_manifest.exists() else '(not created)'}")
+    print(
+        f"- Global manifest: {global_manifest.relative_to(Path.cwd()) if global_manifest.exists() else '(not created)'}"
+    )
 
     return 0 if failures == 0 else 1
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
