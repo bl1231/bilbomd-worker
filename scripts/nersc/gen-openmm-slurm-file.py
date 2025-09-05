@@ -65,7 +65,8 @@ def setup_environment(uuid):
         "openmm_worker": openmm_worker,
         "bilbomd_worker": bilbomd_worker,
         "af_worker": af_worker,
-        "num_cores": num_cores
+        "num_cores": num_cores,
+        "num_rgs": 8
     }
 
 # -----------------------------
@@ -367,21 +368,24 @@ update_status heat Success
     return section
 
 def generate_md_section(config):
+    cores_per_task = int(config['num_cores'] // config['num_rgs'])
     section = f"""
 # --------------------------------------------------------------------------------------
-# OpenMM Molecular Dynamics (all Rg values)
+# OpenMM Molecular Dynamics (concurrent runs with each Rg value)
 update_status md Running
 echo "Running OpenMM MD for all Rg values..."
-srun --ntasks=1 \\
-     --cpus-per-task={config['num_cores']} \\
+srun --ntasks={config['num_rgs']} \\
+     --cpus-per-task={cores_per_task} \\
      --gpus-per-task=4 \\
      --cpu-bind=cores \\
+     --gpu-bind=map_gpu:0,0,1,1,2,2,3,3 \\
      --job-name md \\
      podman-hpc run --rm --gpu \\
         -v $WORKDIR:/bilbomd/work \\
         -v $UPLOAD_DIR:/cfs \\
         {config['openmm_worker']} /bin/bash -c "
             set -e
+            export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
             cd /bilbomd/work/ && python /app/scripts/openmm/md.py openmm_config.yaml
         "
 MD_EXIT=$?
