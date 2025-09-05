@@ -171,10 +171,16 @@ def main() -> int:
             if per_dir_manifest.exists():
                 per_dir_manifest.unlink()
 
-            pdbs = sorted(rgdir.glob("*.pdb"))
+
+            # Only process files matching 'md_\d+.pdb'
+            import re
+            pdbs = sorted([
+                f for f in rgdir.glob("*.pdb")
+                if re.match(r"md_\\d+\\.pdb$", f.name)
+            ])
             if not pdbs:
                 append_line(
-                    per_dir_err, "[WARN] No .pdb files found in this directory."
+                    per_dir_err, "[WARN] No matching .pdb files found in this directory."
                 )
                 continue
 
@@ -205,9 +211,9 @@ def main() -> int:
     print("Completed FoXS runs.")
     print(f"- Total PDBs processed: {total_pdbs}")
     print(f"- Failures: {failures}")
-    print(
-        f"- Global manifest: {global_manifest.relative_to(Path.cwd()) if global_manifest.exists() else '(not created)'}"
-    )
+    # print(
+    #     f"- Global manifest: {global_manifest.relative_to(Path.cwd()) if global_manifest.exists() else '(not created)'}"
+    # )
 
     return 0 if failures == 0 else 1
 

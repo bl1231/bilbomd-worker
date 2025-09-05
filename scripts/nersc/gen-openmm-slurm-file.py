@@ -34,7 +34,7 @@ def setup_environment(uuid):
 
     # Docker images
     openmm_worker = "bilbomd/bilbomd-openmm-worker:0.0.4"
-    bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.20"
+    bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.21"
     af_worker = "bilbomd/bilbomd-colabfold:0.0.8"
 
     # Number of cores
@@ -62,6 +62,7 @@ def setup_environment(uuid):
         "upload_dir": upload_dir,
         "workdir": workdir,
         "openmm_worker": openmm_worker,
+        "bilbomd_worker": bilbomd_worker,
         "af_worker": af_worker,
         "num_cores": num_cores
     }
@@ -207,7 +208,7 @@ def prepare_openmm_config(workdir, params):
     
     rg_min = int(params.get("rg_min", 0))
     rg_max = int(params.get("rg_max", 0))
-    N = int(params.get("rg_N", 10))  # Default to 10 values if not specified
+    N = int(params.get("rg_N", 8))  # Default to 10 values if not specified
     if rg_max > rg_min and N > 0:
         rgs = np.linspace(rg_min, rg_max, N)
         rgs = [int(round(rg)) for rg in rgs]
@@ -396,14 +397,62 @@ update_status md Success
     return section
 
 def generate_foxs_section(config):
-    # Generate FoXS analysis section
-    # ...existing code...
-    pass
+    section = f"""
+# --------------------------------------------------------------------------------------
+# Run FoXS on all MD PDB files
+update_status foxs Running
+echo "Running FoXS on all MD PDB files..."
+
+PDB_DIR=$WORKDIR/openmm/md
+FOXSDIR=$WORKDIR/foxs
+mkdir -p $FOXSDIR
+srun --ntasks=1 \\
+     --cpus-per-task={config['num_cores']} \\
+     --cpu-bind=cores \\
+     --job-name foxs \\
+     podman-hpc run --rm \\
+        -v $WORKDIR:/bilbomd/work \\
+        -v $UPLOAD_DIR:/cfs \\
+        {config['bilbomd_worker']} /bin/bash -c "
+            set -e
+            cd /bilbomd/work/openmm/md &&
+            python /app/scripts/nersc/run-foxs-after-openmm.py --root .
+        "
+FOXS_EXIT=$?
+check_exit_code $FOXS_EXIT foxs
+
+echo "FoXS analysis complete"
+update_status foxs Success
+"""
+    return section
 
 def generate_multifoxs_section(config):
-    # Generate MultiFoXS ensemble analysis section
-    # ...existing code...
-    pass
+    section = f"""
+# --------------------------------------------------------------------------------------
+# Run MultiFoXS on FoXS results
+update_status multifoxs Running
+echo "Running MultiFoXS..."
+
+MFOXSDIR=$WORKDIR/multifoxs
+mkdir -p $MFOXSDIR
+srun --ntasks=1 \\
+     --cpus-per-task={config['num_cores']} \\
+     --cpu-bind=cores \\
+     --job-name multifoxs \\
+     podman-hpc run --rm \\
+         -v $WORKDIR:/bilbomd/work \\
+         -v $UPLOAD_DIR:/cfs \\
+         {config['bilbomd_worker']} /bin/bash -c "
+            set -e
+            cd /bilbomd/work/multifoxs &&
+            python /app/scripts/nersc/run-multifoxs.py
+        "
+MFOXS_EXIT=$?
+check_exit_code $MFOXS_EXIT multifoxs
+
+echo "MultiFoXS processing complete."
+update_status multifoxs Success
+"""
 
 def generate_copy_section(config):
     # Generate section to copy results back to CFS

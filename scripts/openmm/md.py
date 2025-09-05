@@ -190,4 +190,4 @@ if __name__ == "__main__":
     with ThreadPoolExecutor(max_workers=8) as pool:
         futures = [pool.submit(run_md_for_rg, rg, config_path, gid) for rg, gid in assignments]
         for fut in futures:
-            fut.result()  # bubble exceptions
+            fut.result()
