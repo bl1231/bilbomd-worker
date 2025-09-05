@@ -11,6 +11,7 @@ import numpy as np
 # -----------------------------
 # Argument and Environment Setup
 # -----------------------------
+
 def setup_environment(uuid):
     # Slurm and project parameters
     project = "m4659"
@@ -34,7 +35,7 @@ def setup_environment(uuid):
 
     # Docker images
     openmm_worker = "bilbomd/bilbomd-openmm-worker:0.0.4"
-    bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.21"
+    bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.22"
     af_worker = "bilbomd/bilbomd-colabfold:0.0.8"
 
     # Number of cores
@@ -70,6 +71,7 @@ def setup_environment(uuid):
 # -----------------------------
 # Input Preparation
 # -----------------------------
+
 def prepare_input(workdir, upload_dir):
     # Create working directory if it doesn't exist
     Path(workdir).mkdir(parents=True, exist_ok=True)
@@ -102,12 +104,8 @@ def prepare_input(workdir, upload_dir):
 # -----------------------------
 # Convert const.inp to OpenMM config yaml
 # -----------------------------
+
 def prepare_openmm_config(workdir, params):
-    """
-    Locate const.inp in workdir, parse CHARMM-style constraints, and write OpenMM-compatible config.yaml.
-    This is a draft; parsing logic should be expanded for your specific CHARMM syntax.
-    """
-    
 
     # Locate const.inp
     const_inp_path = os.path.join(workdir, "const.inp")
@@ -115,7 +113,7 @@ def prepare_openmm_config(workdir, params):
         print(f"Warning: {const_inp_path} not found. Skipping OpenMM config generation.")
         return None
 
-    # Build OpenMM config dictionary (skeleton)
+    # Build OpenMM config dictionary
     openmm_config = {
         "input": {
             "dir": "/bilbomd/work",
@@ -151,7 +149,7 @@ def prepare_openmm_config(workdir, params):
                 "parameters": {
                     "temperature": 1500,
                     "friction": 0.1,
-                    "nsteps": 100000,
+                    "nsteps": 200000,
                     "timestep": 0.001
                 },
                 "rgyr": {
@@ -168,8 +166,6 @@ def prepare_openmm_config(workdir, params):
         }
     }
 
-    # Parse CHARMM-style constraints for fixed and rigid bodies
-    
     fixed_bodies = []
     rigid_bodies = []
     with open(const_inp_path, "r") as f:
@@ -205,10 +201,9 @@ def prepare_openmm_config(workdir, params):
     openmm_config["constraints"]["rigid_bodies"] = rigid_bodies
 
     # Compute Rg values for MD step
-    
     rg_min = int(params.get("rg_min", 0))
     rg_max = int(params.get("rg_max", 0))
-    N = int(params.get("rg_N", 8))  # Default to 10 values if not specified
+    N = int(params.get("rg_N", 8))
     if rg_max > rg_min and N > 0:
         rgs = np.linspace(rg_min, rg_max, N)
         rgs = [int(round(rg)) for rg in rgs]
@@ -226,10 +221,11 @@ def prepare_openmm_config(workdir, params):
 # -----------------------------
 # Status File Creation
 # -----------------------------
+
 def create_status_file(workdir):
     status_file = os.path.join(workdir, "status.txt")
     steps = [
-        "alphafold", "pae", "autorg", "minimize", "initfoxs", "heat", "md", "dcd2pdb", "foxs", "multifoxs", "copy2cfs"
+        "alphafold", "pae", "autorg", "minimize", "initfoxs", "heat", "md", "dcd2pdb", "foxs", "multifoxs", "analysis", "copy2cfs"
     ]
     with open(status_file, "w") as f:
         for step in steps:
@@ -238,6 +234,7 @@ def create_status_file(workdir):
 # -----------------------------
 # Slurm Script Section Generation
 # -----------------------------
+
 def generate_slurm_header(config):
     header = f"""#!/bin/bash -l
 #SBATCH --qos={config['queue']}
@@ -289,7 +286,6 @@ check_exit_code() {
     return section
 
 def generate_alphafold_section(config):
-    # Generate AlphaFold section for Slurm script
     section = f"""
 # --------------------------------------------------------------------------------------
 # Run ColabFoldLocal (i.e AlphaFold)
@@ -453,11 +449,58 @@ check_exit_code $MFOXS_EXIT multifoxs
 echo "MultiFoXS processing complete."
 update_status multifoxs Success
 """
+    return section
+
+def generate_analysis_section(config):
+    section = f"""
+# --------------------------------------------------------------------------------------
+# Additional Analysis
+update_status analysis Running
+echo "Running additional analysis..."
+ANALYSIS_DIR=$WORKDIR/analysis
+mkdir -p $ANALYSIS_DIR
+srun --ntasks=1 \\
+     --cpus-per-task={config['num_cores']} \\
+     --cpu-bind=cores \\
+     --job-name analysis \\
+     podman-hpc run --rm \\
+        -v $WORKDIR:/bilbomd/work \\
+        -v $UPLOAD_DIR:/cfs \\
+        {config['bilbomd_worker']} /bin/bash -c "
+            set -e
+            cd /bilbomd/work/analysis &&
+            python /app/scripts/openmm/plot_rgyrs.py /bilbomd/work/openmm/md
+        "
+ANALYSIS_EXIT=$?
+check_exit_code $ANALYSIS_EXIT analysis
+echo "Additional analysis complete."
+update_status analysis Success
+"""
+    return section
+
+def generate_end_matters(config):
+    section = f"""
+# --------------------------------------------------------------------------------------
+# End of processing
+echo "All steps completed successfully."
+echo DONE processing {config['uuid']}
+sleep 20
+sacct --format=JobID,JobName,Account,AllocCPUS,State,Elapsed,ExitCode,DerivedExitCode,Start,End -j $SLURM_JOB_ID
+"""
+    return section
 
 def generate_copy_section(config):
-    # Generate section to copy results back to CFS
-    # ...existing code...
-    pass
+    section = f"""
+# --------------------------------------------------------------------------------------
+# Copy results back to CFS
+update_status copy2cfs Running
+echo "Copying results back to CFS..."
+cp -nR $WORKDIR/* $UPLOAD_DIR
+CP_EXIT=$?
+check_exit_code $CP_EXIT copy2cfs
+update_status copy2cfs Success
+"""
+    return section
 
 # -----------------------------
 # Main Assembly
@@ -492,7 +535,9 @@ def main():
     slurm_sections.append(generate_md_section(config))
     slurm_sections.append(generate_foxs_section(config))
     slurm_sections.append(generate_multifoxs_section(config))
+    slurm_sections.append(generate_analysis_section(config))
     slurm_sections.append(generate_copy_section(config))
+    slurm_sections.append(generate_end_matters(config))
 
     # Step 6: Write final Slurm file
     slurm_file = Path(config['workdir']) / 'bilbomd_omm.slurm'
