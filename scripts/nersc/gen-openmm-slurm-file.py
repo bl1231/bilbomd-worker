@@ -35,8 +35,8 @@ def setup_environment(uuid):
     workdir = f"{pscratch}/bilbomd/{env_dir}/{uuid}"
 
     # Docker images
-    openmm_worker = "bilbomd/bilbomd-openmm-worker:0.0.4"
-    bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.23"
+    openmm_worker = "bilbomd/bilbomd-openmm-worker:0.0.9"
+    bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.24"
     af_worker = "bilbomd/bilbomd-colabfold:0.0.8"
 
     # Number of cores
@@ -153,7 +153,7 @@ def prepare_openmm_config(config, params):
                 "parameters": {
                     "temperature": 1500,
                     "friction": 0.1,
-                    "nsteps": 200000,
+                    "nsteps": 500000,
                     "timestep": 0.001,
                 },
                 "rgyr": {
@@ -171,7 +171,7 @@ def prepare_openmm_config(config, params):
     }
 
     fixed_bodies = []
-    rigid_bodies = []
+    rigid_bodies_dict = {}
     with open(const_inp_path, "r") as f:
         for line in f:
             line = line.strip()
@@ -185,8 +185,12 @@ def prepare_openmm_config(config, params):
                 fixed_bodies.append(
                     {
                         "name": f"FixedBody{idx}",
-                        "chain_id": segid[-1],
-                        "residues": {"start": int(start), "stop": int(stop)},
+                        "segments": [
+                            {
+                                "chain_id": segid[-1],
+                                "residues": {"start": int(start), "stop": int(stop)},
+                            }
+                        ],
                     }
                 )
             # Rigid bodies
@@ -196,13 +200,17 @@ def prepare_openmm_config(config, params):
             )
             if m_rigid:
                 idx, start, stop, segid = m_rigid.groups()
-                rigid_bodies.append(
-                    {
-                        "name": f"RigidBody{idx}",
-                        "chain_id": segid[-1],
-                        "residues": {"start": int(start), "stop": int(stop)},
-                    }
-                )
+                name = f"RigidBody{idx}"
+                segment = {
+                    "chain_id": segid[-1],
+                    "residues": {"start": int(start), "stop": int(stop)},
+                }
+                if name not in rigid_bodies_dict:
+                    rigid_bodies_dict[name] = {"name": name, "segments": [segment]}
+                else:
+                    rigid_bodies_dict[name]["segments"].append(segment)
+
+    rigid_bodies = list(rigid_bodies_dict.values())
 
     # Merge into openmm_config
     openmm_config["constraints"]["fixed_bodies"] = fixed_bodies
@@ -437,6 +445,11 @@ update_status md Running
      --gpu-bind=map_gpu:0,1,2,3 \\
      --job-name md_rgset{i} \\
      podman-hpc run --rm --gpu \\
+         --env SLURM_JOB_ID \\
+         --env SLURM_STEP_ID \\
+         --env SLURM_PROCID \\
+         --env SLURM_NTASKS \\
+         --env CUDA_VISIBLE_DEVICES \\
          -v $WORKDIR:/bilbomd/work \\
          -v $UPLOAD_DIR:/cfs \\
          {config['openmm_worker']} /bin/bash -c "

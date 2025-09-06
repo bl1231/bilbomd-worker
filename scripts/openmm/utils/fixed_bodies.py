@@ -1,6 +1,8 @@
 """Fixed Regions"""
+
 from openmm import unit
 from openmm import CustomExternalForce
+
 
 def apply_fixed_body_constraints_zero_mass(system, modeller, fixed_bodies):
     """
@@ -15,21 +17,24 @@ def apply_fixed_body_constraints_zero_mass(system, modeller, fixed_bodies):
     """
     for atom in modeller.topology.atoms():
         res_id = int(atom.residue.id)
+        chain_id = atom.residue.chain.id
         for fixed_body in fixed_bodies:
-            # Check if the atom's chain matches and the residue ID is within the fixed range.
-            if atom.residue.chain.id == fixed_body["chain_id"]:
-                start = fixed_body["residues"]["start"]
-                stop = fixed_body["residues"]["stop"]
-                if start <= res_id < stop:
-                    system.setParticleMass(atom.index, 0.0 * unit.amu)
-                    # Once the atom is frozen for one fixed body, skip to the next atom.
-                    break
+            segments = fixed_body.get("segments", [])
+            for segment in segments:
+                if chain_id == segment["chain_id"]:
+                    start = segment["residues"]["start"]
+                    stop = segment["residues"]["stop"]
+                    if start <= res_id < stop:
+                        system.setParticleMass(atom.index, 0.0 * unit.amu)
+                        break
     # Debug: Print atoms with zero mass
     zero_mass_atoms = [
-        i for i in range(system.getNumParticles())
+        i
+        for i in range(system.getNumParticles())
         if system.getParticleMass(i)._value == 0
     ]
     print(f"Zero-mass atoms: {zero_mass_atoms}")
+
 
 def apply_fixed_body_constraints(system, modeller, fixed_bodies, kfixed=100000.0):
     """
@@ -50,20 +55,24 @@ def apply_fixed_body_constraints(system, modeller, fixed_bodies, kfixed=100000.0
 
     for atom in modeller.topology.atoms():
         res_id = int(atom.residue.id)
+        chain_id = atom.residue.chain.id
         for fixed_body in fixed_bodies:
-            if atom.residue.chain.id == fixed_body["chain_id"]:
-                start = fixed_body["residues"]["start"]
-                stop = fixed_body["residues"]["stop"]
-                if start <= res_id < stop:
-                    pos = modeller.positions[atom.index]
-                    force.addParticle(atom.index, [pos.x, pos.y, pos.z])
-                    break  # Move to next atom once matched
+            segments = fixed_body.get("segments", [])
+            for segment in segments:
+                if chain_id == segment["chain_id"]:
+                    start = segment["residues"]["start"]
+                    stop = segment["residues"]["stop"]
+                    if start <= res_id < stop:
+                        pos = modeller.positions[atom.index]
+                        force.addParticle(atom.index, [pos.x, pos.y, pos.z])
+                        break  # Move to next atom once matched
 
     system.addForce(force)
-        
+
     # Debug: Print atoms with zero mass
     zero_mass_atoms = [
-        i for i in range(system.getNumParticles())
+        i
+        for i in range(system.getNumParticles())
         if system.getParticleMass(i)._value == 0
     ]
     print(f"Zero-mass atoms: {zero_mass_atoms}")
