@@ -35,8 +35,8 @@ def setup_environment(uuid):
     workdir = f"{pscratch}/bilbomd/{env_dir}/{uuid}"
 
     # Docker images
-    openmm_worker = "bilbomd/bilbomd-openmm-worker:0.0.4"
-    bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.23"
+    openmm_worker = "bilbomd/bilbomd-openmm-worker:0.0.10"
+    bilbomd_worker = "bilbomd/bilbomd-perlmutter-worker:0.0.24"
     af_worker = "bilbomd/bilbomd-colabfold:0.0.8"
 
     # Number of cores
@@ -153,11 +153,11 @@ def prepare_openmm_config(config, params):
                 "parameters": {
                     "temperature": 1500,
                     "friction": 0.1,
-                    "nsteps": 200000,
+                    "nsteps": 1000000,
                     "timestep": 0.001,
                 },
                 "rgyr": {
-                    "rgs": [],
+                    "rg_sets": [],
                     "k_rg": 1,
                     "report_interval": 500,
                     "filename": "rgyr_report.csv",
@@ -171,7 +171,7 @@ def prepare_openmm_config(config, params):
     }
 
     fixed_bodies = []
-    rigid_bodies = []
+    rigid_bodies_dict = {}
     with open(const_inp_path, "r") as f:
         for line in f:
             line = line.strip()
@@ -185,8 +185,12 @@ def prepare_openmm_config(config, params):
                 fixed_bodies.append(
                     {
                         "name": f"FixedBody{idx}",
-                        "chain_id": segid[-1],
-                        "residues": {"start": int(start), "stop": int(stop)},
+                        "segments": [
+                            {
+                                "chain_id": segid[-1],
+                                "residues": {"start": int(start), "stop": int(stop)},
+                            }
+                        ],
                     }
                 )
             # Rigid bodies
@@ -196,29 +200,36 @@ def prepare_openmm_config(config, params):
             )
             if m_rigid:
                 idx, start, stop, segid = m_rigid.groups()
-                rigid_bodies.append(
-                    {
-                        "name": f"RigidBody{idx}",
-                        "chain_id": segid[-1],
-                        "residues": {"start": int(start), "stop": int(stop)},
-                    }
-                )
+                name = f"RigidBody{idx}"
+                segment = {
+                    "chain_id": segid[-1],
+                    "residues": {"start": int(start), "stop": int(stop)},
+                }
+                if name not in rigid_bodies_dict:
+                    rigid_bodies_dict[name] = {"name": name, "segments": [segment]}
+                else:
+                    rigid_bodies_dict[name]["segments"].append(segment)
+
+    rigid_bodies = list(rigid_bodies_dict.values())
 
     # Merge into openmm_config
     openmm_config["constraints"]["fixed_bodies"] = fixed_bodies
     openmm_config["constraints"]["rigid_bodies"] = rigid_bodies
 
-    # Compute Rg values for MD step
+    # Compute Rg values for MD step and split into rg_sets
     rg_min = int(params.get("rg_min", 0))
     rg_max = int(params.get("rg_max", 0))
-    # N = int(params.get("rg_N", 8))
     N = int(config["num_rgs"])
+    rg_sets = []
     if rg_max > rg_min and N > 0:
         rgs = np.linspace(rg_min, rg_max, N)
         rgs = [int(round(rg)) for rg in rgs]
-        openmm_config["steps"]["md"]["rgyr"]["rgs"] = rgs
+        # Split rgs into chunks of up to 4
+        for i in range(0, len(rgs), 4):
+            rg_sets.append(rgs[i : i + 4])
+        openmm_config["steps"]["md"]["rgyr"]["rg_sets"] = rg_sets
     else:
-        openmm_config["steps"]["md"]["rgyr"]["rgs"] = []
+        openmm_config["steps"]["md"]["rgyr"]["rg_sets"] = []
 
     # Write to config.yaml
     config_yaml_path = os.path.join(config["workdir"], "openmm_config.yaml")
@@ -399,36 +410,57 @@ update_status heat Success
 
 
 def generate_md_section(config):
-    cores_per_task = int(config["num_cores"] / config["num_rgs"])
+    cores_per_task = int(config["num_cores"] / (config["num_rgs"] / 2))
+    tasks_per_wave = int(config["num_rgs"] / 2)
     print(
         f"MD section: {config['num_cores']} cores, {config['num_rgs']} Rg values, {cores_per_task} cores per task"
     )
-    section = f"""
+    # Read rg_sets from openmm_config.yaml
+    config_yaml_path = os.path.join(config["workdir"], "openmm_config.yaml")
+    with open(config_yaml_path, "r") as f:
+        openmm_config = yaml.safe_load(f)
+    rg_sets = openmm_config["steps"]["md"]["rgyr"].get("rg_sets", [])
+    num_sets = len(rg_sets)
+
+    cores_per_task = (
+        int(config["num_cores"] / (config["num_rgs"] / 2))
+        if config["num_rgs"] > 1
+        else config["num_cores"]
+    )
+    tasks_per_wave = int(config["num_rgs"] / 2) if config["num_rgs"] > 1 else 1
+
+    section = """
 # --------------------------------------------------------------------------------------
-# OpenMM Molecular Dynamics (concurrent runs with each Rg value)
+# OpenMM Molecular Dynamics (concurrent runs with each Rg set)
 update_status md Running
-echo "Running OpenMM MD for all Rg values..."
-srun --ntasks={config['num_rgs']} \\
+"""
+    section += "echo 'Running OpenMM MD for all Rg sets...'\n"
+    for i in range(num_sets):
+        rg_values = rg_sets[i]
+        section += f"echo 'Running MD for rg_set {i}: Rg values {rg_values}'\n"
+        section += f"""srun --ntasks={tasks_per_wave} \\
      --cpus-per-task={cores_per_task} \\
      --gpus-per-node=4 \\
      --cpu-bind=cores \\
      --gpu-bind=map_gpu:0,1,2,3 \\
-     --job-name md \\
+     --job-name md_rgset{i} \\
      podman-hpc run --rm --gpu \\
-        -v $WORKDIR:/bilbomd/work \\
-        -v $UPLOAD_DIR:/cfs \\
-        {config['openmm_worker']} /bin/bash -c "
-            set -e
-            export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
-            cd /bilbomd/work/ && 
-            python /app/scripts/openmm/md.py openmm_config.yaml
-        "
-MD_EXIT=$?
-check_exit_code $MD_EXIT md
-
-echo "OpenMM MD complete"
-update_status md Success
+         --env SLURM_JOB_ID \\
+         --env SLURM_STEP_ID \\
+         --env SLURM_PROCID \\
+         --env SLURM_NTASKS \\
+         --env CUDA_VISIBLE_DEVICES \\
+         -v $WORKDIR:/bilbomd/work \\
+         -v $UPLOAD_DIR:/cfs \\
+         {config['openmm_worker']} /bin/bash -c "
+             set -e
+             export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+             cd /bilbomd/work/ &&
+             python /app/scripts/openmm/md.py openmm_config.yaml --rg-set {i}
+         "
 """
+        section += f"MD_EXIT=$?\ncheck_exit_code $MD_EXIT md\n"
+    section += "echo 'OpenMM MD complete'\nupdate_status md Success\n"
     return section
 
 
