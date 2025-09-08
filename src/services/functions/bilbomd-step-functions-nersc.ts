@@ -99,10 +99,15 @@ const makeBilboMDSlurm = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> =>
       'Preparation of Slurm batch file has started.'
     )
 
-    const prepTaskID = await executeNerscScript(
-      config.scripts.prepareSlurmScript,
-      DBjob.uuid
-    )
+    let prepSlurmScript
+    if ('md_engine' in DBjob) {
+      if (DBjob.md_engine === 'OpenMM') {
+        prepSlurmScript = config.scripts.prepareOMMSlurmScript
+      }
+    } else {
+      prepSlurmScript = config.scripts.prepareCHARMMSlurmScript
+    }
+    const prepTaskID = await executeNerscScript(prepSlurmScript, DBjob.uuid)
 
     const prepResult: INerscTaskResult = await monitorTaskAtNERSC(prepTaskID)
     logger.info(`prepResult: ${JSON.stringify(prepResult)}`)
