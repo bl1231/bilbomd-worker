@@ -16,10 +16,10 @@ import numpy as np
 def setup_environment(uuid):
     # Slurm and project parameters
     project = "m4659"
-    queue = "debug"
+    queue = "regular"
     constraint = "gpu"
     nodes = 1
-    walltime = "00:30:00"
+    walltime = "01:00:00"
     mailtype = "end,fail"
     mailuser = "sclassen@lbl.gov"
 
@@ -381,6 +381,61 @@ update_status minimize Success
     return section
 
 
+def num_saxs_data_points(saxs_file):
+    count = 0
+    with open(saxs_file, "r") as f:
+        for line in f:
+            trimmed = line.strip()
+            # Skip empty lines and lines starting with '#'
+            if trimmed and not trimmed.startswith("#"):
+                count += 1
+    # Adjust count by subtracting 1
+    count -= 1
+    return count
+
+
+def generate_initial_foxs_analysis_section(config, params):
+    saxs_data = os.path.join(config["workdir"], params.get("data_file"))
+    profile_size = num_saxs_data_points(saxs_data)
+    min_c1 = 0.99
+    max_c1 = 1.05
+    min_c2 = -0.50
+    max_c2 = 2.00
+    minimized_pdb = os.path.join(config["workdir"], "openmm/minimization/minimized.pdb")
+    foxs_args = (
+        f"--offset "
+        f"--min_c1={min_c1} "
+        f"--max_c1={max_c1} "
+        f"--min_c2={min_c2} "
+        f"--max_c2={max_c2} "
+        f"--profile_size={profile_size} "
+        f"{minimized_pdb} {saxs_data}"
+    )
+    section = f"""
+    
+# --------------------------------------------------------------------------------------
+# Initial FoXS analysis on input structure
+update_status initfoxs Running
+echo "Running initial FoXS analysis on minimized structure..."
+srun --ntasks=1 \\
+     --cpus-per-task={config['num_cores']} \\
+     --cpu-bind=cores \\
+     --job-name initfoxs \\
+     podman-hpc run --rm \\
+        -v \$WORKDIR:/bilbomd/work \\
+        {config['bilbomd_worker']} /bin/bash -c "
+            set -e
+            cd /bilbomd/work/ &&
+            foxs ${foxs_args} > initial_foxs_analysis.log 2> initial_foxs_analysis_error.log
+        "
+INITFOXS_EXIT=$?
+check_exit_code $INITFOXS_EXIT initfoxs
+echo "Initial FoXS analysis complete"
+update_status initfoxs Success
+"""
+    return section
+
+
 def generate_heat_section(config):
     section = f"""
 # --------------------------------------------------------------------------------------
@@ -608,16 +663,17 @@ def main():
         slurm_sections.append(generate_alphafold_section(config))
         slurm_sections.append(generate_pae2const_section(config))
     slurm_sections.append(generate_minimize_section(config))
+    slurm_sections.append(generate_initial_foxs_analysis_section(config, params))
     slurm_sections.append(generate_heat_section(config))
     slurm_sections.append(generate_md_section(config))
     slurm_sections.append(generate_foxs_section(config))
     slurm_sections.append(generate_multifoxs_section(config))
     slurm_sections.append(generate_analysis_section(config))
-    slurm_sections.append(generate_copy_section(config))
+    # slurm_sections.append(generate_copy_section(config))
     slurm_sections.append(generate_end_matters(config))
 
     # Step 6: Write final Slurm file
-    slurm_file = Path(config["workdir"]) / "bilbomd_omm.slurm"
+    slurm_file = Path(config["workdir"]) / "bilbomd.slurm"
     with open(slurm_file, "w") as f:
         for section in slurm_sections:
             if section:
