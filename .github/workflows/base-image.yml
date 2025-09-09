@@ -4,11 +4,9 @@ on:
   push:
     branches:
       - main
-      - 672-split-docker-build-into-base-and-app
     paths:
       - bilbomd-worker-base.dockerfile
       - scripts/sans/**
-      # Add other items here that should trigger rebuild of the base image
 
 jobs:
   build-and-push-base-image:
