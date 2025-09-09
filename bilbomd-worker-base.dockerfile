@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------
-# Setup the base image for building (CUDA devel)
+# Setup the base image for building
 FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS install-dependencies
 
 RUN apt-get update && \
