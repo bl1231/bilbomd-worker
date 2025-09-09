@@ -8,7 +8,7 @@ on:
     paths:
       - bilbomd-worker-base.dockerfile
       - scripts/sans/**
-      # Add other scientific dependency files here
+      # Add other items here that should trigger rebuild of the base image
 
 jobs:
   build-and-push-base-image:
