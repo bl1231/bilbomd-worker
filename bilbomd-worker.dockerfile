@@ -1,5 +1,4 @@
-# FROM ghcr.io/bl1231/bilbomd-worker-base:latest
-FROM localhost/bilbomd/bilbomd-worker-base:latest
+FROM ghcr.io/bl1231/bilbomd-worker-base:latest
 
 # Install Node.js and update npm to latest
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
