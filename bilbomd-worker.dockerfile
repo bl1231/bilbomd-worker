@@ -1,10 +1,11 @@
 # FROM ghcr.io/bl1231/bilbomd-worker-base:latest
-FROM localhost/bl1231/bilbomd-worker-base:latest
+FROM localhost/bilbomd/bilbomd-worker-base:latest
 
-# Install Node.js
+# Install Node.js and update npm to latest
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get update && \
     apt-get install -y nodejs && \
+    npm install -g npm@latest && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
