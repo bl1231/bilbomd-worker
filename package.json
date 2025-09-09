@@ -11,10 +11,9 @@
     "tsc": "tsc",
     "build": "npm-run-all clean copy-assets lint tsc",
     "build:ci": "npm-run-all clean copy-assets tsc",
-    "build:ci": "npm-run-all clean copy-assets tsc",
     "dev:start": "npm-run-all build start",
     "dev": "nodemon --watch src --ext ts,ejs --exec npm run start",
-    "start": "npm run build && node dist/worker.js",
+    "start": "node dist/worker.js",
     "test": "vitest",
     "test:ui": "vitest --ui"
   },
@@ -22,7 +21,6 @@
   "author": "Scott Classen",
   "license": "ISC",
   "dependencies": {
-    "@bl1231/bilbomd-mongodb-schema": "^1.9.1",
     "@bl1231/bilbomd-mongodb-schema": "^1.9.1",
     "axios": "^1.11.0",
     "axios-retry": "^4.5.0",
