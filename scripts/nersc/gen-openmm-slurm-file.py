@@ -340,7 +340,6 @@ srun --gpus=4 \\
         "
 AF_EXIT=$?
 check_exit_code $AF_EXIT alphafold
-
 echo "AlphaFold Done."
 update_status alphafold Success
 """
@@ -374,7 +373,6 @@ srun --ntasks=1 \\
         "
 MIN_EXIT=$?
 check_exit_code $MIN_EXIT minimize
-
 echo "OpenMM Minimization complete"
 update_status minimize Success
 """
@@ -412,7 +410,7 @@ def generate_initial_foxs_analysis_section(config, params):
         f"{minimized_pdb} {saxs_data}"
     )
     section = f"""
-    
+
 # --------------------------------------------------------------------------------------
 # Initial FoXS analysis on input structure
 update_status initfoxs Running
@@ -422,7 +420,7 @@ srun --ntasks=1 \\
      --cpu-bind=cores \\
      --job-name initfoxs \\
      podman-hpc run --rm \\
-        -v \$WORKDIR:/bilbomd/work \\
+        -v $WORKDIR:/bilbomd/work \\
         {config['bilbomd_worker']} /bin/bash -c "
             set -e
             cd /bilbomd/work/ &&
@@ -457,7 +455,6 @@ srun --ntasks=1 \\
         "
 HEAT_EXIT=$?
 check_exit_code $HEAT_EXIT heat
-
 echo "OpenMM Heating complete"
 update_status heat Success
 """
@@ -543,7 +540,6 @@ srun --ntasks=1 \\
         "
 FOXS_EXIT=$?
 check_exit_code $FOXS_EXIT foxs
-
 echo "FoXS analysis complete"
 update_status foxs Success
 """
@@ -573,7 +569,6 @@ srun --ntasks=1 \\
         "
 MFOXS_EXIT=$?
 check_exit_code $MFOXS_EXIT multifoxs
-
 echo "MultiFoXS processing complete."
 update_status multifoxs Success
 """
