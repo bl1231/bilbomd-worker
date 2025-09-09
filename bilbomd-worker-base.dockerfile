@@ -174,7 +174,7 @@ RUN mkdir -p /opt/envs/openmm /opt/envs/base && \
 RUN set -eux; \
     find /opt/envs -type d -name "__pycache__" -prune -exec rm -rf {} +; \
     find /opt/envs -type f -name "*.py[co]" -delete; \
-    find /opt/envs -type d \( -name tests -o -name test -o -name testing \) -prune -exec rm -rf {} +; \
+    # find /opt/envs -type d \( -name tests -o -name test -o -name testing \) -prune -exec rm -rf {} +; \
     find /opt/envs -type f -name "*.a" -delete; \
     find /opt/envs -type f -name "*.la" -delete; \
     strip --strip-unneeded ${OPENMM_PREFIX}/lib/libOpenMM*.so || true; \
