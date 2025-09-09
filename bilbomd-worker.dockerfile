@@ -37,4 +37,4 @@ USER bilbo:bilbomd
 ENV NODE_ENV=production
 
 EXPOSE 3000
-CMD ["node", "dist/worker.js"]
+CMD ["npm", "start"]
