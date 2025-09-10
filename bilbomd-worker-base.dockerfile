@@ -164,7 +164,10 @@ COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/charmm
 COPY --from=install-sans-tools /usr/local/bin/Pepsi-SANS /usr/local/bin/Pepsi-SANS
 COPY --from=install-sans-tools /usr/local/sans /usr/local/sans
 COPY --from=openmm-build ${OPENMM_PREFIX} ${OPENMM_PREFIX}
-COPY --from=install-atsas /usr/local/ATSAS-4.0.1 /usr/local/ATSAS-4.0.1
+COPY --from=install-atsas /usr/local/ATSAS-4.0.1/Licenses /usr/local/ATSAS-4.0.1/Licenses
+COPY --from=install-atsas /usr/local/ATSAS-4.0.1/bin /usr/local/ATSAS-4.0.1/bin
+COPY --from=install-atsas /usr/local/ATSAS-4.0.1/lib /usr/local/ATSAS-4.0.1/lib
+COPY --from=install-atsas /usr/local/ATSAS-4.0.1/share /usr/local/ATSAS-4.0.1/share
 COPY --from=pack-openmm-env /tmp/openmm-env.tar.gz /tmp/openmm-env.tar.gz
 COPY --from=pack-openmm-env /tmp/base-env.tar.gz   /tmp/base-env.tar.gz
 RUN mkdir -p /opt/envs/openmm /opt/envs/base && \
@@ -188,3 +191,8 @@ ENV OPENMM_INCLUDE_DIR="${OPENMM_PREFIX}/include"
 ENV OPENMM_LIBRARY="${OPENMM_PREFIX}/lib"
 ENV OPENMM_LIBRARIES="${OPENMM_PREFIX}/lib"
 ENV OPENMM_PLUGIN_DIR="${OPENMM_PREFIX}/lib/plugins"
+
+ENV PATH="/usr/local/ATSAS-4.0.1/bin:/miniforge3/bin/:${PATH}"
+
+# ---- Smoke test OpenMM installation ----
+COPY scripts/smoke_test.sh /usr/local/bin/smoke_test.sh
