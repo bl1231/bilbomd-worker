@@ -12,7 +12,7 @@ const getEnvVar = (name: string): string => {
 export const config = {
   sendEmailNotifications: process.env.SEND_EMAIL_NOTIFICATIONS === 'true',
   bilbomdUrl: getEnvVar('BILBOMD_URL'),
-  runOnNERSC: process.env.USE_NERSC === 'true', // Explicit boolean conversion
+  runOnNERSC: process.env.USE_NERSC === 'true',
   nerscBaseAPI: getEnvVar('SFAPI_URL'),
   nerscScriptDir: getEnvVar('SCRIPT_DIR'),
   nerscUploadDir: getEnvVar('UPLOAD_DIR'),
@@ -24,7 +24,8 @@ export const config = {
   foxBin: getEnvVar('FOXS'),
   multifoxsBin: getEnvVar('MULTIFOXS'),
   scripts: {
-    prepareSlurmScript: getEnvVar('PREPARE_SLURM_SCRIPT'),
+    prepareCHARMMSlurmScript: getEnvVar('PREPARE_CHARMM_SLURM_SCRIPT'),
+    prepareOMMSlurmScript: getEnvVar('PREPARE_OMM_SLURM_SCRIPT'),
     copyFromScratchToCFSScript: getEnvVar('CP2CFS_SCRIPT'),
     dockerBuildScript: 'docker-build.sh'
   }

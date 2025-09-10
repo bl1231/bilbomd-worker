@@ -1,11 +1,6 @@
 # -----------------------------------------------------------------------------
 # Build stage 1 - Install build tools & dependencies
-# FROM ubuntu:24.04 AS builder
-# FROM nvcr.io/nvidia/cuda:12.5.1-devel-ubuntu24.04 AS builder
-# FROM nvcr.io/nvidia/cuda:12.2.2-devel-ubuntu22.04 AS builder
-# FROM nvcr.io/nvidia/cuda:12.0.0-devel-ubuntu22.04 AS builder
-# FROM nvcr.io/nvidia/cuda:12.0.1-devel-ubuntu22.04 AS builder
-FROM nvidia/cuda:12.2.2-devel-ubuntu22.04 AS builder
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS builder
 RUN apt-get update && \
     apt-get install -y cmake gcc gfortran g++ python3 \
     libpmix-bin libpmix-dev parallel wget bzip2 ncat \
@@ -107,12 +102,30 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
-# Build stage 7 - worker app
-# need the python script files... I think that's all we need?
-FROM bilbomd-worker-step2 AS bilbomd-perlmutter-worker
+
+# Build stage 7 - worker app (intermediate)
+FROM bilbomd-worker-step2 AS bilbomd-perlmutter-worker-intermediate
 ARG USER_ID
 WORKDIR /app
 COPY scripts/ scripts/
-
-# Needed in order to have podman-hpc runtime run as me.
 RUN chown -R $USER_ID:0 /app
+
+# Build stage 8 - Final runtime image
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS bilbomd-perlmutter-worker
+
+COPY --from=bilbomd-worker-step2 /usr/local/openmm /usr/local/openmm
+COPY --from=bilbomd-worker-step2 /usr/local/openmm/lib /usr/local/openmm/lib
+COPY --from=bilbomd-worker-step2 /usr/local/openmm/lib/plugins /usr/local/openmm/lib/plugins
+COPY --from=bilbomd-worker-step2 /miniforge3 /miniforge3
+COPY --from=bilbomd-perlmutter-worker-intermediate /app /app
+COPY --from=bilbomd-worker-step2 /usr/bin/ /usr/bin/
+COPY --from=bilbomd-worker-step2 /usr/local/bin/ /usr/local/bin/
+COPY --from=bilbomd-worker-step2 /usr/lib/ /usr/lib/
+COPY --from=bilbomd-worker-step2 /usr/local/lib/ /usr/local/lib/
+COPY --from=bilbomd-worker-step2 /usr/local/src/charmm/lib /usr/local/src/charmm/lib
+# Set environment variables
+ENV PATH="/miniforge3/bin/:${PATH}"
+ENV OPENMM_PLUGIN_DIR=/usr/local/openmm/lib/plugins
+ENV LD_LIBRARY_PATH=/usr/local/openmm/lib:/usr/local/openmm/lib/plugins:/usr/lib:/usr/local/lib:$LD_LIBRARY_PATH
+
+WORKDIR /app

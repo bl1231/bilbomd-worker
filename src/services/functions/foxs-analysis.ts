@@ -1,5 +1,5 @@
 import { spawn, ChildProcess } from 'node:child_process'
-import { IJob, IBilboMDAutoJob } from '@bl1231/bilbomd-mongodb-schema'
+import { IJob } from '@bl1231/bilbomd-mongodb-schema'
 import fs from 'fs-extra'
 import path from 'node:path'
 import { logger } from '../../helpers/loggers.js'
@@ -27,7 +27,7 @@ const countDataPoints = async (filePath: string): Promise<number> => {
   return count - 1
 }
 
-const runSingleFoXS = async (DBjob: IJob | IBilboMDAutoJob): Promise<void> => {
+const runSingleFoXS = async (DBjob: IJob): Promise<void> => {
   let status: IStepStatus = {
     status: 'Running',
     message: 'Initial FoXS Calculations have started.'
@@ -39,7 +39,15 @@ const runSingleFoXS = async (DBjob: IJob | IBilboMDAutoJob): Promise<void> => {
     const errorFile = path.join(jobDir, 'initial_foxs_analysis_error.log')
     const logStream = fs.createWriteStream(logFile)
     const errorStream = fs.createWriteStream(errorFile)
-    const inputPDB = 'minimization_output.pdb'
+
+    let inputPDB: string
+    if (!DBjob.md_engine || DBjob.md_engine === 'CHARMM') {
+      inputPDB = 'minimization_output.pdb'
+    } else if (DBjob.md_engine === 'OpenMM') {
+      inputPDB = 'minimize/minimized.pdb'
+    } else {
+      inputPDB = 'minimization_output.pdb' // fallback for unknown engine
+    }
     const inputDAT = DBjob.data_file
     const profileSize = await countDataPoints(path.join(jobDir, inputDAT))
     const foxsOpts = { cwd: jobDir }

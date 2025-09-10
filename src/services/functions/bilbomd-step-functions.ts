@@ -243,7 +243,7 @@ const spawnPaeToConst = async (params: PaeParams): Promise<string> => {
   const opts = { cwd: params.out_dir }
 
   return new Promise((resolve, reject) => {
-    const runPaeToConst: ChildProcess = spawn('python', args, opts)
+    const runPaeToConst: ChildProcess = spawn('/opt/envs/base/bin/python', args, opts)
     runPaeToConst.stdout?.on('data', (data) => {
       logger.info(`runPaeToConst stdout:  ${data.toString()}`)
       logStream.write(data.toString())
@@ -365,7 +365,7 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   await updateStepStatus(DBjob, 'autorg', status)
 
   return new Promise<void>((resolve, reject) => {
-    const autoRg = spawn('python', args, { cwd: outputDir })
+    const autoRg = spawn('/opt/envs/base/bin/python', args, { cwd: outputDir })
 
     autoRg.stdout?.on('data', (data) => {
       logStream.write(data.toString())
@@ -424,7 +424,15 @@ const runAutoRg = async (DBjob: IBilboMDAutoJob): Promise<void> => {
   })
 }
 
-const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob | IBilboMDSANSJob): Promise<void> => {
+const runMinimize = async (
+  MQjob: BullMQJob,
+  DBjob:
+    | IBilboMDCRDJob
+    | IBilboMDPDBJob
+    | IBilboMDAutoJob
+    | IBilboMDAlphaFoldJob
+    | IBilboMDSANSJob
+): Promise<void> => {
   const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const params: CharmmParams = {
     out_dir: outputDir,
@@ -453,7 +461,15 @@ const runMinimize = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob | IBilboMDPDB
   }
 }
 
-const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob | IBilboMDSANSJob): Promise<void> => {
+const runHeat = async (
+  MQjob: BullMQJob,
+  DBjob:
+    | IBilboMDCRDJob
+    | IBilboMDPDBJob
+    | IBilboMDAutoJob
+    | IBilboMDAlphaFoldJob
+    | IBilboMDSANSJob
+): Promise<void> => {
   const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const params: CharmmHeatParams = {
     out_dir: outputDir,
@@ -485,7 +501,12 @@ const runHeat = async (MQjob: BullMQJob, DBjob: IBilboMDCRDJob | IBilboMDPDBJob 
 
 const runMolecularDynamics = async (
   MQjob: BullMQJob,
-  DBjob: IBilboMDCRDJob | IBilboMDPDBJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob | IBilboMDSANSJob
+  DBjob:
+    | IBilboMDCRDJob
+    | IBilboMDPDBJob
+    | IBilboMDAutoJob
+    | IBilboMDAlphaFoldJob
+    | IBilboMDSANSJob
 ): Promise<void> => {
   const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const params: CharmmMDParams = {
@@ -532,7 +553,7 @@ const runMolecularDynamics = async (
   }
 }
 
-const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IBilboMDPDBJob | IBilboMDCRDJob | IBilboMDAutoJob | IBilboMDAlphaFoldJob): Promise<void> => {
+const runMultiFoxs = async (MQjob: BullMQJob, DBjob: IJob): Promise<void> => {
   const outputDir = path.join(config.uploadDir, DBjob.uuid)
   const multifoxsParams: MultiFoxsParams = {
     out_dir: outputDir,
@@ -595,23 +616,51 @@ const prepareResults = async (
       // Decide whether to continue or throw based on your application's requirements
     }
 
-    // Copy the minimized PDB
-    await copyFiles({
-      source: `${jobDir}/minimization_output.pdb`,
-      destination: resultsDir,
-      filename: 'minimization_output.pdb',
-      MQjob,
-      isCritical: false
-    })
+    {
+      const baseDataName = DBjob.data_file.split('.')[0]
+      const charmmPdb = path.join(jobDir, 'minimization_output.pdb')
+      const openmmPdb = path.join(jobDir, 'minimize', 'minimized.pdb')
 
-    // Copy the DAT file for the minimized PDB
-    await copyFiles({
-      source: `${jobDir}/minimization_output_${DBjob.data_file.split('.')[0]}.dat`,
-      destination: resultsDir,
-      filename: 'minimization_output.pdb.dat',
-      MQjob,
-      isCritical: false
-    })
+      const pdbSource = (await fs.pathExists(openmmPdb))
+        ? openmmPdb
+        : (await fs.pathExists(charmmPdb))
+        ? charmmPdb
+        : null
+
+      if (pdbSource) {
+        await copyFiles({
+          source: pdbSource,
+          destination: resultsDir,
+          filename: path.basename(pdbSource), // keep original filename
+          MQjob,
+          isCritical: false
+        })
+      } else {
+        logger.warn('No minimized PDB found (checked OpenMM and CHARMM locations).')
+      }
+
+      // --- Copy the DAT file for the minimized PDB (supports both layouts)
+      const charmmDat = path.join(jobDir, `minimization_output_${baseDataName}.dat`)
+      const openmmDat = path.join(jobDir, 'minimize', `minimized_${baseDataName}.dat`)
+
+      const datSource = (await fs.pathExists(openmmDat))
+        ? openmmDat
+        : (await fs.pathExists(charmmDat))
+        ? charmmDat
+        : null
+
+      if (datSource) {
+        await copyFiles({
+          source: datSource,
+          destination: resultsDir,
+          filename: path.basename(datSource),
+          MQjob,
+          isCritical: false
+        })
+      } else {
+        logger.warn('No minimized DAT file found (checked OpenMM and CHARMM locations).')
+      }
+    }
 
     // Copy ensemble_size_*.txt files
     await copyFiles({
@@ -632,9 +681,7 @@ const prepareResults = async (
     })
 
     // Gather original uploaded files
-    const filesToCopy = [
-      { file: DBjob.data_file, label: 'data_file' } // Assuming data_file is common
-    ]
+    const filesToCopy = [{ file: DBjob.data_file, label: 'data_file' }]
 
     if ('pdb_file' in DBjob && DBjob.pdb_file) {
       filesToCopy.push({ file: DBjob.pdb_file, label: 'pdb_file' })
@@ -775,7 +822,7 @@ const spawnRgyrDmaxScript = async (DBjob: IJob): Promise<void> => {
   const opts = { cwd: jobDir }
 
   return new Promise((resolve, reject) => {
-    const runRgyrDmaxScript: ChildProcess = spawn('python', args, opts)
+    const runRgyrDmaxScript: ChildProcess = spawn('/opt/envs/base/bin/python', args, opts)
 
     runRgyrDmaxScript.stdout?.on('data', (data) => {
       logger.info(`Rgyr Dmax script stdout: ${data.toString()}`)
@@ -821,7 +868,7 @@ const spawnFeedbackScript = async (DBjob: IJob): Promise<void> => {
   const opts = { cwd: resultsDir }
 
   return new Promise((resolve, reject) => {
-    const runFeedbackScript: ChildProcess = spawn('python', args, opts)
+    const runFeedbackScript: ChildProcess = spawn('/opt/envs/base/bin/python', args, opts)
 
     runFeedbackScript.stdout?.on('data', (data) => {
       logger.info(`Feedback script stdout: ${data.toString()}`)

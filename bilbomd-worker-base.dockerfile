@@ -133,8 +133,6 @@ FROM pdbfixer-build AS pack-openmm-env
 RUN conda install -y -n base  -c conda-forge conda-pack && \
     conda install -y -n openmm -c conda-forge conda-pack && \
     conda clean -afy
-RUN conda run -n openmm python -c "import sys; print(sys.version)" || true
-RUN conda run -n base   python -c "import sys; print(sys.version)" || true
 RUN conda run -n openmm conda-pack -n openmm -o /tmp/openmm-env.tar.gz
 RUN conda run -n base   conda-pack -p /miniforge3 -o /tmp/base-env.tar.gz
 
@@ -149,7 +147,7 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ca-certificates curl software-properties-common \
     libgfortran5 libstdc++6 libxml2 libtiff5 liblzma5 libicu70 libharfbuzz0b \
-    parallel && \
+    parallel binutils && \
     rm -rf /var/lib/apt/lists/*
 
 RUN add-apt-repository -y ppa:salilab/ppa && \
@@ -164,6 +162,11 @@ COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/charmm
 COPY --from=install-sans-tools /usr/local/bin/Pepsi-SANS /usr/local/bin/Pepsi-SANS
 COPY --from=install-sans-tools /usr/local/sans /usr/local/sans
 COPY --from=openmm-build ${OPENMM_PREFIX} ${OPENMM_PREFIX}
+# COPY --from=install-atsas /usr/local/ATSAS-4.0.1/Licenses /usr/local/ATSAS-4.0.1/Licenses
+COPY --from=install-atsas /usr/local/ATSAS-4.0.1/atsas.lic /usr/local/ATSAS-4.0.1/atsas.lic
+COPY --from=install-atsas /usr/local/ATSAS-4.0.1/bin /usr/local/ATSAS-4.0.1/bin
+COPY --from=install-atsas /usr/local/ATSAS-4.0.1/lib /usr/local/ATSAS-4.0.1/lib
+COPY --from=install-atsas /usr/local/ATSAS-4.0.1/share /usr/local/ATSAS-4.0.1/share
 COPY --from=pack-openmm-env /tmp/openmm-env.tar.gz /tmp/openmm-env.tar.gz
 COPY --from=pack-openmm-env /tmp/base-env.tar.gz   /tmp/base-env.tar.gz
 RUN mkdir -p /opt/envs/openmm /opt/envs/base && \
@@ -174,7 +177,7 @@ RUN mkdir -p /opt/envs/openmm /opt/envs/base && \
 RUN set -eux; \
     find /opt/envs -type d -name "__pycache__" -prune -exec rm -rf {} +; \
     find /opt/envs -type f -name "*.py[co]" -delete; \
-    find /opt/envs -type d \( -name tests -o -name test -o -name testing \) -prune -exec rm -rf {} +; \
+    # find /opt/envs -type d \( -name tests -o -name test -o -name testing \) -prune -exec rm -rf {} +; \
     find /opt/envs -type f -name "*.a" -delete; \
     find /opt/envs -type f -name "*.la" -delete; \
     strip --strip-unneeded ${OPENMM_PREFIX}/lib/libOpenMM*.so || true; \
@@ -187,3 +190,9 @@ ENV OPENMM_INCLUDE_DIR="${OPENMM_PREFIX}/include"
 ENV OPENMM_LIBRARY="${OPENMM_PREFIX}/lib"
 ENV OPENMM_LIBRARIES="${OPENMM_PREFIX}/lib"
 ENV OPENMM_PLUGIN_DIR="${OPENMM_PREFIX}/lib/plugins"
+
+ENV ATSAS="/usr/local/ATSAS-4.0.1"
+ENV PATH="${ATSAS}/bin:${PATH}"
+
+# ---- Smoke test OpenMM installation ----
+COPY scripts/smoke_test.sh /usr/local/bin/smoke_test.sh
