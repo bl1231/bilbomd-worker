@@ -341,10 +341,10 @@ const runOmmMD = async (
   // Read YAML to get Rg list
   const yamlRaw = await fs.readFile(configYamlPath, 'utf8')
   const cfg = YAML.parse(yamlRaw)
-  const rgs: number[] = cfg?.steps?.md?.rgyr?.rgs ?? []
+  let rgs: number[] = cfg?.steps?.md?.rgyr?.rgs ?? []
   if (!Array.isArray(rgs) || rgs.length === 0) {
     logger.warn('No rgs found in config; defaulting to [50]')
-    rgs.splice(0, rgs.length, 50)
+    rgs = [50]
   }
 
   // Determine concurrency
@@ -391,7 +391,8 @@ const runOmmMD = async (
 
   const pump = async (): Promise<void> => {
     while (running < maxParallel && queue.length > 0) {
-      const rg = queue.shift() as number
+      const rg = queue.shift()
+      if (rg === undefined) break
       running++
       runOne(rg)
         .then(async () => {

@@ -3,7 +3,6 @@
 import sys
 import os
 import yaml
-from concurrent.futures import ThreadPoolExecutor  # ⬅️ use threads, not processes
 from openmm.unit import angstroms
 from openmm.app import (
     Simulation,

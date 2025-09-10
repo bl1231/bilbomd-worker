@@ -616,25 +616,6 @@ const prepareResults = async (
       // Decide whether to continue or throw based on your application's requirements
     }
 
-    // // Copy the minimized PDB
-    // await copyFiles({
-    //   source: `${jobDir}/minimization_output.pdb`,
-    //   destination: resultsDir,
-    //   filename: 'minimization_output.pdb',
-    //   MQjob,
-    //   isCritical: false
-    // })
-
-    // // Copy the DAT file for the minimized PDB
-    // await copyFiles({
-    //   source: `${jobDir}/minimization_output_${DBjob.data_file.split('.')[0]}.dat`,
-    //   destination: resultsDir,
-    //   filename: 'minimization_output.pdb.dat',
-    //   MQjob,
-    //   isCritical: false
-    // })
-
-    // --- Copy the minimized PDB (supports CHARMM and OpenMM layouts)
     {
       const baseDataName = DBjob.data_file.split('.')[0]
       const charmmPdb = path.join(jobDir, 'minimization_output.pdb')
@@ -672,7 +653,7 @@ const prepareResults = async (
         await copyFiles({
           source: datSource,
           destination: resultsDir,
-          filename: path.basename(datSource), // keep original filename
+          filename: path.basename(datSource),
           MQjob,
           isCritical: false
         })
@@ -700,9 +681,7 @@ const prepareResults = async (
     })
 
     // Gather original uploaded files
-    const filesToCopy = [
-      { file: DBjob.data_file, label: 'data_file' } // Assuming data_file is common
-    ]
+    const filesToCopy = [{ file: DBjob.data_file, label: 'data_file' }]
 
     if ('pdb_file' in DBjob && DBjob.pdb_file) {
       filesToCopy.push({ file: DBjob.pdb_file, label: 'pdb_file' })
