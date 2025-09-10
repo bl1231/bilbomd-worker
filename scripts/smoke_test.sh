@@ -7,21 +7,30 @@ if charmm 2>&1 | grep -q "Chemistry at HARvard Macromolecular Mechanics"; then
 else
     echo "CHARMM not found or not working"
 fi
-Pepsi-SANS --help || echo "Pepsi-SANS not found"
-if [ -x /usr/local/ATSAS-4.0.1/bin/dammin ]; then
-    /usr/local/ATSAS-4.0.1/bin/dammin --version || echo "ATSAS dammin not found"
+
+if Pepsi-SANS 2>&1 | grep -q "Pepsi-SANS : an adaptive method for rapid and accurate"; then
+    echo "Pepsi-SANS OK"
 else
-    echo "ATSAS dammin not found"
+    echo "Pepsi-SANS not found or not working"
 fi
+
+
+if dammin 2>&1 | grep -q "Ab inito shape determination by simulated"; then
+    echo "DAMMIN OK"
+else
+    echo "DAMMIN not found or not working"
+fi
+
+
 foxs --version || echo "FOXS not found"
 multi_foxs --version || echo "Multi-FOXS not found"
 echo "Testing Python packages..."
-/miniforge3/bin/python -c "import numpy; print('numpy OK')" || echo "numpy missing"
-/miniforge3/bin/python -c "import scipy; print('scipy OK')" || echo "scipy missing"
-/miniforge3/bin/python -c "import bioxtasraw; print('bioxtasraw OK')" || echo "bioxtasraw missing"
-/miniforge3/bin/python -c "import lmfit; print('lmfit OK')" || echo "lmfit missing"
-/miniforge3/bin/python -c "import pandas; print('pandas OK')" || echo "pandas missing"
-/miniforge3/bin/python -c "import dask; print('dask OK')" || echo "dask missing"
-/miniforge3/bin/python -c "import openmm; print('openmm OK')" || echo "openmm missing"
+/opt/envs/base/bin/python -c "import numpy; print('numpy OK')" || echo "numpy missing"
+/opt/envs/base/bin/python -c "import scipy; print('scipy OK')" || echo "scipy missing"
+/opt/envs/base/bin/python -c "import bioxtasraw; print('bioxtasraw OK')" || echo "bioxtasraw missing"
+/opt/envs/base/bin/python -c "import lmfit; print('lmfit OK')" || echo "lmfit missing"
+/opt/envs/base/bin/python -c "import pandas; print('pandas OK')" || echo "pandas missing"
+/opt/envs/base/bin/python -c "import dask; print('dask OK')" || echo "dask missing"
+/opt/envs/openmm/bin/python -c "import openmm; print('openmm OK')" || echo "openmm missing"
 
 echo "Smoke test complete."

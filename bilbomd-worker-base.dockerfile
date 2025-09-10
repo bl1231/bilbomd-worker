@@ -133,8 +133,6 @@ FROM pdbfixer-build AS pack-openmm-env
 RUN conda install -y -n base  -c conda-forge conda-pack && \
     conda install -y -n openmm -c conda-forge conda-pack && \
     conda clean -afy
-RUN conda run -n openmm python -c "import sys; print(sys.version)" || true
-RUN conda run -n base   python -c "import sys; print(sys.version)" || true
 RUN conda run -n openmm conda-pack -n openmm -o /tmp/openmm-env.tar.gz
 RUN conda run -n base   conda-pack -p /miniforge3 -o /tmp/base-env.tar.gz
 

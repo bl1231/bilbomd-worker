@@ -1,5 +1,5 @@
 # --------------------------------------------------------------------------------------
-#
+# BilboMD Worker Dockerfile
 FROM ghcr.io/bl1231/bilbomd-worker-base:latest
 
 # Install Node.js and update npm to latest
