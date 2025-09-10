@@ -59,6 +59,10 @@ localhost/bilbomd/bilbomd-perlmutter-worker  0.0.20                    4e3ef0f8d
 
 ## Version History
 
+- 1.16.0 (9/10/2025)
+  - Update NodeJS to v22.19.0
+  - Update dependencies
+  - Add `OpenMM` as 2nd option for MD steps (still testing)
 - 1.15.2 (8/18/2025)
   - Update NodeJS to v22.18.0
   - Update dependencies
