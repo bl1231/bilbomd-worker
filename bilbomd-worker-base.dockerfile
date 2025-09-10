@@ -193,7 +193,8 @@ ENV OPENMM_LIBRARY="${OPENMM_PREFIX}/lib"
 ENV OPENMM_LIBRARIES="${OPENMM_PREFIX}/lib"
 ENV OPENMM_PLUGIN_DIR="${OPENMM_PREFIX}/lib/plugins"
 
-ENV PATH="/usr/local/ATSAS-4.0.1/bin:/miniforge3/bin/:${PATH}"
+ENV ATSAS="/usr/local/ATSAS-4.0.1"
+ENV PATH="${ATSAS}/bin:${PATH}"
 
 # ---- Smoke test OpenMM installation ----
 COPY scripts/smoke_test.sh /usr/local/bin/smoke_test.sh
