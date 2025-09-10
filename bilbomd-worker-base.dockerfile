@@ -149,7 +149,7 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ca-certificates curl software-properties-common \
     libgfortran5 libstdc++6 libxml2 libtiff5 liblzma5 libicu70 libharfbuzz0b \
-    parallel && \
+    parallel binutils && \
     rm -rf /var/lib/apt/lists/*
 
 RUN add-apt-repository -y ppa:salilab/ppa && \
