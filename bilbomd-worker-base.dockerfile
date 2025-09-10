@@ -164,6 +164,7 @@ COPY --from=build_charmm /usr/local/src/charmm/bin/charmm /usr/local/bin/charmm
 COPY --from=install-sans-tools /usr/local/bin/Pepsi-SANS /usr/local/bin/Pepsi-SANS
 COPY --from=install-sans-tools /usr/local/sans /usr/local/sans
 COPY --from=openmm-build ${OPENMM_PREFIX} ${OPENMM_PREFIX}
+COPY --from=install-atsas /usr/local/ATSAS-4.0.1 /usr/local/ATSAS-4.0.1
 COPY --from=pack-openmm-env /tmp/openmm-env.tar.gz /tmp/openmm-env.tar.gz
 COPY --from=pack-openmm-env /tmp/base-env.tar.gz   /tmp/base-env.tar.gz
 RUN mkdir -p /opt/envs/openmm /opt/envs/base && \
